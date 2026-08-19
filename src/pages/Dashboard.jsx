@@ -1,6 +1,10 @@
 import Sidebar from "../components/Sidebar";
 import DashboardHeader from "../components/DashboardHeader";
 
+import DashboardStats from "../components/DashboardStats";
+import WeatherAlerts from "../components/WeatherAlerts";
+import PuneAreaMonitoring from "../components/PuneAreaMonitoring";
+
 import CurrentWeather from "../components/CurrentWeather";
 import HourlyForecast from "../components/HourlyForecast";
 import WeeklyForecast from "../components/WeeklyForecast";
@@ -22,7 +26,6 @@ function Dashboard() {
 
           {/* Page Header */}
           <div className="mb-7">
-
             <h1 className="text-3xl font-bold text-gray-900">
               PMC Officer
             </h1>
@@ -30,7 +33,12 @@ function Dashboard() {
             <p className="text-gray-500 mt-2">
               Here's today's weather overview for Pune.
             </p>
+          </div>
 
+
+          {/* Dashboard Stats */}
+          <div className="mb-6">
+            <DashboardStats />
           </div>
 
 
@@ -39,7 +47,6 @@ function Dashboard() {
 
             {/* Current Weather */}
             <CurrentWeather />
-
 
             {/* Weather Details */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
@@ -51,7 +58,6 @@ function Dashboard() {
               <p className="text-gray-500 text-sm mt-1">
                 Current atmospheric conditions
               </p>
-
 
               <div className="grid grid-cols-2 gap-4 mt-6">
 
@@ -66,7 +72,6 @@ function Dashboard() {
                   </p>
                 </div>
 
-
                 {/* Wind */}
                 <div className="bg-gray-50 rounded-2xl p-5">
                   <p className="text-sm text-gray-500">
@@ -78,7 +83,6 @@ function Dashboard() {
                   </p>
                 </div>
 
-
                 {/* Pressure */}
                 <div className="bg-gray-50 rounded-2xl p-5">
                   <p className="text-sm text-gray-500">
@@ -89,7 +93,6 @@ function Dashboard() {
                     1008 hPa
                   </p>
                 </div>
-
 
                 {/* Visibility */}
                 <div className="bg-gray-50 rounded-2xl p-5">
@@ -103,9 +106,13 @@ function Dashboard() {
                 </div>
 
               </div>
-
             </div>
+          </div>
 
+
+          {/* Dashboard Stats */}
+          <div className="mt-6">
+            <DashboardStats />
           </div>
 
 
@@ -118,6 +125,18 @@ function Dashboard() {
           {/* Weekly Forecast */}
           <div className="mt-6">
             <WeeklyForecast />
+          </div>
+
+
+          {/* Weather Alerts */}
+          <div className="mt-6">
+            <WeatherAlerts />
+          </div>
+
+
+          {/* Pune Area Monitoring */}
+          <div className="mt-6">
+            <PuneAreaMonitoring />
           </div>
 
         </main>

@@ -4,6 +4,10 @@ import Login from "./pages/Login"
 import Register from "./pages/Register"
 import ForgotPassword from "./pages/ForgotPassword"
 import Dashboard from "./pages/Dashboard"
+import Weather from "./pages/Weather";
+import Rainfall from "./pages/Rainfall";
+import PuneAreas from "./pages/PuneAreas";
+import Alerts from "./pages/Alerts";
 
 function App() {
   return (
@@ -34,6 +38,26 @@ function App() {
         <Route
           path="/dashboard"
           element={<Dashboard />}
+        />
+
+        <Route
+          path="/weather"
+          element={<Weather />}
+        />
+
+        <Route
+          path="/rainfall"
+          element={<Rainfall />}
+        />
+
+        <Route
+          path="/areas"
+          element={<PuneAreas />}
+        />
+
+        <Route
+          path="/alerts"
+          element={<Alerts />}
         />
 
       </Routes>
