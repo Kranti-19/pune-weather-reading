@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  FileText,
 } from "lucide-react";
 
 import { useLocation, useNavigate } from "react-router-dom";
@@ -15,38 +16,33 @@ function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const menuItems = [
-    {
-      icon: <LayoutDashboard size={19} />,
-      label: "Dashboard",
-      path: "/dashboard",
-    },
-    {
-      icon: <CloudSun size={19} />,
-      label: "Weather",
-      path: "/weather",
-    },
-    {
-      icon: <CloudRain size={19} />,
-      label: "Rainfall",
-      path: "/rainfall",
-    },
-    {
-      icon: <MapPin size={19} />,
-      label: "Pune Areas",
-      path: "/areas",
-    },
-    {
-      icon: <Bell size={19} />,
-      label: "Alerts",
-      path: "/alerts",
-    },
-    {
-      icon: <BarChart3 size={19} />,
-      label: "Analytics",
-      path: "/analytics",
-    },
-  ];
+ const menuItems = [
+  {
+    icon: <LayoutDashboard size={19} />,
+    label: "Dashboard",
+    path: "/dashboard",
+  },
+  {
+    icon: <MapPin size={19} />,
+    label: "Pune Areas",
+    path: "/pune-areas",
+  },
+  {
+    icon: <Bell size={19} />,
+    label: "Alerts",
+    path: "/alerts",
+  },
+  {
+    icon: <BarChart3 size={19} />,
+    label: "Analytics",
+    path: "/analytics",
+  },
+  {
+  label: "Reports",
+  path: "/reports",
+  icon: <FileText size={19} />,
+},
+];
 
   return (
     <aside className="w-64 min-h-screen bg-white border-r border-gray-200 flex flex-col">
@@ -66,7 +62,7 @@ function Sidebar() {
             </h1>
 
             <p className="text-xs text-gray-500">
-              Weather Monitoring
+              Air Quality Monitoring
             </p>
           </div>
 

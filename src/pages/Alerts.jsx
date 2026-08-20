@@ -1,271 +1,399 @@
-import { useState } from "react";
 import {
+  Bell,
   AlertTriangle,
-  MapPin,
+  WifiOff,
+  Activity,
+  BatteryWarning,
+  Wrench,
+  CheckCircle,
   Clock,
-  X,
 } from "lucide-react";
 
-import Sidebar from "../components/Sidebar";
-import DashboardHeader from "../components/DashboardHeader";
-
 function Alerts() {
-  const [filter, setFilter] = useState("All");
-  const [selectedAlert, setSelectedAlert] = useState(null);
-
   const alerts = [
     {
-      id: 1,
-      title: "Heavy Rainfall Expected",
-      areas: "Kothrud · Baner · Aundh",
+      id: "ALT-001",
+      title: "High AQI Detected",
+      description: "Air quality has reached the Poor category.",
+      station: "Baner Monitoring Station",
+      parameter: "AQI",
+      value: "214",
+      severity: "Critical",
       time: "10 minutes ago",
-      severity: "High",
-      description:
-        "Heavy rainfall is expected in these areas. Residents and municipal teams are advised to remain alert.",
+      type: "air",
+      status: "Active",
     },
     {
-      id: 2,
-      title: "Strong Winds",
-      areas: "Hinjewadi · Wakad",
-      time: "35 minutes ago",
-      severity: "Moderate",
-      description:
-        "Strong winds are being observed in the area. Avoid unnecessary travel and monitor weather conditions.",
+      id: "ALT-002",
+      title: "Station Offline",
+      description: "No data has been received from the monitoring station.",
+      station: "Baner Monitoring Station",
+      parameter: "Connectivity",
+      value: "18 min",
+      severity: "Warning",
+      time: "18 minutes ago",
+      type: "offline",
+      status: "Active",
     },
     {
-      id: 3,
-      title: "Waterlogging Advisory",
-      areas: "Hadapsar · Kharadi",
-      time: "1 hour ago",
-      severity: "Moderate",
-      description:
-        "Waterlogging has been reported in some locations. Municipal response teams should monitor affected roads.",
+      id: "ALT-003",
+      title: "PM2.5 Above Threshold",
+      description: "PM2.5 concentration has exceeded the configured limit.",
+      station: "Hadapsar Monitoring Station",
+      parameter: "PM2.5",
+      value: "72 µg/m³",
+      severity: "Warning",
+      time: "25 minutes ago",
+      type: "pollution",
+      status: "Active",
     },
     {
-      id: 4,
-      title: "Thunderstorm Advisory",
-      areas: "Viman Nagar · Yerwada",
+      id: "ALT-004",
+      title: "Low Battery Warning",
+      description: "Station battery level is below the configured threshold.",
+      station: "Kharadi Monitoring Station",
+      parameter: "Battery",
+      value: "18%",
+      severity: "Warning",
+      time: "42 minutes ago",
+      type: "battery",
+      status: "Active",
+    },
+    {
+      id: "ALT-005",
+      title: "Sensor Calibration Due",
+      description: "Scheduled calibration is due for the PM10 sensor.",
+      station: "Kothrud Monitoring Station",
+      parameter: "PM10 Sensor",
+      value: "Due",
+      severity: "Info",
       time: "2 hours ago",
-      severity: "Low",
-      description:
-        "A thunderstorm is possible in these areas. Continue monitoring local weather conditions.",
+      type: "maintenance",
+      status: "Active",
     },
   ];
 
-  const filteredAlerts =
-    filter === "All"
-      ? alerts
-      : alerts.filter((alert) => alert.severity === filter);
+  const activeAlerts = alerts.filter(
+    (alert) => alert.status === "Active"
+  ).length;
+
+  const criticalAlerts = alerts.filter(
+    (alert) => alert.severity === "Critical"
+  ).length;
+
+  const warningAlerts = alerts.filter(
+    (alert) => alert.severity === "Warning"
+  ).length;
 
   const getSeverityStyle = (severity) => {
-    if (severity === "High") {
-      return "bg-red-100 text-red-600";
-    }
+    switch (severity) {
+      case "Critical":
+        return "bg-red-100 text-red-600";
 
-    if (severity === "Moderate") {
-      return "bg-orange-100 text-orange-600";
-    }
+      case "Warning":
+        return "bg-orange-100 text-orange-600";
 
-    return "bg-green-100 text-green-600";
+      case "Info":
+        return "bg-blue-100 text-blue-600";
+
+      default:
+        return "bg-gray-100 text-gray-600";
+    }
+  };
+
+  const getIcon = (type) => {
+    switch (type) {
+      case "air":
+        return <Activity size={20} />;
+
+      case "offline":
+        return <WifiOff size={20} />;
+
+      case "pollution":
+        return <AlertTriangle size={20} />;
+
+      case "battery":
+        return <BatteryWarning size={20} />;
+
+      case "maintenance":
+        return <Wrench size={20} />;
+
+      default:
+        return <Bell size={20} />;
+    }
+  };
+
+  const getIconStyle = (severity) => {
+    switch (severity) {
+      case "Critical":
+        return "bg-red-50 text-red-500";
+
+      case "Warning":
+        return "bg-orange-50 text-orange-500";
+
+      case "Info":
+        return "bg-blue-50 text-blue-500";
+
+      default:
+        return "bg-gray-50 text-gray-500";
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
 
-      {/* Sidebar */}
-      <Sidebar />
+      <main className="p-8">
 
-      {/* Main Content */}
-      <div className="flex-1 min-w-0">
+        {/* Page Header */}
+        <div className="mb-7">
 
-        {/* Header */}
-        <DashboardHeader />
+          <h1 className="text-3xl font-bold text-gray-900">
+            Alerts
+          </h1>
 
-        <main className="p-8">
+          <p className="text-gray-500 mt-2">
+            Monitor and manage air-quality and station alerts across Pune.
+          </p>
 
-          {/* Page Header */}
-          <div className="mb-7">
-
-            <h1 className="text-3xl font-bold text-gray-900">
-              Weather Alerts
-            </h1>
-
-            <p className="text-gray-500 mt-2">
-              Monitor active weather warnings and advisories across Pune.
-            </p>
-
-          </div>
+        </div>
 
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
 
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+          {/* Active Alerts */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
 
-              <p className="text-sm text-gray-500">
-                Active Alerts
-              </p>
-
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {alerts.length}
-              </p>
-
-              <p className="text-sm text-gray-500 mt-2">
-                Across Pune
-              </p>
-
-            </div>
-
-
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-
-              <p className="text-sm text-gray-500">
-                High Severity
-              </p>
-
-              <p className="text-3xl font-bold text-red-500 mt-2">
-                {alerts.filter((alert) => alert.severity === "High").length}
-              </p>
-
-              <p className="text-sm text-gray-500 mt-2">
-                Requires immediate attention
-              </p>
-
-            </div>
-
-
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-
-              <p className="text-sm text-gray-500">
-                Moderate Alerts
-              </p>
-
-              <p className="text-3xl font-bold text-orange-500 mt-2">
-                {
-                  alerts.filter(
-                    (alert) => alert.severity === "Moderate"
-                  ).length
-                }
-              </p>
-
-              <p className="text-sm text-gray-500 mt-2">
-                Requires monitoring
-              </p>
-
-            </div>
-
-          </div>
-
-
-          {/* Alerts Section */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center justify-between">
 
               <div>
 
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Active Weather Alerts
-                </h2>
+                <p className="text-sm text-gray-500">
+                  Active Alerts
+                </p>
 
-                <p className="text-sm text-gray-500 mt-1">
-                  Current warnings issued across monitored areas.
+                <p className="text-3xl font-bold text-gray-900 mt-3">
+                  {activeAlerts}
+                </p>
+
+                <p className="text-sm text-gray-500 mt-2">
+                  Require attention
                 </p>
 
               </div>
 
-
-              {/* Filter */}
-              <div className="flex gap-2">
-
-                {["All", "High", "Moderate", "Low"].map((option) => (
-
-                  <button
-                    key={option}
-                    onClick={() => setFilter(option)}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-                      filter === option
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    {option}
-                  </button>
-
-                ))}
-
+              <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Bell size={22} />
               </div>
 
             </div>
 
+          </div>
 
-            {/* Alert List */}
-            <div className="space-y-4">
 
-              {filteredAlerts.map((alert) => (
+          {/* Critical */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
 
-                <div
-                  key={alert.id}
-                  className="bg-gray-50 border border-gray-100 rounded-2xl p-5"
-                >
+            <div className="flex items-center justify-between">
 
-                  <div className="flex items-start gap-4">
+              <div>
 
-                    {/* Icon */}
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center ${
-                        alert.severity === "High"
-                          ? "bg-red-100 text-red-500"
-                          : alert.severity === "Moderate"
-                          ? "bg-orange-100 text-orange-500"
-                          : "bg-green-100 text-green-500"
-                      }`}
-                    >
-                      <AlertTriangle size={20} />
+                <p className="text-sm text-gray-500">
+                  Critical Alerts
+                </p>
+
+                <p className="text-3xl font-bold text-red-500 mt-3">
+                  {criticalAlerts}
+                </p>
+
+                <p className="text-sm text-red-500 mt-2">
+                  Immediate attention required
+                </p>
+
+              </div>
+
+              <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
+                <AlertTriangle size={22} />
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* Warning */}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <p className="text-sm text-gray-500">
+                  Warning Alerts
+                </p>
+
+                <p className="text-3xl font-bold text-orange-500 mt-3">
+                  {warningAlerts}
+                </p>
+
+                <p className="text-sm text-orange-500 mt-2">
+                  Monitoring required
+                </p>
+
+              </div>
+
+              <div className="w-11 h-11 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center">
+                <Clock size={22} />
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* Alerts List */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+
+          {/* Header */}
+          <div className="p-6 border-b border-gray-100">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Active Alerts
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  Current air-quality and monitoring system warnings.
+                </p>
+
+              </div>
+
+              <span className="text-sm text-gray-500">
+                {activeAlerts} alerts
+              </span>
+
+            </div>
+
+          </div>
+
+
+          {/* Alert Items */}
+          <div>
+
+            {alerts.map((alert) => (
+
+              <div
+                key={alert.id}
+                className="p-6 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition"
+              >
+
+                <div className="flex items-start gap-4">
+
+                  {/* Icon */}
+                  <div
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${getIconStyle(
+                      alert.severity
+                    )}`}
+                  >
+                    {getIcon(alert.type)}
+                  </div>
+
+
+                  {/* Main Content */}
+                  <div className="flex-1 min-w-0">
+
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
+                      <div>
+
+                        <div className="flex items-center gap-3">
+
+                          <h3 className="font-semibold text-gray-900">
+                            {alert.title}
+                          </h3>
+
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getSeverityStyle(
+                              alert.severity
+                            )}`}
+                          >
+                            {alert.severity}
+                          </span>
+
+                        </div>
+
+                        <p className="text-sm text-gray-500 mt-1">
+                          {alert.description}
+                        </p>
+
+                      </div>
+
+
+                      {/* Status */}
+                      <span className="flex items-center gap-2 text-sm text-red-500 font-medium">
+
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+
+                        {alert.status}
+
+                      </span>
+
                     </div>
 
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
+                    {/* Details */}
+                    <div className="flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm">
 
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-
-                        <h3 className="font-semibold text-gray-900">
-                          {alert.title}
-                        </h3>
-
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium w-fit ${getSeverityStyle(
-                            alert.severity
-                          )}`}
-                        >
-                          {alert.severity}
+                      <div>
+                        <span className="text-gray-400">
+                          Station:
+                        </span>{" "}
+                        <span className="text-gray-700 font-medium">
+                          {alert.station}
                         </span>
-
                       </div>
 
-
-                      <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-500">
-
-                        <span className="flex items-center gap-1">
-                          <MapPin size={15} />
-                          {alert.areas}
+                      <div>
+                        <span className="text-gray-400">
+                          Parameter:
+                        </span>{" "}
+                        <span className="text-gray-700 font-medium">
+                          {alert.parameter}
                         </span>
+                      </div>
 
-                        <span className="flex items-center gap-1">
-                          <Clock size={15} />
+                      <div>
+                        <span className="text-gray-400">
+                          Value:
+                        </span>{" "}
+                        <span className="text-gray-700 font-medium">
+                          {alert.value}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400">
                           {alert.time}
                         </span>
-
                       </div>
 
+                    </div>
 
-                      <button
-                        onClick={() => setSelectedAlert(alert)}
-                        className="text-sm text-blue-600 font-medium mt-4 hover:text-blue-700"
-                      >
-                        View details →
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-3 mt-5">
+
+                      <button className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition">
+                        Acknowledge
+                      </button>
+
+                      <button className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition">
+                        View Details
                       </button>
 
                     </div>
@@ -274,128 +402,44 @@ function Alerts() {
 
                 </div>
 
-              ))}
-
-
-              {filteredAlerts.length === 0 && (
-
-                <div className="text-center py-10 text-gray-500">
-                  No alerts found.
-                </div>
-
-              )}
-
-            </div>
-
-          </div>
-
-        </main>
-
-      </div>
-
-
-      {/* Details Modal */}
-      {selectedAlert && (
-
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-
-          <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-xl">
-
-            <div className="flex items-start justify-between">
-
-              <div>
-
-                <p className="text-sm text-blue-600 font-medium">
-                  Weather Alert
-                </p>
-
-                <h2 className="text-xl font-bold text-gray-900 mt-1">
-                  {selectedAlert.title}
-                </h2>
-
               </div>
 
-
-              <button
-                onClick={() => setSelectedAlert(null)}
-                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
-              >
-                <X size={18} />
-              </button>
-
-            </div>
-
-
-            <div className="mt-6 space-y-4">
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Severity
-                </p>
-
-                <span
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-2 ${getSeverityStyle(
-                    selectedAlert.severity
-                  )}`}
-                >
-                  {selectedAlert.severity}
-                </span>
-              </div>
-
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Affected Areas
-                </p>
-
-                <p className="text-gray-900 mt-1">
-                  {selectedAlert.areas}
-                </p>
-
-              </div>
-
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Issued
-                </p>
-
-                <p className="text-gray-900 mt-1">
-                  {selectedAlert.time}
-                </p>
-
-              </div>
-
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Description
-                </p>
-
-                <p className="text-gray-600 mt-1 leading-6">
-                  {selectedAlert.description}
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <button
-              onClick={() => setSelectedAlert(null)}
-              className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium mt-7 hover:bg-blue-700 transition"
-            >
-              Close
-            </button>
+            ))}
 
           </div>
 
         </div>
 
-      )}
+
+        {/* Alert Information */}
+        <div className="mt-6 bg-blue-50 border border-blue-100 rounded-2xl p-5">
+
+          <div className="flex items-start gap-3">
+
+            <CheckCircle
+              size={20}
+              className="text-blue-600 mt-0.5 shrink-0"
+            />
+
+            <div>
+
+              <h3 className="font-semibold text-blue-900">
+                Alert Monitoring
+              </h3>
+
+              <p className="text-sm text-blue-700 mt-1">
+                Alerts are generated when air-quality thresholds,
+                station connectivity, sensor health, battery,
+                calibration or maintenance conditions require attention.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
 
     </div>
   );

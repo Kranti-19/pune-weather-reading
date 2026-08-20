@@ -1,143 +1,211 @@
 function PuneAreaMonitoring() {
-  const areas = [
-    {
-      area: "Kothrud",
-      temperature: "23°C",
-      condition: "Light Rain",
-      rainfall: "18 mm",
-      status: "Normal",
-    },
-    {
-      area: "Hinjewadi",
-      temperature: "24°C",
-      condition: "Cloudy",
-      rainfall: "12 mm",
-      status: "Normal",
-    },
-    {
-      area: "Hadapsar",
-      temperature: "25°C",
-      condition: "Light Rain",
-      rainfall: "21 mm",
-      status: "Watch",
-    },
-    {
-      area: "Kharadi",
-      temperature: "25°C",
-      condition: "Cloudy",
-      rainfall: "15 mm",
-      status: "Watch",
-    },
-    {
-      area: "Baner",
-      temperature: "23°C",
-      condition: "Rain",
-      rainfall: "26 mm",
-      status: "Alert",
-    },
-  ];
+  const constructionSites = [
+  {
+    name: "PMC Main Building Construction",
+    ward: "Ward 10",
+    zone: "West",
+    aqi: 118,
+    category: "Moderate",
+    stationStatus: "Online",
+  },
+  {
+    name: "Hinjewadi IT Park Construction",
+    ward: "Ward 25",
+    zone: "West",
+    aqi: 92,
+    category: "Satisfactory",
+    stationStatus: "Online",
+  },
+  {
+    name: "Hadapsar Commercial Complex",
+    ward: "Ward 15",
+    zone: "East",
+    aqi: 156,
+    category: "Moderate",
+    stationStatus: "Online",
+  },
+  {
+    name: "Kharadi Metro Construction Site",
+    ward: "Ward 17",
+    zone: "East",
+    aqi: 134,
+    category: "Moderate",
+    stationStatus: "Online",
+  },
+  {
+    name: "Baner Road Flyover Construction",
+    ward: "Ward 8",
+    zone: "West",
+    aqi: 214,
+    category: "Poor",
+    stationStatus: "Offline",
+  },
+];
+
+  const getAQIStyle = (category) => {
+    switch (category) {
+      case "Good":
+        return "bg-green-100 text-green-600";
+
+      case "Satisfactory":
+        return "bg-lime-100 text-lime-600";
+
+      case "Moderate":
+        return "bg-orange-100 text-orange-600";
+
+      case "Poor":
+        return "bg-red-100 text-red-600";
+
+      case "Very Poor":
+        return "bg-purple-100 text-purple-600";
+
+      case "Severe":
+        return "bg-red-200 text-red-700";
+
+      default:
+        return "bg-gray-100 text-gray-600";
+    }
+  };
 
   return (
     <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
 
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">
-            Pune Area Monitoring
-          </h3>
+      <div className="flex items-center justify-between">
+  <div>
+    <h3 className="text-lg font-semibold text-gray-900">
+      Construction Site Monitoring
+    </h3>
 
-          <p className="text-sm text-gray-500 mt-1">
-            Current conditions across monitored Pune areas
-          </p>
-        </div>
+    <p className="text-sm text-gray-500 mt-1">
+      Current air-quality status across monitored construction sites
+    </p>
+  </div>
 
-        <button className="text-sm font-medium text-blue-600 hover:text-blue-700">
-          View all
-        </button>
-
-      </div>
+  <button className="text-sm font-medium text-blue-600">
+    View all
+  </button>
+</div>
 
 
       {/* Table */}
+
       <div className="overflow-x-auto">
 
         <table className="w-full">
 
           <thead>
+
             <tr className="border-b border-gray-100">
 
               <th className="text-left pb-3 text-sm font-medium text-gray-500">
-                Area
+                Construction / Building
               </th>
 
               <th className="text-left pb-3 text-sm font-medium text-gray-500">
-                Temperature
+                Ward
               </th>
 
               <th className="text-left pb-3 text-sm font-medium text-gray-500">
-                Condition
+                Zone
               </th>
 
               <th className="text-left pb-3 text-sm font-medium text-gray-500">
-                Rainfall
+                AQI
               </th>
 
               <th className="text-left pb-3 text-sm font-medium text-gray-500">
-                Status
+                Category
+              </th>
+
+              <th className="text-left pb-3 text-sm font-medium text-gray-500">
+                Station
               </th>
 
             </tr>
+
           </thead>
 
 
           <tbody>
 
-            {areas.map((area) => (
+            {constructionSites.map((site) => (
 
               <tr
-                key={area.area}
+                key={site.name}
                 className="border-b border-gray-50 last:border-0"
               >
 
                 {/* Area */}
+
                 <td className="py-4 font-semibold text-gray-900">
-                  {area.area}
+                  {site.name}
                 </td>
 
 
-                {/* Temperature */}
+                {/* Ward */}
+
                 <td className="py-4 text-sm text-gray-600">
-                  {area.temperature}
+                  {site.ward}
                 </td>
 
 
-                {/* Condition */}
+                {/* Zone */}
+
                 <td className="py-4 text-sm text-gray-600">
-                  {area.condition}
+                  {site.zone}
                 </td>
 
 
-                {/* Rainfall */}
-                <td className="py-4 text-sm text-gray-600">
-                  {area.rainfall}
+                {/* AQI */}
+
+                <td className="py-4">
+
+                  <span className="text-sm font-bold text-gray-900">
+                    {site.aqi}
+                  </span>
+
                 </td>
 
 
-                {/* Status */}
+                {/* AQI Category */}
+
                 <td className="py-4">
 
                   <span
-                    className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                      area.status === "Normal"
-                        ? "bg-green-100 text-green-600"
-                        : area.status === "Watch"
-                        ? "bg-orange-100 text-orange-500"
-                        : "bg-red-100 text-red-500"
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${getAQIStyle(
+                      site.category
+                    )}`}
+                  >
+                    {site.category}
+                  </span>
+
+                </td>
+
+
+                {/* Station Status */}
+
+                <td className="py-4">
+
+                  <span
+                    className={`inline-flex items-center gap-2 text-xs font-medium ${
+                      site.stationStatus === "Online"
+                        ? "text-green-600"
+                        : "text-red-500"
                     }`}
                   >
-                    {area.status}
+
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        site.stationStatus === "Online"
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    />
+
+                    {site.stationStatus}
+
                   </span>
 
                 </td>

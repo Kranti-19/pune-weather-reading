@@ -1,6 +1,5 @@
 import {
   Bell,
-  Search,
   ChevronDown,
 } from "lucide-react"
 
@@ -13,7 +12,7 @@ function DashboardHeader() {
       <div>
 
         <h2 className="text-xl font-bold text-gray-900">
-          Weather Monitoring Dashboard
+          Air Quality Monitoring Dashboard
         </h2>
 
         <p className="text-sm text-gray-500 mt-1">
@@ -26,23 +25,6 @@ function DashboardHeader() {
       {/* Right */}
 
       <div className="flex items-center gap-5">
-
-        {/* Search */}
-
-        <div className="relative hidden md:block">
-
-          <Search
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-
-          <input
-            type="text"
-            placeholder="Search area..."
-            className="w-52 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:border-blue-500"
-          />
-
-        </div>
 
 
         {/* Notification */}
