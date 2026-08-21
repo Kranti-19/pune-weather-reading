@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Link } from "react-router-dom"
+import axios from "axios"
+
 import {
   CloudRain,
   User,
@@ -12,79 +14,139 @@ import {
 
 function Register() {
 
-    const navigate = useNavigate()
+  const navigate = useNavigate()
 
-    const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState({
     fullName: "",
     userId: "",
     email: "",
     password: "",
     confirmPassword: "",
-    })
-
-    const [error, setError] = useState("")
-
-    const handleRegister = (e) => {
-
-  e.preventDefault()
-
-  if (
-    !formData.fullName ||
-    !formData.userId ||
-    !formData.email ||
-    !formData.password ||
-    !formData.confirmPassword
-  ) {
-    setError("Please fill in all fields.")
-    return
-  }
-
-  if (formData.password !== formData.confirmPassword) {
-    setError("Passwords do not match.")
-    return
-  }
-
-  if (formData.password.length < 6) {
-    setError("Password must be at least 6 characters.")
-    return
-  }
-
-  // Frontend only for now
-  alert("Account created successfully!")
-
-  navigate("/login")
-}
-
-    const handleChange = (e) => {
-  setFormData({
-    ...formData,
-    [e.target.name]: e.target.value,
   })
 
-  setError("")
-}
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+
+  // ================= HANDLE INPUT CHANGE =================
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+
+    setError("")
+  }
+
+
+  // ================= HANDLE REGISTER =================
+
+  const handleRegister = async (e) => {
+
+    e.preventDefault()
+
+    // Check all fields
+    if (
+      !formData.fullName ||
+      !formData.userId ||
+      !formData.email ||
+      !formData.password ||
+      !formData.confirmPassword
+    ) {
+      setError("Please fill in all fields.")
+      return
+    }
+
+
+    // Check password match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.")
+      return
+    }
+
+
+    // Check password length
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters.")
+      return
+    }
+
+
+    try {
+
+      setLoading(true)
+      setError("")
+
+      // Send registration request to backend
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/register",
+        {
+          fullName: formData.fullName,
+          pmcUserId: formData.userId,
+          email: formData.email,
+          password: formData.password,
+        }
+      )
+
+
+      console.log("Registration response:", response.data)
+
+
+      // Registration successful
+      alert("Account created successfully!")
+
+      // Go to login page
+      navigate("/login")
+
+
+    } catch (error) {
+
+      console.error("Registration error:", error)
+
+
+      // Get error message from backend
+      const message =
+        error.response?.data?.message ||
+        "Registration failed. Please try again."
+
+      setError(message)
+
+    } finally {
+
+      setLoading(false)
+
+    }
+  }
+
+
   return (
+
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
 
       <div className="w-full max-w-6xl bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
 
+
         {/* ================= LEFT SIDE ================= */}
 
         <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-10 lg:p-12 flex flex-col justify-between min-h-[650px]">
+
 
           {/* Logo */}
 
           <div className="flex items-center gap-3">
 
             <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
+
               <CloudRain size={27} />
+
             </div>
 
             <div>
+
               <h2 className="text-xl font-bold">
                 Pune Weather
               </h2>
@@ -92,6 +154,7 @@ function Register() {
               <p className="text-sm text-blue-100">
                 Weather Monitoring System
               </p>
+
             </div>
 
           </div>
@@ -106,15 +169,19 @@ function Register() {
             </p>
 
             <h1 className="text-4xl lg:text-5xl font-bold leading-tight">
+
               Create your
               <br />
               PMC account
+
             </h1>
 
             <p className="mt-6 text-blue-100 leading-7 max-w-md">
+
               Register to access the Pune weather monitoring
               system and monitor weather conditions, rainfall,
               forecasts and alerts across Pune.
+
             </p>
 
           </div>
@@ -134,6 +201,7 @@ function Register() {
         <div className="p-8 lg:p-12">
 
           <div className="max-w-md mx-auto">
+
 
             {/* Heading */}
 
@@ -156,7 +224,11 @@ function Register() {
 
             {/* ================= FORM ================= */}
 
-            <form className="space-y-4">
+            <form
+              onSubmit={handleRegister}
+              className="space-y-4"
+            >
+
 
               {/* Full Name */}
 
@@ -175,6 +247,9 @@ function Register() {
 
                   <input
                     type="text"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleChange}
                     placeholder="Enter your full name"
                     className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
@@ -201,6 +276,9 @@ function Register() {
 
                   <input
                     type="text"
+                    name="userId"
+                    value={formData.userId}
+                    onChange={handleChange}
                     placeholder="Enter your PMC user ID"
                     className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
@@ -227,6 +305,9 @@ function Register() {
 
                   <input
                     type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
                     placeholder="Enter your official email"
                     className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
@@ -253,20 +334,27 @@ function Register() {
 
                   <input
                     type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
                     placeholder="Create a password"
                     className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-12 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
 
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() =>
+                      setShowPassword(!showPassword)
+                    }
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
                   >
+
                     {showPassword ? (
                       <EyeOff size={19} />
                     ) : (
                       <Eye size={19} />
                     )}
+
                   </button>
 
                 </div>
@@ -290,7 +378,14 @@ function Register() {
                   />
 
                   <input
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={
+                      showConfirmPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
                     placeholder="Confirm your password"
                     className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-12 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
@@ -298,15 +393,19 @@ function Register() {
                   <button
                     type="button"
                     onClick={() =>
-                      setShowConfirmPassword(!showConfirmPassword)
+                      setShowConfirmPassword(
+                        !showConfirmPassword
+                      )
                     }
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
                   >
+
                     {showConfirmPassword ? (
                       <EyeOff size={19} />
                     ) : (
                       <Eye size={19} />
                     )}
+
                   </button>
 
                 </div>
@@ -314,14 +413,37 @@ function Register() {
               </div>
 
 
-              {/* Create Account */}
+              {/* ================= ERROR MESSAGE ================= */}
+
+              {error && (
+
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-3">
+
+                  {error}
+
+                </div>
+
+              )}
+
+
+              {/* ================= CREATE ACCOUNT ================= */}
 
               <button
-                type="button"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition mt-2"
+                type="submit"
+                disabled={loading}
+                className={`w-full text-white font-semibold py-3.5 rounded-xl transition mt-2 ${
+                  loading
+                    ? "bg-blue-400 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
               >
-                Create Account
+
+                {loading
+                  ? "Creating Account..."
+                  : "Create Account"}
+
               </button>
+
 
             </form>
 
