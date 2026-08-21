@@ -289,11 +289,91 @@ const forgotPassword = async (req, res) => {
 };
 
 
+//reset Password
+const resetPassword = async (req, res) => {
+    try {
+        const { accessToken, newPassword } = req.body;
+
+        if (!accessToken || !newPassword) {
+            return res.status(400).json({
+                status: "error",
+                message: "Access token and new password are required"
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                status: "error",
+                message: "Password must be at least 6 characters"
+            });
+        }
+
+        // Verify the recovery access token
+        const {
+            data: userData,
+            error: userError
+        } = await supabase.auth.getUser(accessToken);
+
+        if (userError || !userData.user) {
+
+            console.error("Token verification error:", userError);
+
+            return res.status(401).json({
+                status: "error",
+                message: "Invalid or expired reset link"
+            });
+        }
+
+        const userId = userData.user.id;
+
+        console.log("Resetting password for user:", userId);
+
+        // Update password using Supabase Admin API
+        const {
+            data,
+            error
+        } = await supabase.auth.admin.updateUserById(
+            userId,
+            {
+                password: newPassword
+            }
+        );
+
+        if (error) {
+
+            console.error("Password update error:", error);
+
+            return res.status(400).json({
+                status: "error",
+                message: error.message
+            });
+        }
+
+        return res.status(200).json({
+            status: "success",
+            message: "Password updated successfully"
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Reset password server error:",
+            error
+        );
+
+        return res.status(500).json({
+            status: "error",
+            message: "Server error"
+        });
+    }
+};
+
 
 module.exports = {
     register,
     login,
     logout,
     getCurrentUser,
-    forgotPassword
+    forgotPassword,
+    resetPassword
 };

@@ -1,35 +1,84 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
+import axios from "axios"
 
 function ForgotPassword() {
 
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+
+  // ================= HANDLE SUBMIT =================
+
+  const handleSubmit = async (e) => {
+
     e.preventDefault()
 
+    setError("")
+
     if (!email) {
+      setError("Please enter your email address.")
       return
     }
 
-    // Frontend only for now
-    setSubmitted(true)
+    try {
+
+      setLoading(true)
+
+      // Call backend Forgot Password API
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/forgot-password",
+        {
+          email: email.trim().toLowerCase(),
+        }
+      )
+
+      console.log("Forgot password response:", response.data)
+
+      // Show success screen
+      setSubmitted(true)
+
+    } catch (error) {
+
+      console.error("Forgot password error:", error)
+
+      const message =
+        error.response?.data?.message ||
+        "Unable to send reset link. Please try again."
+
+      setError(message)
+
+    } finally {
+
+      setLoading(false)
+
+    }
   }
 
+
   return (
+
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
 
       <div className="w-full max-w-md">
 
-        {/* Logo / Brand */}
+
+        {/* ================= LOGO / BRAND ================= */}
+
         <div className="text-center mb-8">
 
           <div className="flex justify-center mb-4">
+
             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl">
+
               🌧️
+
             </div>
+
           </div>
+
 
           <h1 className="text-2xl font-bold text-gray-900">
             Pune PMC
@@ -42,12 +91,18 @@ function ForgotPassword() {
         </div>
 
 
-        {/* Card */}
+        {/* ================= CARD ================= */}
+
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+
 
           {!submitted ? (
 
             <>
+
+
+              {/* Heading */}
+
               <div className="mb-8">
 
                 <p className="text-blue-600 text-sm font-medium">
@@ -59,16 +114,22 @@ function ForgotPassword() {
                 </h2>
 
                 <p className="text-gray-500 mt-3 leading-6">
+
                   Enter your registered official email address and
                   we'll send you a link to reset your password.
+
                 </p>
 
               </div>
 
 
+              {/* ================= FORM ================= */}
+
               <form onSubmit={handleSubmit}>
 
+
                 {/* Email */}
+
                 <div className="mb-6">
 
                   <label className="block text-sm font-medium text-gray-900 mb-2">
@@ -84,7 +145,10 @@ function ForgotPassword() {
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setError("")
+                      }}
                       placeholder="Enter your official email"
                       className="w-full h-14 pl-12 pr-4 rounded-xl border border-gray-200 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
                       required
@@ -95,18 +159,42 @@ function ForgotPassword() {
                 </div>
 
 
+                {/* Error */}
+
+                {error && (
+
+                  <div className="mb-5 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-3">
+
+                    {error}
+
+                  </div>
+
+                )}
+
+
                 {/* Button */}
+
                 <button
                   type="submit"
-                  className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-sm"
+                  disabled={loading}
+                  className={`w-full h-14 text-white font-semibold rounded-xl transition shadow-sm ${
+                    loading
+                      ? "bg-blue-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
                 >
-                  Send Reset Link
+
+                  {loading
+                    ? "Sending..."
+                    : "Send Reset Link"}
+
                 </button>
 
               </form>
 
 
               {/* Back to login */}
+
               <div className="text-center mt-6">
 
                 <Link
@@ -122,7 +210,8 @@ function ForgotPassword() {
 
           ) : (
 
-            /* Success State */
+            /* ================= SUCCESS STATE ================= */
+
             <div className="text-center py-6">
 
               <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center text-3xl mb-5">
@@ -134,8 +223,10 @@ function ForgotPassword() {
               </h2>
 
               <p className="text-gray-500 mt-3 leading-6">
+
                 If an account exists with this email address,
                 you will receive a password reset link shortly.
+
               </p>
 
               <Link
@@ -152,7 +243,8 @@ function ForgotPassword() {
         </div>
 
 
-        {/* Footer */}
+        {/* ================= FOOTER ================= */}
+
         <p className="text-center text-xs text-gray-400 mt-6">
           Authorized PMC personnel only
         </p>
