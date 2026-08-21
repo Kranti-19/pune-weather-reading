@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { Eye, EyeOff, LockKeyhole, UserRound, CloudRain } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { Link } from "react-router-dom";
+import { Link } from "react-router-dom"
+import axios from "axios"
 
 function Login() {
   const navigate = useNavigate()
@@ -13,40 +14,114 @@ function Login() {
     password: "",
   })
 
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  // ================= HANDLE INPUT CHANGE =================
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     })
+
+    setError("")
   }
 
-  const handleSubmit = (e) => {
+
+  // ================= HANDLE LOGIN =================
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Temporary frontend login.
-    // Backend authentication will be connected later.
+    setError("")
 
-    navigate("/dashboard")
+    // Check fields
+    if (!formData.userId || !formData.password) {
+      setError("Please enter your PMC User ID and password.")
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      // Call backend Login API
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/login",
+        {
+          userId: formData.userId,
+          password: formData.password,
+        }
+      )
+
+      console.log("Login response:", response.data)
+
+      // Get user and session from backend
+      const { user, session } = response.data
+
+      // Store access token
+      localStorage.setItem(
+        "access_token",
+        session.access_token
+      )
+
+      // Store refresh token
+      localStorage.setItem(
+        "refresh_token",
+        session.refresh_token
+      )
+
+      // Store user information
+      localStorage.setItem(
+        "user",
+        JSON.stringify(user)
+      )
+
+      // Login successful
+      alert("Login successful!")
+
+      // Navigate to dashboard
+      navigate("/dashboard")
+
+    } catch (error) {
+      console.error("Login error:", error)
+
+      const message =
+        error.response?.data?.message ||
+        "Login failed. Please check your PMC User ID and password."
+
+      setError(message)
+
+    } finally {
+      setLoading(false)
+    }
   }
+
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
 
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
 
-        {/* Left Section */}
+
+        {/* ================= LEFT SECTION ================= */}
 
         <div className="hidden md:flex bg-gradient-to-br from-blue-600 to-blue-800 text-white p-12 flex-col justify-between">
 
           <div>
 
+            {/* Logo */}
+
             <div className="flex items-center gap-3">
 
               <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center">
+
                 <CloudRain size={28} />
+
               </div>
 
               <div>
+
                 <h1 className="text-xl font-bold">
                   Pune Weather
                 </h1>
@@ -54,10 +129,13 @@ function Login() {
                 <p className="text-sm text-blue-100">
                   Weather Monitoring System
                 </p>
+
               </div>
 
             </div>
 
+
+            {/* Main Content */}
 
             <div className="mt-16">
 
@@ -66,20 +144,26 @@ function Login() {
               </p>
 
               <h2 className="text-4xl font-bold mt-4 leading-tight">
+
                 Pune Weather
                 <br />
                 Monitoring System
+
               </h2>
 
               <p className="text-blue-100 mt-5 leading-7">
+
                 Monitor weather conditions, rainfall,
                 forecasts and alerts across Pune.
+
               </p>
 
             </div>
 
           </div>
 
+
+          {/* Footer */}
 
           <div className="text-sm text-blue-200">
             Municipal Weather Monitoring Portal
@@ -88,19 +172,23 @@ function Login() {
         </div>
 
 
-        {/* Right Section */}
+        {/* ================= RIGHT SECTION ================= */}
 
         <div className="p-8 md:p-12">
+
 
           {/* Mobile Logo */}
 
           <div className="md:hidden flex items-center gap-3 mb-10">
 
             <div className="w-11 h-11 bg-blue-600 text-white rounded-xl flex items-center justify-center">
+
               <CloudRain size={24} />
+
             </div>
 
             <div>
+
               <h1 className="font-bold text-lg">
                 Pune Weather
               </h1>
@@ -108,10 +196,13 @@ function Login() {
               <p className="text-xs text-gray-500">
                 Weather Monitoring System
               </p>
+
             </div>
 
           </div>
 
+
+          {/* Heading */}
 
           <div>
 
@@ -130,14 +221,15 @@ function Login() {
           </div>
 
 
-          {/* Login Form */}
+          {/* ================= LOGIN FORM ================= */}
 
           <form
             onSubmit={handleSubmit}
             className="mt-8 space-y-5"
           >
 
-            {/* User ID */}
+
+            {/* PMC User ID */}
 
             <div>
 
@@ -157,7 +249,7 @@ function Login() {
                   name="userId"
                   value={formData.userId}
                   onChange={handleChange}
-                  placeholder="Enter your user ID"
+                  placeholder="Enter your PMC user ID"
                   className="w-full border border-gray-200 rounded-xl py-3.5 pl-11 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
                   required
                 />
@@ -194,14 +286,18 @@ function Login() {
 
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() =>
+                    setShowPassword(!showPassword)
+                  }
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
+
                   {showPassword ? (
                     <EyeOff size={19} />
                   ) : (
                     <Eye size={19} />
                   )}
+
                 </button>
 
               </div>
@@ -225,39 +321,63 @@ function Login() {
               </label>
 
 
-              <button
-                type="button"
+              <Link
+                to="/forgot-password"
                 className="text-sm text-blue-600 font-medium hover:text-blue-700"
               >
-                <Link
-                  to="/forgot-password"
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Forgot password?
-                </Link>
-              </button>
+                Forgot password?
+              </Link>
 
             </div>
 
 
-            {/* Login button */}
+            {/* Error Message */}
+
+            {error && (
+
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-3">
+
+                {error}
+
+              </div>
+
+            )}
+
+
+            {/* Login Button */}
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition shadow-sm"
+              disabled={loading}
+              className={`w-full text-white font-semibold py-3.5 rounded-xl transition shadow-sm ${
+                loading
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              Sign In
+
+              {loading
+                ? "Signing In..."
+                : "Sign In"}
+
             </button>
 
           </form>
 
 
+          {/* Authorized Personnel */}
+
           <p className="text-center text-xs text-gray-400 mt-8">
             Authorized PMC personnel only
           </p>
 
+
+          {/* Register Link */}
+
           <div className="text-center mt-6">
+
             <p className="text-sm text-gray-500">
+
               Don't have an account?{" "}
 
               <Link
@@ -266,7 +386,9 @@ function Login() {
               >
                 Create account
               </Link>
+
             </p>
+
           </div>
 
         </div>
