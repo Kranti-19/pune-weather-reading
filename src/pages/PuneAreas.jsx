@@ -1,26 +1,53 @@
+import React, { useState, useMemo } from "react";
 import {
   MapPin,
   Wifi,
   Activity,
   ChevronRight,
   WifiOff,
+  Search,
+  Download,
+  Filter,
+  Flame
 } from "lucide-react";
-
 import { useNavigate } from "react-router-dom";
 import PuneMap from "../components/PuneMap";
 
-function PuneAreas() {
+// CPCB official category color styling
+const getCategoryStyle = (category) => {
+  switch (category) {
+    case "Good":
+      return "bg-[#00B050]/15 text-[#00B050] border border-[#00B050]/30";
+    case "Satisfactory":
+      return "bg-[#92D050]/20 text-[#4c7526] border border-[#92D050]/30";
+    case "Moderate":
+      return "bg-[#FEF08A] text-[#854D0E] border border-amber-300";
+    case "Poor":
+      return "bg-[#FF9900]/15 text-[#D97706] border border-[#FF9900]/30";
+    case "Very Poor":
+      return "bg-[#FF0000]/15 text-[#DC2626] border border-[#FF0000]/30";
+    case "Severe":
+      return "bg-[#C00000]/15 text-[#991B1B] border border-[#C00000]/30";
+    default:
+      return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+};
 
+export default function PuneAreas() {
   const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [zoneFilter, setZoneFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const stations = [
     {
       id: "PMC-001",
       name: "Kothrud Monitoring Station",
-      ward: "Kothrud",
+      ward: "Kothrud (Ward 10)",
       zone: "West Zone",
       aqi: 118,
       category: "Moderate",
+      dominant: "PM2.5",
       pm25: 58,
       pm10: 96,
       status: "Online",
@@ -29,10 +56,11 @@ function PuneAreas() {
     {
       id: "PMC-002",
       name: "Hinjewadi Monitoring Station",
-      ward: "Hinjewadi",
+      ward: "Hinjewadi (Ward 25)",
       zone: "North-West Zone",
       aqi: 92,
       category: "Satisfactory",
+      dominant: "PM10",
       pm25: 42,
       pm10: 78,
       status: "Online",
@@ -41,10 +69,11 @@ function PuneAreas() {
     {
       id: "PMC-003",
       name: "Hadapsar Monitoring Station",
-      ward: "Hadapsar",
+      ward: "Hadapsar (Ward 15)",
       zone: "East Zone",
       aqi: 156,
       category: "Moderate",
+      dominant: "PM2.5",
       pm25: 72,
       pm10: 118,
       status: "Online",
@@ -53,10 +82,11 @@ function PuneAreas() {
     {
       id: "PMC-004",
       name: "Kharadi Monitoring Station",
-      ward: "Kharadi",
+      ward: "Kharadi (Ward 17)",
       zone: "East Zone",
       aqi: 134,
       category: "Moderate",
+      dominant: "NO₂",
       pm25: 64,
       pm10: 105,
       status: "Online",
@@ -65,10 +95,11 @@ function PuneAreas() {
     {
       id: "PMC-005",
       name: "Baner Monitoring Station",
-      ward: "Baner",
+      ward: "Baner (Ward 8)",
       zone: "West Zone",
       aqi: 214,
       category: "Poor",
+      dominant: "PM2.5",
       pm25: 91,
       pm10: 142,
       status: "Offline",
@@ -76,363 +107,263 @@ function PuneAreas() {
     },
   ];
 
-  const onlineStations = stations.filter(
-    (station) => station.status === "Online"
-  ).length;
+  // Filter logic
+  const filteredStations = useMemo(() => {
+    return stations.filter((st) => {
+      const matchesSearch =
+        st.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        st.ward.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        st.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesZone = zoneFilter === "All" || st.zone === zoneFilter;
+      const matchesStatus = statusFilter === "All" || st.status === statusFilter;
+      return matchesSearch && matchesZone && matchesStatus;
+    });
+  }, [stations, searchTerm, zoneFilter, statusFilter]);
 
-  const attentionRequired = stations.filter(
-    (station) => station.status === "Offline" || station.aqi > 200
-  ).length;
+  const onlineStations = stations.filter((s) => s.status === "Online").length;
+  const attentionRequired = stations.filter((s) => s.status === "Offline" || s.aqi > 200).length;
 
-  const getCategoryStyle = (category) => {
-    switch (category) {
-      case "Satisfactory":
-        return "bg-yellow-100 text-yellow-700";
-
-      case "Moderate":
-        return "bg-orange-100 text-orange-600";
-
-      case "Poor":
-        return "bg-red-100 text-red-600";
-
-      case "Very Poor":
-        return "bg-purple-100 text-purple-600";
-
-      case "Severe":
-        return "bg-gray-200 text-gray-800";
-
-      default:
-        return "bg-green-100 text-green-700";
-    }
+  const handleExportCSV = () => {
+    const headers = "Station ID,Name,Ward,Zone,AQI,Category,Dominant Pollutant,PM2.5,PM10,Status,Last Updated\n";
+    const rows = filteredStations
+      .map((s) => `"${s.id}","${s.name}","${s.ward}","${s.zone}",${s.aqi},"${s.category}","${s.dominant}",${s.pm25},${s.pm10},"${s.status}","${s.updated}"`)
+      .join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.setAttribute("href", url);
+    a.setAttribute("download", `PMC_Air_Quality_Stations_${new Date().toISOString().slice(0, 10)}.csv`);
+    a.click();
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-
-      {/* Page Content */}
-      <main className="p-8">
-
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <main className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+        
         {/* Page Header */}
-        <div className="mb-7">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Pune Areas
-          </h1>
-
-          <p className="text-gray-500 mt-2">
-            Monitor air quality stations across Pune.
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
+              Pune Municipal Stations & Ward Overview
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Live continuous ambient air quality monitoring (CAAQM) station records across municipal wards.
+            </p>
+          </div>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-700 font-medium px-4 py-2 rounded-xl border border-slate-200 shadow-sm text-sm transition"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
         </div>
 
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-
-          {/* Total Stations */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
+        {/* Summary KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
             <div className="flex items-center justify-between">
-
               <div>
-                <p className="text-sm text-gray-500">
-                  Total Stations
-                </p>
-
-                <p className="text-3xl font-bold text-gray-900 mt-3">
-                  {stations.length}
-                </p>
-
-                <p className="text-sm text-gray-400 mt-2">
-                  Monitoring Pune areas
-                </p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Stations</p>
+                <p className="text-3xl font-extrabold text-slate-900 mt-2">{stations.length}</p>
+                <p className="text-xs text-slate-400 mt-1">Monitored across Pune</p>
               </div>
-
-              <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                <MapPin size={22} />
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <MapPin size={24} />
               </div>
-
             </div>
-
           </div>
 
-
-          {/* Online Stations */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
             <div className="flex items-center justify-between">
-
               <div>
-                <p className="text-sm text-gray-500">
-                  Online Stations
-                </p>
-
-                <p className="text-3xl font-bold text-gray-900 mt-3">
-                  {onlineStations}
-                </p>
-
-                <p className="text-sm text-green-600 mt-2">
-                  Currently transmitting data
-                </p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Transmitting</p>
+                <p className="text-3xl font-extrabold text-emerald-600 mt-2">{onlineStations}</p>
+                <p className="text-xs text-emerald-700/80 font-medium mt-1">Operational & sending valid data</p>
               </div>
-
-              <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center">
-                <Wifi size={22} />
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Wifi size={24} />
               </div>
-
             </div>
-
           </div>
 
-
-          {/* Attention Required */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
             <div className="flex items-center justify-between">
-
               <div>
-                <p className="text-sm text-gray-500">
-                  Attention Required
-                </p>
-
-                <p className="text-3xl font-bold text-gray-900 mt-3">
-                  {attentionRequired}
-                </p>
-
-                <p className="text-sm text-red-500 mt-2">
-                  Offline or high AQI stations
-                </p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Attention Required</p>
+                <p className="text-3xl font-extrabold text-rose-600 mt-2">{attentionRequired}</p>
+                <p className="text-xs text-rose-700/80 font-medium mt-1">Offline or Poor/Severe AQI threshold</p>
               </div>
-
-              <div className="w-11 h-11 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
-                <Activity size={22} />
+              <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                <Activity size={24} />
               </div>
-
             </div>
-
           </div>
-
         </div>
 
+        {/* Filter & Search Bar */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search station, ward, ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
 
-        {/* Monitoring Stations */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <Filter size={14} /> Filters:
+            </div>
+            <select
+              value={zoneFilter}
+              onChange={(e) => setZoneFilter(e.target.value)}
+              className="text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none"
+            >
+              <option value="All">All Zones</option>
+              <option value="West Zone">West Zone</option>
+              <option value="East Zone">East Zone</option>
+              <option value="North-West Zone">North-West Zone</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none"
+            >
+              <option value="All">All Status</option>
+              <option value="Online">Online</option>
+              <option value="Offline">Offline</option>
+            </select>
+          </div>
+        </div>
 
-          {/* Table Header */}
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-
+        {/* Monitoring Stations Table */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Monitoring Stations
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                Current air quality status by station.
-              </p>
+              <h2 className="text-base font-bold text-slate-900">Registered CAAQM Stations</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Showing {filteredStations.length} of {stations.length} locations</p>
             </div>
-
-            <button className="text-sm font-medium text-blue-600 hover:text-blue-700">
-              View map
-            </button>
-
-
           </div>
 
-
-          {/* Table */}
           <div className="overflow-x-auto">
-
-            <table className="w-full">
-
+            <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-gray-100 text-left">
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    Station
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    Ward
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    Zone
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    AQI
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    PM2.5
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    PM10
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    Status
-                  </th>
-
-                  <th className="px-6 py-5 text-sm font-medium text-gray-500">
-                    Last Updated
-                  </th>
-
-                  <th></th>
-
+                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <th className="px-6 py-4">Station Details</th>
+                  <th className="px-6 py-4">Ward & Zone</th>
+                  <th className="px-6 py-4">CPCB AQI</th>
+                  <th className="px-6 py-4">Dominant</th>
+                  <th className="px-6 py-4">PM2.5 / PM10</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Last Ping</th>
+                  <th className="px-6 py-4 text-right">Action</th>
                 </tr>
               </thead>
 
-
-              <tbody>
-
-                {stations.map((station) => (
-
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {filteredStations.map((station) => (
                   <tr
                     key={station.id}
-                    className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition"
+                    className="hover:bg-slate-50/80 transition cursor-pointer"
+                    onClick={() => navigate(`/station/${station.id.replace("PMC-", "")}`)}
                   >
-
-                    {/* Station */}
-                    <td className="px-6 py-6">
-
+                    {/* Station Name & ID */}
+                    <td className="px-6 py-4">
                       <div>
-                        <p className="font-semibold text-gray-900 max-w-[150px]">
-                          {station.name}
-                        </p>
-
-                        <p className="text-xs text-gray-400 mt-1">
-                          {station.id}
-                        </p>
+                        <p className="font-semibold text-slate-900">{station.name}</p>
+                        <p className="text-xs font-mono text-slate-400 mt-0.5">{station.id}</p>
                       </div>
-
                     </td>
 
-
-                    {/* Ward */}
-                    <td className="px-6 py-6 text-sm text-gray-600">
-                      {station.ward}
+                    {/* Ward & Zone */}
+                    <td className="px-6 py-4">
+                      <p className="font-medium text-slate-700 text-xs">{station.ward}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{station.zone}</p>
                     </td>
 
-
-                    {/* Zone */}
-                    <td className="px-6 py-6 text-sm text-gray-600">
-                      {station.zone}
-                    </td>
-
-
-                    {/* AQI */}
-                    <td className="px-6 py-6">
-
+                    {/* AQI & Category Badge */}
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-
-                        <span className="font-semibold text-gray-900">
-                          {station.aqi}
-                        </span>
-
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryStyle(
-                            station.category
-                          )}`}
-                        >
+                        <span className="font-extrabold font-mono text-slate-900 text-base">{station.aqi}</span>
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${getCategoryStyle(station.category)}`}>
                           {station.category}
                         </span>
-
                       </div>
-
                     </td>
 
-
-                    {/* PM2.5 */}
-                    <td className="px-6 py-6">
-
-                      <p className="text-sm text-gray-700">
-                        {station.pm25}
-                      </p>
-
-                      <p className="text-xs text-gray-400">
-                        µg/m³
-                      </p>
-
+                    {/* Dominant Pollutant */}
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md">
+                        <Flame size={12} className="text-amber-500" />
+                        {station.dominant}
+                      </span>
                     </td>
 
-
-                    {/* PM10 */}
-                    <td className="px-6 py-6">
-
-                      <p className="text-sm text-gray-700">
-                        {station.pm10}
-                      </p>
-
-                      <p className="text-xs text-gray-400">
-                        µg/m³
-                      </p>
-
+                    {/* PM2.5 and PM10 */}
+                    <td className="px-6 py-4">
+                      <div className="text-xs font-medium text-slate-700">
+                        PM2.5: <strong className="text-slate-900">{station.pm25}</strong> µg/m³
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        PM10: <strong className="text-slate-600">{station.pm10}</strong> µg/m³
+                      </div>
                     </td>
-
 
                     {/* Status */}
-                    <td className="px-6 py-6">
-
+                    <td className="px-6 py-4">
                       {station.status === "Online" ? (
-
-                        <div className="flex items-center gap-2 text-sm font-medium text-green-600">
-                          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                           Online
                         </div>
-
                       ) : (
-
-                        <div className="flex items-center gap-2 text-sm font-medium text-red-600">
-                          <WifiOff size={16} />
+                        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600">
+                          <WifiOff size={14} />
                           Offline
                         </div>
-
                       )}
-
                     </td>
 
-
                     {/* Updated */}
-                    <td className="px-6 py-6 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-xs text-slate-500 font-mono">
                       {station.updated}
                     </td>
 
-
-                    {/* Arrow */}
-                    <td className="px-6 py-6">
-
+                    {/* Action Arrow */}
+                    <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => navigate(`/station/${station.id.replace("PMC-", "")}`)}
-                        className="text-gray-400 hover:text-blue-600 transition"
-                        title="View station details"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/station/${station.id.replace("PMC-", "")}`);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
                       >
-                        <ChevronRight size={20} />
+                        <ChevronRight size={18} />
                       </button>
-
                     </td>
-
                   </tr>
-
                 ))}
-
               </tbody>
-
             </table>
-
           </div>
-
         </div>
 
-        {/* GIS Map */}
-
-            <div className="mt-6">
-              <PuneMap />
-            </div>
+        {/* GIS Map Component */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+          <div className="mb-4">
+            <h3 className="font-bold text-slate-900 text-sm">Municipal GIS Station Coverage</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Geospatial location distribution of monitoring points across Pune wards</p>
+          </div>
+          <div className="rounded-xl overflow-hidden border border-slate-200">
+            <PuneMap />
+          </div>
+        </div>
 
       </main>
-
     </div>
   );
 }
-
-export default PuneAreas;

@@ -10,8 +10,12 @@ import {
   Gauge,
   MapPin,
   Calendar,
+  ShieldCheck,
+  Cpu,
+  Zap,
+  Flame,
+  AlertCircle
 } from "lucide-react";
-
 import {
   LineChart,
   Line,
@@ -20,170 +24,177 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine
 } from "recharts";
+import { getCPCBStatus } from "../utils/aqiUtils";
 
-
-function StationDetails() {
-
+export default function StationDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
-
   const [selectedPeriod, setSelectedPeriod] = useState("24 Hours");
-
-
-  /* Station Data */
 
   const stations = {
     "1": {
       id: "PMC-001",
+      gatewayId: "GW-KTH-09",
+      firmware: "v2.4.1",
       name: "Kothrud Monitoring Station",
-      ward: "Kothrud",
+      ward: "Kothrud (Ward 10)",
       zone: "West Zone",
       aqi: 118,
-      category: "Moderate",
+      dominant: "PM2.5",
       status: "Online",
+      power: "Mains (Battery 98%)",
+      lastCalibration: "12 Jan 2026",
       updated: "Just now",
-
-      pm25: 58,
-      pm10: 96,
-      no2: 42,
-      so2: 18,
-      co: 1.2,
-      o3: 54,
-      nh3: 21,
-      pb: 0.4,
-
+      pollutants: [
+        { name: "PM2.5", value: 58, unit: "µg/m³", standard: 60, subIndex: 118, flag: "Valid" },
+        { name: "PM10", value: 96, unit: "µg/m³", standard: 100, subIndex: 96, flag: "Valid" },
+        { name: "NO₂", value: 42, unit: "µg/m³", standard: 80, subIndex: 53, flag: "Valid" },
+        { name: "SO₂", value: 18, unit: "µg/m³", standard: 80, subIndex: 23, flag: "Valid" },
+        { name: "CO", value: 1.2, unit: "mg/m³", standard: 2.0, subIndex: 60, flag: "Valid" },
+        { name: "O₃", value: 54, unit: "µg/m³", standard: 100, subIndex: 54, flag: "Valid" },
+        { name: "NH₃", value: 21, unit: "µg/m³", standard: 400, subIndex: 15, flag: "Valid" },
+        { name: "Pb", value: 0.4, unit: "µg/m³", standard: 1.0, subIndex: 40, flag: "Valid" },
+      ],
       temperature: "23°C",
       humidity: "68%",
       windSpeed: "2.8 m/s",
-      windDirection: "NW",
+      windDirection: "NW (315°)",
       pressure: "1008 hPa",
     },
-
     "2": {
       id: "PMC-002",
+      gatewayId: "GW-HNJ-02",
+      firmware: "v2.4.0",
       name: "Hinjewadi Monitoring Station",
-      ward: "Hinjewadi",
+      ward: "Hinjewadi (Ward 25)",
       zone: "North-West Zone",
       aqi: 92,
-      category: "Satisfactory",
+      dominant: "PM10",
       status: "Online",
+      power: "Solar + Mains",
+      lastCalibration: "05 Feb 2026",
       updated: "2 min ago",
-
-      pm25: 42,
-      pm10: 78,
-      no2: 35,
-      so2: 14,
-      co: 0.9,
-      o3: 48,
-      nh3: 18,
-      pb: 0.3,
-
+      pollutants: [
+        { name: "PM2.5", value: 42, unit: "µg/m³", standard: 60, subIndex: 70, flag: "Valid" },
+        { name: "PM10", value: 78, unit: "µg/m³", standard: 100, subIndex: 92, flag: "Valid" },
+        { name: "NO₂", value: 35, unit: "µg/m³", standard: 80, subIndex: 44, flag: "Valid" },
+        { name: "SO₂", value: 14, unit: "µg/m³", standard: 80, subIndex: 18, flag: "Valid" },
+        { name: "CO", value: 0.9, unit: "mg/m³", standard: 2.0, subIndex: 45, flag: "Valid" },
+        { name: "O₃", value: 48, unit: "µg/m³", standard: 100, subIndex: 48, flag: "Valid" },
+        { name: "NH₃", value: 18, unit: "µg/m³", standard: 400, subIndex: 12, flag: "Valid" },
+        { name: "Pb", value: 0.3, unit: "µg/m³", standard: 1.0, subIndex: 30, flag: "Valid" },
+      ],
       temperature: "24°C",
       humidity: "64%",
       windSpeed: "3.1 m/s",
-      windDirection: "W",
+      windDirection: "W (270°)",
       pressure: "1007 hPa",
     },
-
     "3": {
       id: "PMC-003",
+      gatewayId: "GW-HDP-04",
+      firmware: "v2.4.1",
       name: "Hadapsar Monitoring Station",
-      ward: "Hadapsar",
+      ward: "Hadapsar (Ward 15)",
       zone: "East Zone",
       aqi: 156,
-      category: "Moderate",
+      dominant: "PM2.5",
       status: "Online",
+      power: "Mains (Battery 92%)",
+      lastCalibration: "18 Dec 2025",
       updated: "1 min ago",
-
-      pm25: 72,
-      pm10: 118,
-      no2: 49,
-      so2: 21,
-      co: 1.4,
-      o3: 57,
-      nh3: 24,
-      pb: 0.5,
-
+      pollutants: [
+        { name: "PM2.5", value: 72, unit: "µg/m³", standard: 60, subIndex: 156, flag: "Valid" },
+        { name: "PM10", value: 118, unit: "µg/m³", standard: 100, subIndex: 112, flag: "Valid" },
+        { name: "NO₂", value: 49, unit: "µg/m³", standard: 80, subIndex: 61, flag: "Valid" },
+        { name: "SO₂", value: 21, unit: "µg/m³", standard: 80, subIndex: 26, flag: "Valid" },
+        { name: "CO", value: 1.4, unit: "mg/m³", standard: 2.0, subIndex: 70, flag: "Valid" },
+        { name: "O₃", value: 57, unit: "µg/m³", standard: 100, subIndex: 57, flag: "Valid" },
+        { name: "NH₃", value: 24, unit: "µg/m³", standard: 400, subIndex: 17, flag: "Valid" },
+        { name: "Pb", value: 0.5, unit: "µg/m³", standard: 1.0, subIndex: 50, flag: "Valid" },
+      ],
       temperature: "25°C",
       humidity: "70%",
       windSpeed: "2.4 m/s",
-      windDirection: "E",
+      windDirection: "E (90°)",
       pressure: "1006 hPa",
     },
-
     "4": {
       id: "PMC-004",
+      gatewayId: "GW-KHR-01",
+      firmware: "v2.3.9",
       name: "Kharadi Monitoring Station",
-      ward: "Kharadi",
+      ward: "Kharadi (Ward 17)",
       zone: "East Zone",
       aqi: 134,
-      category: "Moderate",
+      dominant: "PM2.5",
       status: "Online",
+      power: "Mains",
+      lastCalibration: "22 Jan 2026",
       updated: "3 min ago",
-
-      pm25: 64,
-      pm10: 105,
-      no2: 44,
-      so2: 19,
-      co: 1.3,
-      o3: 52,
-      nh3: 22,
-      pb: 0.4,
-
+      pollutants: [
+        { name: "PM2.5", value: 64, unit: "µg/m³", standard: 60, subIndex: 134, flag: "Valid" },
+        { name: "PM10", value: 105, unit: "µg/m³", standard: 100, subIndex: 103, flag: "Valid" },
+        { name: "NO₂", value: 44, unit: "µg/m³", standard: 80, subIndex: 55, flag: "Valid" },
+        { name: "SO₂", value: 19, unit: "µg/m³", standard: 80, subIndex: 24, flag: "Valid" },
+        { name: "CO", value: 1.3, unit: "mg/m³", standard: 2.0, subIndex: 65, flag: "Valid" },
+        { name: "O₃", value: 52, unit: "µg/m³", standard: 100, subIndex: 52, flag: "Valid" },
+        { name: "NH₃", value: 22, unit: "µg/m³", standard: 400, subIndex: 16, flag: "Valid" },
+        { name: "Pb", value: 0.4, unit: "µg/m³", standard: 1.0, subIndex: 40, flag: "Valid" },
+      ],
       temperature: "25°C",
       humidity: "66%",
       windSpeed: "2.7 m/s",
-      windDirection: "NE",
+      windDirection: "NE (45°)",
       pressure: "1007 hPa",
     },
-
     "5": {
       id: "PMC-005",
+      gatewayId: "GW-BNR-07",
+      firmware: "v2.4.1",
       name: "Baner Monitoring Station",
-      ward: "Baner",
+      ward: "Baner (Ward 8)",
       zone: "West Zone",
       aqi: 214,
-      category: "Poor",
+      dominant: "PM2.5",
       status: "Offline",
+      power: "Battery (Critical 14%)",
+      lastCalibration: "10 Nov 2025",
       updated: "18 min ago",
-
-      pm25: 91,
-      pm10: 142,
-      no2: 61,
-      so2: 25,
-      co: 1.8,
-      o3: 63,
-      nh3: 29,
-      pb: 0.7,
-
+      pollutants: [
+        { name: "PM2.5", value: 91, unit: "µg/m³", standard: 60, subIndex: 214, flag: "Suspect" },
+        { name: "PM10", value: 142, unit: "µg/m³", standard: 100, subIndex: 128, flag: "Suspect" },
+        { name: "NO₂", value: 61, unit: "µg/m³", standard: 80, subIndex: 76, flag: "Valid" },
+        { name: "SO₂", value: 25, unit: "µg/m³", standard: 80, subIndex: 31, flag: "Valid" },
+        { name: "CO", value: 1.8, unit: "mg/m³", standard: 2.0, subIndex: 90, flag: "Valid" },
+        { name: "O₃", value: 63, unit: "µg/m³", standard: 100, subIndex: 63, flag: "Valid" },
+        { name: "NH₃", value: 29, unit: "µg/m³", standard: 400, subIndex: 20, flag: "Valid" },
+        { name: "Pb", value: 0.7, unit: "µg/m³", standard: 1.0, subIndex: 70, flag: "Valid" },
+      ],
       temperature: "23°C",
       humidity: "72%",
       windSpeed: "1.9 m/s",
-      windDirection: "SW",
+      windDirection: "SW (225°)",
       pressure: "1005 hPa",
     },
   };
 
-
   const station = stations[id] || stations["1"];
-
-
-  /* Historical AQI Data */
+  const aqiTheme = getCPCBStatus(station.aqi);
 
   const aqiData = {
-
     "24 Hours": [
-      { time: "12 AM", aqi: station.aqi - 12 },
-      { time: "3 AM", aqi: station.aqi - 8 },
-      { time: "6 AM", aqi: station.aqi - 5 },
-      { time: "9 AM", aqi: station.aqi + 4 },
-      { time: "12 PM", aqi: station.aqi + 10 },
-      { time: "3 PM", aqi: station.aqi + 6 },
-      { time: "6 PM", aqi: station.aqi + 14 },
-      { time: "9 PM", aqi: station.aqi },
+      { time: "00:00", aqi: station.aqi - 12 },
+      { time: "03:00", aqi: station.aqi - 8 },
+      { time: "06:00", aqi: station.aqi - 5 },
+      { time: "09:00", aqi: station.aqi + 14 },
+      { time: "12:00", aqi: station.aqi + 10 },
+      { time: "15:00", aqi: station.aqi + 6 },
+      { time: "18:00", aqi: station.aqi + 18 },
+      { time: "21:00", aqi: station.aqi },
     ],
-
     "7 Days": [
       { time: "Mon", aqi: station.aqi - 18 },
       { time: "Tue", aqi: station.aqi - 10 },
@@ -193,528 +204,232 @@ function StationDetails() {
       { time: "Sat", aqi: station.aqi + 7 },
       { time: "Sun", aqi: station.aqi },
     ],
-
     "30 Days": [
-      { time: "Week 1", aqi: station.aqi - 22 },
-      { time: "Week 2", aqi: station.aqi - 12 },
-      { time: "Week 3", aqi: station.aqi + 6 },
-      { time: "Week 4", aqi: station.aqi },
+      { time: "Wk 1", aqi: station.aqi - 22 },
+      { time: "Wk 2", aqi: station.aqi - 12 },
+      { time: "Wk 3", aqi: station.aqi + 6 },
+      { time: "Wk 4", aqi: station.aqi },
     ],
-
   };
 
-
-  const pollutantData = [
-    ["PM2.5", station.pm25, "µg/m³"],
-    ["PM10", station.pm10, "µg/m³"],
-    ["NO₂", station.no2, "µg/m³"],
-    ["SO₂", station.so2, "µg/m³"],
-    ["CO", station.co, "mg/m³"],
-    ["O₃", station.o3, "µg/m³"],
-    ["NH₃", station.nh3, "µg/m³"],
-    ["Pb", station.pb, "µg/m³"],
-  ];
-
-
   return (
-    <div className="min-h-screen bg-gray-50">
-
-      <main className="p-8">
-
-        {/* Back Button */}
-
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <main className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+        
+        {/* Navigation Breadcrumb */}
         <button
           onClick={() => navigate("/pune-areas")}
-          className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-blue-600 mb-6"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-blue-600 transition"
         >
-          <ArrowLeft size={18} />
-          Back to Pune Areas
+          <ArrowLeft size={16} />
+          Back to Pune Stations
         </button>
 
-
-        {/* Page Header */}
-
-        <div className="mb-7">
-
-          <div className="flex items-center gap-3">
-
-            <h1 className="text-3xl font-bold text-gray-900">
-              {station.name}
-            </h1>
-
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                station.status === "Online"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-600"
-              }`}
-            >
-              {station.status}
-            </span>
-
-          </div>
-
-          <p className="text-gray-500 mt-2">
-            {station.id} · {station.ward} · {station.zone}
-          </p>
-
-        </div>
-
-
-        {/* Current AQI + Station Information */}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-
-
-          {/* AQI Card */}
-
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
-            <div className="flex items-center justify-between">
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Current AQI
-                </p>
-
-                <p className="text-4xl font-bold text-gray-900 mt-3">
-                  {station.aqi}
-                </p>
-
-                <p className="text-sm text-orange-500 mt-2">
-                  {station.category}
-                </p>
-
-              </div>
-
-              <div className="w-12 h-12 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center">
-                <Activity size={24} />
-              </div>
-
-            </div>
-
-          </div>
-
-
-          {/* Station Status */}
-
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
-            <div className="flex items-center gap-3 mb-5">
-
-              <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                <Wifi size={22} />
-              </div>
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Station Status
-                </p>
-
-                <p className="font-semibold text-gray-900 mt-1">
-                  {station.status}
-                </p>
-
-              </div>
-
-            </div>
-
-            <p className="text-sm text-gray-500">
-              Last updated
-            </p>
-
-            <p className="text-sm font-medium text-gray-900 mt-1">
-              {station.updated}
-            </p>
-
-          </div>
-
-
-          {/* Location */}
-
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-
-            <div className="flex items-center gap-3 mb-5">
-
-              <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center">
-                <MapPin size={22} />
-              </div>
-
-              <div>
-
-                <p className="text-sm text-gray-500">
-                  Monitoring Area
-                </p>
-
-                <p className="font-semibold text-gray-900 mt-1">
-                  {station.ward}
-                </p>
-
-              </div>
-
-            </div>
-
-            <p className="text-sm text-gray-500">
-              Zone
-            </p>
-
-            <p className="text-sm font-medium text-gray-900 mt-1">
-              {station.zone}
-            </p>
-
-          </div>
-
-        </div>
-
-
-        {/* Current Pollutant Values */}
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
-
-          <div className="mb-6">
-
-            <h2 className="text-lg font-semibold text-gray-900">
-              Current Pollutant Values
-            </h2>
-
-            <p className="text-sm text-gray-500 mt-1">
-              Latest measurements from the monitoring station.
-            </p>
-
-          </div>
-
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-            {pollutantData.map(([name, value, unit]) => (
-
-              <div
-                key={name}
-                className="bg-gray-50 rounded-2xl p-5"
+        {/* Station Title Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-900">{station.name}</h1>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  station.status === "Online"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-rose-100 text-rose-700"
+                }`}
               >
-
-                <p className="text-sm text-gray-500">
-                  {name}
-                </p>
-
-                <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {value}
-                </p>
-
-                <p className="text-xs text-gray-400 mt-1">
-                  {unit}
-                </p>
-
-              </div>
-
-            ))}
-
-          </div>
-
-        </div>
-
-
-        {/* Meteorological Conditions */}
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
-
-          <div className="mb-6">
-
-            <h2 className="text-lg font-semibold text-gray-900">
-              Meteorological Conditions
-            </h2>
-
-            <p className="text-sm text-gray-500 mt-1">
-              Current meteorological measurements at the station.
+                ● {station.status}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 font-mono">
+              ID: {station.id} • {station.ward} • {station.zone} • Last Ping: {station.updated}
             </p>
-
           </div>
 
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">CPCB Station Class:</span>
+            <span className="text-xs font-semibold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
+              Continuous CAAQM (Real-Time)
+            </span>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-
-
-            <div className="bg-gray-50 rounded-2xl p-5">
-
-              <Thermometer className="text-orange-500" size={20} />
-
-              <p className="text-sm text-gray-500 mt-3">
-                Temperature
-              </p>
-
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {station.temperature}
-              </p>
-
+        {/* Primary AQI & Diagnostics Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          {/* AQI Score Card */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 relative overflow-hidden">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Calculated AQI</p>
+                <div className="text-4xl font-black text-slate-900 mt-2">{station.aqi}</div>
+              </div>
+              <span className={`px-2.5 py-1 rounded text-xs font-bold ${aqiTheme.badge}`}>
+                {aqiTheme.label}
+              </span>
             </div>
-
-
-            <div className="bg-gray-50 rounded-2xl p-5">
-
-              <Droplets className="text-blue-500" size={20} />
-
-              <p className="text-sm text-gray-500 mt-3">
-                Relative Humidity
-              </p>
-
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {station.humidity}
-              </p>
-
+            <div className="flex items-center gap-1 text-xs text-slate-500 mt-3">
+              <Flame size={14} className="text-amber-500" />
+              Dominant Driver: <strong className="text-slate-800">{station.dominant}</strong>
             </div>
+            <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${aqiTheme.bg}`}></div>
+          </div>
 
-
-            <div className="bg-gray-50 rounded-2xl p-5">
-
-              <Wind className="text-green-600" size={20} />
-
-              <p className="text-sm text-gray-500 mt-3">
-                Wind Speed
-              </p>
-
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {station.windSpeed}
-              </p>
-
+          {/* Sub-Index Critical Status */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Quality & Sub-Index</p>
+            <div className="mt-2 text-2xl font-bold text-slate-900">
+              {station.pollutants.find(p => p.name === station.dominant)?.subIndex || station.aqi}
+              <span className="text-xs font-normal text-slate-400 ml-1.5">Max Sub-Index</span>
             </div>
+            <p className="text-xs text-emerald-600 font-medium mt-3 flex items-center gap-1.5">
+              <ShieldCheck size={14} /> 8 of 8 Pollutant Analyzers Transmitting
+            </p>
+          </div>
 
-
-            <div className="bg-gray-50 rounded-2xl p-5">
-
-              <Wind className="text-blue-600" size={20} />
-
-              <p className="text-sm text-gray-500 mt-3">
-                Wind Direction
-              </p>
-
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {station.windDirection}
-              </p>
-
+          {/* Power & Gateway Status */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Gateway & Telemetry</p>
+            <div className="mt-2 text-sm font-semibold text-slate-800">
+              Gateway: <span className="font-mono text-blue-600">{station.gatewayId}</span>
             </div>
-
-
-            <div className="bg-gray-50 rounded-2xl p-5">
-
-              <Gauge className="text-purple-500" size={20} />
-
-              <p className="text-sm text-gray-500 mt-3">
-                Pressure
-              </p>
-
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {station.pressure}
-              </p>
-
+            <div className="text-xs text-slate-400 mt-1">
+              Power: <strong className="text-slate-600">{station.power}</strong>
             </div>
-
+            <div className="text-xs text-slate-400 mt-1">
+              Last Calibrated: <strong className="text-slate-600">{station.lastCalibration}</strong>
+            </div>
           </div>
 
         </div>
 
-
-        {/* Historical AQI */}
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
-
-          <div className="flex items-start justify-between">
-
+        {/* 8 CPCB Pollutants Matrix with Sub-Indices */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
             <div>
-
-              <h2 className="text-lg font-semibold text-gray-900">
-                Historical AQI
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                AQI trend for {station.name}.
-              </p>
-
+              <h2 className="text-base font-bold text-slate-900">Continuous 8-Pollutant Concentrations & Sub-Indices</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Parameters measured according to Central Pollution Control Board (CPCB) standards</p>
             </div>
+            <span className="text-[11px] font-medium text-slate-400">15-min rolling window</span>
+          </div>
 
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {station.pollutants.map((p) => {
+              const pTheme = getCPCBStatus(p.subIndex);
+              const isExceeded = p.value > p.standard;
+              return (
+                <div key={p.name} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col justify-between">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                    <span>{p.name}</span>
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-white text-slate-400 border border-slate-200">
+                      {p.flag}
+                    </span>
+                  </div>
 
-            <div className="flex gap-2">
+                  <div className="my-2">
+                    <div className={`text-xl font-extrabold ${isExceeded ? 'text-amber-600' : 'text-slate-900'}`}>
+                      {p.value}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono">{p.unit}</div>
+                  </div>
 
+                  <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center text-[10px]">
+                    <span className="text-slate-400">Sub-Index:</span>
+                    <span className={`font-bold px-1 rounded ${pTheme.badge}`}>{p.subIndex}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Historical AQI Trend Chart */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Historical AQI Trend</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Time-series observations for {station.name}</p>
+            </div>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
               {["24 Hours", "7 Days", "30 Days"].map((period) => (
-
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
                     selectedPeriod === period
-                      ? "bg-blue-50 text-blue-600"
-                      : "text-gray-500 hover:bg-gray-50"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
                   }`}
                 >
                   {period}
                 </button>
-
               ))}
-
             </div>
-
           </div>
 
-
-          <div className="h-80 mt-6">
-
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-
-              <LineChart
-                data={aqiData[selectedPeriod]}
-                margin={{
-                  top: 10,
-                  right: 20,
-                  left: 0,
-                  bottom: 5,
-                }}
-              >
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
+              <LineChart data={aqiData[selectedPeriod]} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#64748B' }} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 400]} tick={{ fontSize: 11, fill: '#64748B' }} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', fontSize: '12px', border: '1px solid #E2E8F0' }}
+                  formatter={(value) => [`${value} AQI`, 'Station AQI']}
                 />
-
-                <XAxis
-                  dataKey="time"
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <YAxis
-                  domain={[0, 500]}
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <Tooltip />
-
+                <ReferenceLine y={100} stroke="#92D050" strokeDasharray="3 3" label={{ value: 'Satisfactory (100)', fill: '#70a83b', fontSize: 10 }} />
+                <ReferenceLine y={200} stroke="#EAB308" strokeDasharray="3 3" label={{ value: 'Moderate (200)', fill: '#CA8A04', fontSize: 10 }} />
                 <Line
                   type="monotone"
                   dataKey="aqi"
-                  stroke="#2563eb"
-                  strokeWidth={3}
-                  dot={{
-                    r: 4,
-                    fill: "#2563eb",
-                  }}
-                  activeDot={{
-                    r: 6,
-                  }}
+                  stroke={aqiTheme.hex}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: aqiTheme.hex }}
+                  activeDot={{ r: 5 }}
                 />
-
               </LineChart>
-
             </ResponsiveContainer>
-
           </div>
-
         </div>
 
+        {/* Meteorological Strip */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
+          <h2 className="text-base font-bold text-slate-900 mb-1">Meteorological Dispersion Context</h2>
+          <p className="text-xs text-slate-400 mb-4">Atmospheric conditions impacting localized air pollutant movement</p>
 
-        {/* Station Information */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <Thermometer className="text-orange-500" size={18} />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Temperature</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">{station.temperature}</p>
+            </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <Droplets className="text-blue-500" size={18} />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Relative Humidity</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">{station.humidity}</p>
+            </div>
 
-          <div className="mb-6">
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <Wind className="text-emerald-600" size={18} />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Wind Speed</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">{station.windSpeed}</p>
+            </div>
 
-            <h2 className="text-lg font-semibold text-gray-900">
-              Station Information
-            </h2>
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <Wind className="text-sky-600" size={18} />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Wind Direction</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">{station.windDirection}</p>
+            </div>
 
-            <p className="text-sm text-gray-500 mt-1">
-              Monitoring station identification and status.
-            </p>
-
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <Gauge className="text-purple-500" size={18} />
+              <p className="text-xs text-slate-400 mt-2 font-medium">Atmospheric Pressure</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">{station.pressure}</p>
+            </div>
           </div>
-
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            <div className="flex items-center gap-3">
-
-              <Calendar
-                size={20}
-                className="text-gray-400"
-              />
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Station ID
-                </p>
-
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {station.id}
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="flex items-center gap-3">
-
-              <MapPin
-                size={20}
-                className="text-gray-400"
-              />
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Ward
-                </p>
-
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {station.ward}
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="flex items-center gap-3">
-
-              <Wifi
-                size={20}
-                className="text-gray-400"
-              />
-
-              <div>
-
-                <p className="text-xs text-gray-500">
-                  Connectivity
-                </p>
-
-                <p
-                  className={`text-sm font-medium mt-1 ${
-                    station.status === "Online"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {station.status}
-                </p>
-
-              </div>
-
-            </div>
-
-          </div>
-
         </div>
-
 
       </main>
-
     </div>
   );
 }
-
-
-export default StationDetails;
