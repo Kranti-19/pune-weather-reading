@@ -7,39 +7,36 @@ import {
   Activity,
   Database,
   Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
+import ExcelJS from "exceljs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import axios from "axios";
 
 
 function Reports() {
 
-  // ============================================
+  // =========================================================
   // STATE
-  // ============================================
+  // =========================================================
 
   const [stations, setStations] = useState([]);
-
   const [selectedStation, setSelectedStation] = useState("");
-
-  const [selectedDate, setSelectedDate] = useState(
-    "2026-08-20"
-  );
+  const [selectedDate, setSelectedDate] = useState("2026-08-20");
 
   const [report, setReport] = useState(null);
 
-  const [loadingStations, setLoadingStations] =
-    useState(true);
-
-  const [loadingReport, setLoadingReport] =
-    useState(false);
+  const [loadingStations, setLoadingStations] = useState(true);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const [error, setError] = useState("");
 
 
-  // ============================================
+  // =========================================================
   // GET STATIONS
-  // ============================================
+  // =========================================================
 
   useEffect(() => {
 
@@ -48,31 +45,23 @@ function Reports() {
       try {
 
         setLoadingStations(true);
-
         setError("");
 
         const response = await axios.get(
           "http://localhost:5000/api/stations"
         );
 
-        console.log(
-          "Stations response:",
-          response.data
-        );
-
+        console.log("Stations response:", response.data);
 
         const stationList =
           response.data.stations || [];
 
-
         setStations(stationList);
 
-
-        // Select first station automatically
         if (stationList.length > 0) {
 
           setSelectedStation(
-            stationList[0].station_id
+            String(stationList[0].station_id)
           );
 
         }
@@ -97,15 +86,14 @@ function Reports() {
 
     };
 
-
     fetchStations();
 
   }, []);
 
 
-  // ============================================
+  // =========================================================
   // GENERATE REPORT
-  // ============================================
+  // =========================================================
 
   const handleGenerateReport = async () => {
 
@@ -116,7 +104,6 @@ function Reports() {
       );
 
       return;
-
     }
 
 
@@ -127,23 +114,18 @@ function Reports() {
       );
 
       return;
-
     }
 
 
     try {
 
       setLoadingReport(true);
-
       setError("");
-
       setReport(null);
-
 
       const response = await axios.get(
         `http://localhost:5000/api/reports/${selectedStation}?date=${selectedDate}`
       );
-
 
       console.log(
         "Report response:",
@@ -175,7 +157,6 @@ function Reports() {
         error
       );
 
-
       setError(
         error.response?.data?.message ||
         "Failed to generate report."
@@ -190,10 +171,9 @@ function Reports() {
   };
 
 
-  // ============================================
+  // =========================================================
   // AUTO GENERATE REPORT
-  // AFTER STATIONS LOAD
-  // ============================================
+  // =========================================================
 
   useEffect(() => {
 
@@ -214,9 +194,9 @@ function Reports() {
   ]);
 
 
-  // ============================================
+  // =========================================================
   // FORMAT DATE
-  // ============================================
+  // =========================================================
 
   const formatDate = (date) => {
 
@@ -239,13 +219,11 @@ function Reports() {
   };
 
 
-  // ============================================
+  // =========================================================
   // CATEGORY STYLE
-  // ============================================
+  // =========================================================
 
-  const getCategoryStyle = (
-    category
-  ) => {
+  const getCategoryStyle = (category) => {
 
     switch (
       category?.toLowerCase()
@@ -277,16 +255,15 @@ function Reports() {
   };
 
 
-  // ============================================
+  // =========================================================
   // STATION STATUS STYLE
-  // ============================================
+  // =========================================================
 
-  const getStationStatusStyle = (
-    status
-  ) => {
+  const getStationStatusStyle = (status) => {
 
     if (
-      status?.toLowerCase() === "online"
+      status?.toLowerCase() === "online" ||
+      status?.toLowerCase() === "active"
     ) {
 
       return {
@@ -304,11 +281,88 @@ function Reports() {
   };
 
 
-  // ============================================
-  // EXPORT
-  // ============================================
+  // =========================================================
+  // EXCEL HELPER FUNCTIONS
+  // =========================================================
 
-  const handleExport = () => {
+  const applyBorder = (cell) => {
+
+    cell.border = {
+
+      top: {
+        style: "thin",
+        color: {
+          argb: "D1D5DB",
+        },
+      },
+
+      bottom: {
+        style: "thin",
+        color: {
+          argb: "D1D5DB",
+        },
+      },
+
+      left: {
+        style: "thin",
+        color: {
+          argb: "D1D5DB",
+        },
+      },
+
+      right: {
+        style: "thin",
+        color: {
+          argb: "D1D5DB",
+        },
+      },
+
+    };
+
+  };
+
+
+  const styleSectionHeading = (
+    worksheet,
+    cellAddress,
+    text
+  ) => {
+
+    const cell =
+      worksheet.getCell(cellAddress);
+
+    cell.value = text;
+
+    cell.font = {
+      name: "Calibri",
+      size: 12,
+      bold: true,
+      color: {
+        argb: "FFFFFF",
+      },
+    };
+
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: {
+        argb: "2563EB",
+      },
+    };
+
+    cell.alignment = {
+      horizontal: "left",
+      vertical: "middle",
+    };
+
+  };
+
+
+  // =========================================================
+  // EXCEL EXPORT
+  // =========================================================
+
+  const handleExportExcel = async () => {
 
     if (!report) {
 
@@ -321,121 +375,1187 @@ function Reports() {
     }
 
 
-    // Temporary export
-    // We can connect this to a backend
-    // PDF/CSV API later.
+    try {
 
-    const reportText = `
-
-PUNE MUNICIPAL CORPORATION
-AIR QUALITY MONITORING REPORT
-
-Station:
-${report.station}
-
-Station ID:
-${report.stationId}
-
-Ward:
-${report.ward}
-
-Zone:
-${report.zone}
-
-Date:
-${formatDate(report.date)}
-
-AQI:
-${report.aqi ?? "-"}
-
-Category:
-${report.category ?? "-"}
-
-Dominant Pollutant:
-${report.dominantPollutant ?? "-"}
-
-Data Availability:
-${report.dataAvailability ?? "-"}
-
-Station Status:
-${report.stationStatus ?? "-"}
+      setError("");
 
 
-POLLUTANT MEASUREMENTS
+      // -----------------------------------------------------
+      // CREATE WORKBOOK
+      // -----------------------------------------------------
 
-${(report.pollutants || [])
-  .map(
-    (pollutant) =>
-      `${pollutant.name}: ${pollutant.value} ${pollutant.unit}`
-  )
-  .join("\n")}
+      const workbook =
+        new ExcelJS.Workbook();
 
-`;
+      workbook.creator =
+        "Pune Municipal Corporation";
+
+      workbook.lastModifiedBy =
+        "Air Quality Monitoring System";
+
+      workbook.created =
+        new Date();
+
+      workbook.modified =
+        new Date();
 
 
-    const blob =
-      new Blob(
-        [reportText],
+      // -----------------------------------------------------
+      // CREATE WORKSHEET
+      // -----------------------------------------------------
+
+      const worksheet =
+        workbook.addWorksheet(
+          "Air Quality Report"
+        );
+
+
+      // -----------------------------------------------------
+      // COLUMN WIDTHS
+      // -----------------------------------------------------
+
+      worksheet.columns = [
+
         {
-          type: "text/plain",
+          key: "A",
+          width: 27,
+        },
+
+        {
+          key: "B",
+          width: 25,
+        },
+
+        {
+          key: "C",
+          width: 27,
+        },
+
+        {
+          key: "D",
+          width: 25,
+        },
+
+      ];
+
+
+      // -----------------------------------------------------
+      // PAGE SETUP
+      // -----------------------------------------------------
+
+      worksheet.pageSetup = {
+
+        paperSize: 9,
+
+        orientation: "portrait",
+
+        fitToPage: true,
+
+        fitToWidth: 1,
+
+        fitToHeight: 0,
+
+        horizontalCentered: true,
+
+        verticalCentered: false,
+
+        margins: {
+
+          left: 0.25,
+
+          right: 0.25,
+
+          top: 0.5,
+
+          bottom: 0.5,
+
+          header: 0.2,
+
+          footer: 0.2,
+
+        },
+
+      };
+
+
+      // =====================================================
+      // TITLE
+      // =====================================================
+
+      worksheet.mergeCells("A1:D1");
+
+      const titleCell =
+        worksheet.getCell("A1");
+
+      titleCell.value =
+        "PUNE MUNICIPAL CORPORATION";
+
+      titleCell.font = {
+
+        name: "Calibri",
+
+        size: 18,
+
+        bold: true,
+
+        color: {
+          argb: "FFFFFF",
+        },
+
+      };
+
+      titleCell.fill = {
+
+        type: "pattern",
+
+        pattern: "solid",
+
+        fgColor: {
+          argb: "2563EB",
+        },
+
+      };
+
+      titleCell.alignment = {
+
+        horizontal: "center",
+
+        vertical: "middle",
+
+      };
+
+      worksheet.getRow(1).height = 34;
+
+
+      // =====================================================
+      // SUBTITLE
+      // =====================================================
+
+      worksheet.mergeCells("A2:D2");
+
+      const subtitleCell =
+        worksheet.getCell("A2");
+
+      subtitleCell.value =
+        "AIR QUALITY MONITORING REPORT";
+
+      subtitleCell.font = {
+
+        name: "Calibri",
+
+        size: 14,
+
+        bold: true,
+
+        color: {
+          argb: "1E3A8A",
+        },
+
+      };
+
+      subtitleCell.alignment = {
+
+        horizontal: "center",
+
+        vertical: "middle",
+
+      };
+
+      worksheet.getRow(2).height = 26;
+
+
+      // Empty row
+
+      worksheet.getRow(3).height = 8;
+
+
+      // =====================================================
+      // STATION DETAILS
+      // =====================================================
+
+      worksheet.mergeCells("A4:D4");
+
+      styleSectionHeading(
+        worksheet,
+        "A4",
+        "STATION DETAILS"
+      );
+
+      worksheet.getRow(4).height = 24;
+
+
+      // Station row
+
+      worksheet.addRow([
+
+        "Station",
+
+        report.station || "-",
+
+        "Station ID",
+
+        report.stationId ?? "-",
+
+      ]);
+
+
+      // Ward row
+
+      worksheet.addRow([
+
+        "Ward",
+
+        report.ward || "-",
+
+        "Zone",
+
+        report.zone || "-",
+
+      ]);
+
+
+      // Date row
+
+      worksheet.addRow([
+
+        "Report Date",
+
+        formatDate(report.date),
+
+        "Station Status",
+
+        report.stationStatus || "-",
+
+      ]);
+
+
+      // Style rows 5-7
+
+      for (
+        let rowNumber = 5;
+        rowNumber <= 7;
+        rowNumber++
+      ) {
+
+        const row =
+          worksheet.getRow(rowNumber);
+
+        row.height = 24;
+
+        for (
+          let columnNumber = 1;
+          columnNumber <= 4;
+          columnNumber++
+        ) {
+
+          const cell =
+            row.getCell(columnNumber);
+
+          applyBorder(cell);
+
+          cell.alignment = {
+
+            vertical: "middle",
+
+            wrapText: true,
+
+          };
+
+        }
+
+        row.getCell(1).font = {
+          bold: true,
+        };
+
+        row.getCell(3).font = {
+          bold: true,
+        };
+
+      }
+
+
+      // =====================================================
+      // SPACE
+      // =====================================================
+
+      worksheet.getRow(8).height = 8;
+
+
+      // =====================================================
+      // AQI SUMMARY
+      // =====================================================
+
+      worksheet.mergeCells("A9:D9");
+
+      styleSectionHeading(
+        worksheet,
+        "A9",
+        "AQI SUMMARY"
+      );
+
+      worksheet.getRow(9).height = 24;
+
+
+      worksheet.addRow([
+
+        "AQI",
+
+        report.aqi ?? "-",
+
+        "Category",
+
+        report.category || "-",
+
+      ]);
+
+
+      worksheet.addRow([
+
+        "Dominant Pollutant",
+
+        report.dominantPollutant || "-",
+
+        "Data Availability",
+
+        report.dataAvailability || "-",
+
+      ]);
+
+
+      // Style AQI rows
+
+      for (
+        let rowNumber = 10;
+        rowNumber <= 11;
+        rowNumber++
+      ) {
+
+        const row =
+          worksheet.getRow(rowNumber);
+
+        row.height = 25;
+
+        for (
+          let columnNumber = 1;
+          columnNumber <= 4;
+          columnNumber++
+        ) {
+
+          const cell =
+            row.getCell(columnNumber);
+
+          applyBorder(cell);
+
+          cell.alignment = {
+
+            vertical: "middle",
+
+            wrapText: true,
+
+          };
+
+        }
+
+        row.getCell(1).font = {
+          bold: true,
+        };
+
+        row.getCell(3).font = {
+          bold: true,
+        };
+
+      }
+
+
+      // AQI value
+
+      worksheet.getCell("B10").font = {
+
+        bold: true,
+
+        size: 15,
+
+      };
+
+      worksheet.getCell("B10").alignment = {
+
+        horizontal: "center",
+
+        vertical: "middle",
+
+      };
+
+
+      // Category
+
+      worksheet.getCell("D10").font = {
+
+        bold: true,
+
+      };
+
+
+      // =====================================================
+      // SPACE
+      // =====================================================
+
+      worksheet.getRow(12).height = 8;
+
+
+      // =====================================================
+      // POLLUTANT MEASUREMENTS
+      // =====================================================
+
+      worksheet.mergeCells("A13:D13");
+
+      styleSectionHeading(
+        worksheet,
+        "A13",
+        "POLLUTANT MEASUREMENTS"
+      );
+
+      worksheet.getRow(13).height = 24;
+
+
+      // -----------------------------------------------------
+      // TABLE HEADER
+      // -----------------------------------------------------
+
+      const headerRow =
+        worksheet.addRow([
+
+          "Parameter",
+
+          "Value",
+
+          "Unit",
+
+          "Quality",
+
+        ]);
+
+
+      headerRow.height = 27;
+
+
+      headerRow.eachCell(
+        (cell) => {
+
+          cell.font = {
+
+            name: "Calibri",
+
+            size: 11,
+
+            bold: true,
+
+            color: {
+              argb: "FFFFFF",
+            },
+
+          };
+
+          cell.fill = {
+
+            type: "pattern",
+
+            pattern: "solid",
+
+            fgColor: {
+              argb: "1E40AF",
+            },
+
+          };
+
+          cell.alignment = {
+
+            horizontal: "center",
+
+            vertical: "middle",
+
+          };
+
+          applyBorder(cell);
+
         }
       );
 
 
-    const url =
-      URL.createObjectURL(blob);
+      // =====================================================
+      // POLLUTANT DATA
+      // =====================================================
+
+      if (
+        report.pollutants &&
+        report.pollutants.length > 0
+      ) {
+
+        report.pollutants.forEach(
+          (pollutant) => {
+
+            const row =
+              worksheet.addRow([
+
+                pollutant.name || "-",
+
+                pollutant.value ?? "-",
+
+                pollutant.unit || "-",
+
+                pollutant.qualityFlag ||
+                "Valid",
+
+              ]);
 
 
-    const link =
-      document.createElement("a");
+            row.height = 24;
 
 
-    link.href = url;
+            row.eachCell(
+              (cell) => {
 
-    link.download =
-      `${report.station}_report_${report.date}.txt`;
+                applyBorder(cell);
+
+                cell.alignment = {
+
+                  vertical: "middle",
+
+                  wrapText: true,
+
+                };
+
+              }
+            );
 
 
-    document.body.appendChild(link);
+            row.getCell(2).alignment = {
 
-    link.click();
+              horizontal: "center",
 
-    document.body.removeChild(link);
+              vertical: "middle",
 
-    URL.revokeObjectURL(url);
+            };
+
+
+            row.getCell(3).alignment = {
+
+              horizontal: "center",
+
+              vertical: "middle",
+
+            };
+
+
+            row.getCell(4).alignment = {
+
+              horizontal: "center",
+
+              vertical: "middle",
+
+            };
+
+
+            const quality =
+              pollutant.qualityFlag
+                ?.toLowerCase();
+
+
+            if (
+              quality === "good" ||
+              quality === "valid"
+            ) {
+
+              row.getCell(4).font = {
+
+                bold: true,
+
+                color: {
+                  argb: "15803D",
+                },
+
+              };
+
+            }
+
+          }
+        );
+
+      } else {
+
+        const row =
+          worksheet.addRow([
+
+            "No pollutant readings available",
+
+            "-",
+
+            "-",
+
+            "-",
+
+          ]);
+
+
+        row.height = 24;
+
+
+        row.eachCell(
+          (cell) => {
+
+            applyBorder(cell);
+
+            cell.alignment = {
+
+              vertical: "middle",
+
+              wrapText: true,
+
+            };
+
+          }
+        );
+
+      }
+
+
+      // =====================================================
+      // FOOTER
+      // =====================================================
+
+      const footerSpacer =
+        worksheet.addRow([]);
+
+      footerSpacer.height = 12;
+
+
+      const footer =
+        worksheet.addRow([
+
+          "Pune Municipal Corporation - Air Quality Monitoring System",
+
+        ]);
+
+
+      worksheet.mergeCells(
+        `A${footer.number}:D${footer.number}`
+      );
+
+
+      footer.height = 22;
+
+
+      footer.getCell(1).font = {
+
+        name: "Calibri",
+
+        italic: true,
+
+        size: 9,
+
+        color: {
+          argb: "6B7280",
+        },
+
+      };
+
+
+      footer.getCell(1).alignment = {
+
+        horizontal: "center",
+
+        vertical: "middle",
+
+      };
+
+
+      // =====================================================
+      // IMPORTANT:
+      // NO FREEZE PANES
+      // =====================================================
+
+      /*
+        Do NOT add:
+
+        worksheet.views = [
+          {
+            state: "frozen",
+            ySplit: 14
+          }
+        ];
+
+        That causes the top rows to remain visible while
+        scrolling and makes the report look duplicated.
+      */
+
+
+      // =====================================================
+      // PRINT AREA
+      // =====================================================
+
+      worksheet.pageSetup.printArea =
+        `A1:D${footer.number}`;
+
+
+      // =====================================================
+      // HEADER / FOOTER
+      // =====================================================
+
+      // The report already contains a footer row inside the worksheet.
+      // Do not use worksheet.headerFooter.oddFooter.center.text here.
+      // ExcelJS does not initialize oddFooter as an object in this
+      // browser-side workbook, which causes the export error.
+
+      // =====================================================
+      // DOWNLOAD EXCEL
+      // =====================================================
+
+      const buffer =
+        await workbook.xlsx.writeBuffer();
+
+
+      const blob =
+        new Blob(
+          [buffer],
+          {
+            type:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }
+        );
+
+
+      const url =
+        window.URL.createObjectURL(blob);
+
+
+      const link =
+        document.createElement("a");
+
+
+      link.href = url;
+
+
+      link.download =
+        `${report.station || "Station"}_Report_${report.date}.xlsx`;
+
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+
+      window.URL.revokeObjectURL(url);
+
+
+    } catch (error) {
+
+      console.error(
+        "Excel export error:",
+        error
+      );
+
+      setError(
+        "Failed to export Excel report."
+      );
+
+    }
 
   };
 
 
-  // ============================================
+  // =========================================================
+  // PDF EXPORT
+  // =========================================================
+
+  const handleExportPDF = () => {
+
+    if (!report) {
+
+      setError(
+        "Generate a report before exporting."
+      );
+
+      return;
+
+    }
+
+
+    try {
+
+      const doc =
+        new jsPDF();
+
+
+      // =====================================================
+      // TITLE
+      // =====================================================
+
+      doc.setFontSize(18);
+
+      doc.setFont(
+        "helvetica",
+        "bold"
+      );
+
+      doc.text(
+        "PUNE MUNICIPAL CORPORATION",
+        105,
+        20,
+        {
+          align: "center",
+        }
+      );
+
+
+      doc.setFontSize(14);
+
+      doc.text(
+        "AIR QUALITY MONITORING REPORT",
+        105,
+        30,
+        {
+          align: "center",
+        }
+      );
+
+
+      // =====================================================
+      // STATION DETAILS
+      // =====================================================
+
+      doc.setFont(
+        "helvetica",
+        "normal"
+      );
+
+      doc.setFontSize(11);
+
+
+      doc.text(
+        `Station: ${report.station || "-"}`,
+        15,
+        45
+      );
+
+
+      doc.text(
+        `Station ID: ${report.stationId || "-"}`,
+        15,
+        53
+      );
+
+
+      doc.text(
+        `Ward: ${report.ward || "-"}`,
+        15,
+        61
+      );
+
+
+      doc.text(
+        `Zone: ${report.zone || "-"}`,
+        15,
+        69
+      );
+
+
+      doc.text(
+        `Report Date: ${formatDate(report.date)}`,
+        15,
+        77
+      );
+
+
+      doc.text(
+        `Station Status: ${report.stationStatus || "-"}`,
+        15,
+        85
+      );
+
+
+      // =====================================================
+      // AQI SUMMARY
+      // =====================================================
+
+      doc.setFont(
+        "helvetica",
+        "bold"
+      );
+
+      doc.setFontSize(13);
+
+      doc.text(
+        "AQI Summary",
+        15,
+        98
+      );
+
+
+      const aqiRows = [
+
+        [
+
+          report.aqi ?? "-",
+
+          report.category || "-",
+
+          report.dominantPollutant || "-",
+
+          report.dataAvailability || "-",
+
+        ],
+
+      ];
+
+
+      autoTable(
+        doc,
+        {
+
+          startY: 103,
+
+          head: [
+
+            [
+
+              "AQI",
+
+              "Category",
+
+              "Dominant Pollutant",
+
+              "Availability",
+
+            ],
+
+          ],
+
+          body: aqiRows,
+
+          theme: "grid",
+
+          styles: {
+
+            fontSize: 9,
+
+            cellPadding: 3,
+
+          },
+
+          headStyles: {
+
+            fillColor: [
+              37,
+              99,
+              235,
+            ],
+
+            textColor: 255,
+
+            fontStyle: "bold",
+
+          },
+
+        }
+      );
+
+
+      // =====================================================
+      // POLLUTANT TABLE
+      // =====================================================
+
+      const finalY =
+        doc.lastAutoTable.finalY + 15;
+
+
+      doc.setFont(
+        "helvetica",
+        "bold"
+      );
+
+      doc.setFontSize(13);
+
+      doc.text(
+        "Pollutant Measurements",
+        15,
+        finalY
+      );
+
+
+      const pollutantRows =
+        (report.pollutants || []).map(
+          (pollutant) => [
+
+            pollutant.name || "-",
+
+            pollutant.value ?? "-",
+
+            pollutant.unit || "-",
+
+            pollutant.qualityFlag ||
+            "Valid",
+
+          ]
+        );
+
+
+      autoTable(
+        doc,
+        {
+
+          startY: finalY + 6,
+
+          head: [
+
+            [
+
+              "Parameter",
+
+              "Value",
+
+              "Unit",
+
+              "Quality",
+
+            ],
+
+          ],
+
+          body:
+
+            pollutantRows.length > 0
+
+              ? pollutantRows
+
+              : [
+
+                  [
+
+                    "No readings",
+
+                    "-",
+
+                    "-",
+
+                    "-",
+
+                  ],
+
+                ],
+
+          theme: "grid",
+
+          styles: {
+
+            fontSize: 10,
+
+            cellPadding: 3,
+
+          },
+
+          headStyles: {
+
+            fillColor: [
+              30,
+              64,
+              175,
+            ],
+
+            textColor: 255,
+
+            fontStyle: "bold",
+
+          },
+
+        }
+      );
+
+
+      // =====================================================
+      // FOOTER
+      // =====================================================
+
+      const pageHeight =
+        doc.internal.pageSize.height;
+
+
+      doc.setFont(
+        "helvetica",
+        "normal"
+      );
+
+      doc.setFontSize(8);
+
+      doc.text(
+        "Pune Municipal Corporation - Air Quality Monitoring System",
+        105,
+        pageHeight - 10,
+        {
+          align: "center",
+        }
+      );
+
+
+      // =====================================================
+      // DOWNLOAD
+      // =====================================================
+
+      doc.save(
+        `${report.station || "Station"}_Report_${report.date}.pdf`
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "PDF export error:",
+        error
+      );
+
+      setError(
+        "Failed to export PDF report."
+      );
+
+    }
+
+  };
+
+
+  // =========================================================
   // MAIN UI
-  // ============================================
+  // =========================================================
 
   return (
 
     <main className="p-8">
 
 
-      {/* ========================================
+      {/* =====================================================
           PAGE HEADER
-      ======================================== */}
+      ===================================================== */}
 
       <div className="mb-7">
 
         <h1 className="text-3xl font-bold text-gray-900">
+
           Reports
+
         </h1>
 
+
         <p className="text-gray-500 mt-2">
+
           Generate air-quality monitoring reports for Pune.
+
         </p>
 
       </div>
 
 
-      {/* ========================================
-          ERROR MESSAGE
-      ======================================== */}
+      {/* =====================================================
+          ERROR
+      ===================================================== */}
 
       {error && (
 
@@ -448,9 +1568,9 @@ ${(report.pollutants || [])
       )}
 
 
-      {/* ========================================
+      {/* =====================================================
           REPORT CONFIGURATION
-      ======================================== */}
+      ===================================================== */}
 
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
 
@@ -468,14 +1588,20 @@ ${(report.pollutants || [])
           <div>
 
             <h2 className="text-lg font-semibold text-gray-900">
+
               Daily Station Report
+
             </h2>
 
+
             <p className="text-sm text-gray-500 mt-1">
+
               Generate a daily air-quality report for a monitoring station.
+
             </p>
 
           </div>
+
 
         </div>
 
@@ -483,14 +1609,16 @@ ${(report.pollutants || [])
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
 
-          {/* ========================================
+          {/* =================================================
               STATION
-          ======================================== */}
+          ================================================= */}
 
           <div>
 
             <label className="text-sm font-medium text-gray-700">
+
               Monitoring Station
+
             </label>
 
 
@@ -504,26 +1632,35 @@ ${(report.pollutants || [])
 
 
               <select
+
                 value={selectedStation}
+
                 onChange={(e) =>
                   setSelectedStation(
                     e.target.value
                   )
                 }
+
                 disabled={loadingStations}
+
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
+
               >
 
                 {loadingStations ? (
 
                   <option>
+
                     Loading stations...
+
                   </option>
 
                 ) : stations.length === 0 ? (
 
                   <option>
+
                     No stations available
+
                   </option>
 
                 ) : (
@@ -532,14 +1669,19 @@ ${(report.pollutants || [])
                     (station) => (
 
                       <option
+
                         key={
                           station.station_id
                         }
+
                         value={
                           station.station_id
                         }
+
                       >
+
                         {station.name}
+
                       </option>
 
                     )
@@ -554,14 +1696,16 @@ ${(report.pollutants || [])
           </div>
 
 
-          {/* ========================================
+          {/* =================================================
               DATE
-          ======================================== */}
+          ================================================= */}
 
           <div>
 
             <label className="text-sm font-medium text-gray-700">
+
               Report Date
+
             </label>
 
 
@@ -575,14 +1719,19 @@ ${(report.pollutants || [])
 
 
               <input
+
                 type="date"
+
                 value={selectedDate}
+
                 onChange={(e) =>
                   setSelectedDate(
                     e.target.value
                   )
                 }
+
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+
               />
 
             </div>
@@ -590,25 +1739,30 @@ ${(report.pollutants || [])
           </div>
 
 
-          {/* ========================================
-              GENERATE BUTTON
-          ======================================== */}
+          {/* =================================================
+              GENERATE
+          ================================================= */}
 
           <div className="flex items-end">
 
             <button
+
               onClick={
                 handleGenerateReport
               }
+
               disabled={
                 loadingReport ||
                 loadingStations ||
                 !selectedStation
               }
+
               className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition disabled:bg-blue-300 disabled:cursor-not-allowed"
+
             >
 
               <FileText size={18} />
+
 
               {loadingReport
                 ? "Generating..."
@@ -618,14 +1772,15 @@ ${(report.pollutants || [])
 
           </div>
 
+
         </div>
 
       </div>
 
 
-      {/* ========================================
-          REPORT
-      ======================================== */}
+      {/* =====================================================
+          LOADING
+      ===================================================== */}
 
       {loadingReport && (
 
@@ -633,14 +1788,21 @@ ${(report.pollutants || [])
 
           <div className="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto"></div>
 
+
           <p className="text-gray-500 mt-4">
+
             Generating report...
+
           </p>
 
         </div>
 
       )}
 
+
+      {/* =====================================================
+          NO REPORT
+      ===================================================== */}
 
       {!loadingReport && !report && (
 
@@ -651,8 +1813,11 @@ ${(report.pollutants || [])
             className="mx-auto text-gray-300"
           />
 
+
           <p className="text-gray-500 mt-4">
+
             Select a station and date to generate a report.
+
           </p>
 
         </div>
@@ -660,14 +1825,18 @@ ${(report.pollutants || [])
       )}
 
 
+      {/* =====================================================
+          REPORT
+      ===================================================== */}
+
       {!loadingReport && report && (
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
 
 
-          {/* ========================================
+          {/* =================================================
               REPORT HEADER
-          ======================================== */}
+          ================================================= */}
 
           <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
 
@@ -675,7 +1844,9 @@ ${(report.pollutants || [])
             <div>
 
               <p className="text-sm text-gray-500">
+
                 Daily Station Report
+
               </p>
 
 
@@ -706,7 +1877,9 @@ ${(report.pollutants || [])
             <div className="text-left md:text-right">
 
               <p className="text-sm text-gray-500">
+
                 Report Date
+
               </p>
 
 
@@ -720,18 +1893,21 @@ ${(report.pollutants || [])
 
             </div>
 
+
           </div>
 
 
-          {/* ========================================
+          {/* =================================================
               AQI SUMMARY
-          ======================================== */}
+          ================================================= */}
 
           <div className="p-6 border-b border-gray-100">
 
 
             <h3 className="text-lg font-semibold text-gray-900">
+
               AQI Summary
+
             </h3>
 
 
@@ -748,7 +1924,9 @@ ${(report.pollutants || [])
                   <Activity size={18} />
 
                   <span className="text-sm font-medium">
+
                     AQI
+
                   </span>
 
                 </div>
@@ -783,7 +1961,9 @@ ${(report.pollutants || [])
               <div className="p-5 rounded-2xl bg-gray-50">
 
                 <p className="text-sm text-gray-500">
+
                   Dominant Pollutant
+
                 </p>
 
 
@@ -807,7 +1987,9 @@ ${(report.pollutants || [])
                   <Database size={18} />
 
                   <span className="text-sm font-medium">
+
                     Data Availability
+
                   </span>
 
                 </div>
@@ -827,14 +2009,14 @@ ${(report.pollutants || [])
 
               <div className="p-5 rounded-2xl bg-blue-50">
 
-
                 <p className="text-sm text-gray-500">
+
                   Station Status
+
                 </p>
 
 
                 <div className="flex items-center gap-2 mt-3">
-
 
                   <span
                     className={`w-2.5 h-2.5 rounded-full ${
@@ -862,32 +2044,33 @@ ${(report.pollutants || [])
 
               </div>
 
+
             </div>
 
           </div>
 
 
-          {/* ========================================
-              POLLUTANT MEASUREMENTS
-          ======================================== */}
+          {/* =================================================
+              POLLUTANTS
+          ================================================= */}
 
           <div className="p-6">
 
 
-            <div className="flex items-center justify-between mb-5">
+            <div className="mb-5">
 
-              <div>
+              <h3 className="text-lg font-semibold text-gray-900">
 
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Daily Pollutant Measurements
-                </h3>
+                Daily Pollutant Measurements
+
+              </h3>
 
 
-                <p className="text-sm text-gray-500 mt-1">
-                  Recorded pollutant observations for the selected station.
-                </p>
+              <p className="text-sm text-gray-500 mt-1">
 
-              </div>
+                Recorded pollutant observations for the selected station.
+
+              </p>
 
             </div>
 
@@ -903,22 +2086,30 @@ ${(report.pollutants || [])
                   <tr className="border-b border-gray-100">
 
                     <th className="text-left pb-3 text-sm font-medium text-gray-500">
+
                       Parameter
+
                     </th>
 
 
                     <th className="text-left pb-3 text-sm font-medium text-gray-500">
+
                       Value
+
                     </th>
 
 
                     <th className="text-left pb-3 text-sm font-medium text-gray-500">
+
                       Unit
+
                     </th>
 
 
                     <th className="text-left pb-3 text-sm font-medium text-gray-500">
+
                       Quality
+
                     </th>
 
                   </tr>
@@ -957,7 +2148,6 @@ ${(report.pollutants || [])
                           }
                           className="border-b border-gray-50 last:border-0"
                         >
-
 
                           <td className="py-4 font-medium text-gray-900">
 
@@ -1017,30 +2207,69 @@ ${(report.pollutants || [])
           </div>
 
 
-          {/* ========================================
-              FOOTER
-          ======================================== */}
+          {/* =================================================
+              EXPORT
+          ================================================= */}
 
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
 
 
             <p className="text-xs text-gray-500">
+
               Daily station report · Pune Municipal Corporation
+
             </p>
 
 
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
+            <div className="flex flex-wrap items-center gap-3">
 
-              <Download size={17} />
 
-              Export Report
+              {/* EXCEL */}
 
-            </button>
+              <button
+
+                onClick={
+                  handleExportExcel
+                }
+
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition text-sm font-medium"
+
+              >
+
+                <FileSpreadsheet
+                  size={17}
+                />
+
+                Export Excel
+
+              </button>
+
+
+              {/* PDF */}
+
+              <button
+
+                onClick={
+                  handleExportPDF
+                }
+
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition text-sm font-medium"
+
+              >
+
+                <Download
+                  size={17}
+                />
+
+                Export PDF
+
+              </button>
+
+
+            </div>
 
           </div>
+
 
         </div>
 
