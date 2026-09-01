@@ -1,8 +1,13 @@
+require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SECRET_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("⚠️ Supabase URL or Secret Key is missing in environment variables!");
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = supabase;

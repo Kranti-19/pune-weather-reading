@@ -1,9 +1,5 @@
 const supabase = require("../config/supabase");
 
-
-
-
-
 // register 
 const register = async (req, res) => {
     try {
