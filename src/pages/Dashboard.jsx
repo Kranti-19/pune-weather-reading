@@ -1,4 +1,4 @@
-<<<<<<< Updated upstream
+// <<<<<<< Updated upstream
 import React, { useState } from "react";
 import {
   Wind,
@@ -557,5 +557,5 @@ export default function Dashboard() {
     </div>
   );
 }
-=======
->>>>>>> Stashed changes
+// =======
+// >>>>>>> Stashed changes

@@ -1,4 +1,4 @@
-<<<<<<< Updated upstream
+// <<<<<<< Updated upstream
 import React, { useState } from "react";
 import {
   Activity,
@@ -645,5 +645,5 @@ export default function DeviceHealth() {
     </div>
   );
 }
-=======
->>>>>>> Stashed changes
+// =======
+// >>>>>>> Stashed changes

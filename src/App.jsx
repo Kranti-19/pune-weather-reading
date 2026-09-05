@@ -17,6 +17,8 @@ import DeviceHealth from "./pages/DeviceHealth";
 import Maintenance from "./pages/Maintenance";
 import Reports from "./pages/Reports";
 
+import AddMonitoringSite from "./pages/AddMonitoringSite";
+
 import Layout from "./components/Layout";
 
 function App() {
@@ -147,6 +149,11 @@ function App() {
               <Reports />
             </Layout>
           }
+        />
+
+        <Route
+          path="/admin/add-monitoring-site"
+          element={<AddMonitoringSite />}
         />
 
       </Routes>

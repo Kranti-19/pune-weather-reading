@@ -1,21 +1,42 @@
 const express = require("express");
 
+const router =
+    express.Router();
+
 const {
     getAlerts,
     getAlertById,
-    acknowledgeAlert
+    acknowledgeAlert,
+    resolveAlert
 } = require("../controllers/alertController");
 
-const router = express.Router();
 
-router.get("/", getAlerts);
+// Get all alerts
+router.get(
+    "/",
+    getAlerts
+);
 
+
+// Get one alert
+router.get(
+    "/:id",
+    getAlertById
+);
+
+
+// Acknowledge
 router.patch(
     "/:id/acknowledge",
     acknowledgeAlert
 );
 
 
-router.get("/:id", getAlertById);
+// Resolve
+router.patch(
+    "/:id/resolve",
+    resolveAlert
+);
+
 
 module.exports = router;

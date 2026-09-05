@@ -1,341 +1,384 @@
 const supabase = require("../config/supabase");
 
+// =====================================================
+// GET REPORT DATA
+// GET /api/reports
+// GET /api/reports?stationId=1&date=2026-09-03
+// =====================================================
 
-// ============================================
-// GET REPORT
-// ============================================
-
-const getReport = async (req, res) => {
-
+const getReportData = async (req, res) => {
     try {
+        const {
+            stationId = "ALL",
+            date
+        } = req.query;
 
-        const { stationId } = req.params;
-        const { date } = req.query;
+        const observationDate =
+            date ||
+            new Date()
+                .toISOString()
+                .split("T")[0];
 
+        // =================================================
+        // 1. GET STATIONS
+        // =================================================
 
-        if (!stationId) {
-
-            return res.status(400).json({
-                status: "error",
-                message: "Station ID is required"
+        const {
+            data: stations,
+            error: stationError
+        } = await supabase
+            .from("station")
+            .select("*")
+            .order("station_id", {
+                ascending: true
             });
-
-        }
-
-
-        if (!date) {
-
-            return res.status(400).json({
-                status: "error",
-                message: "Report date is required"
-            });
-
-        }
-
-
-        // ============================================
-        // GET STATION
-        // ============================================
-
-        const { data: station, error: stationError } =
-            await supabase
-                .from("station")
-                .select(`
-                    station_id,
-                    name,
-                    ward,
-                    zone,
-                    latitude,
-                    longitude,
-                    station_type,
-                    installation_date,
-                    status
-                `)
-                .eq("station_id", stationId)
-                .single();
-
 
         if (stationError) {
-
-            console.error(
-                "Station error:",
-                stationError
-            );
-
-            return res.status(404).json({
-                status: "error",
-                message: "Station not found"
-            });
-
+            throw stationError;
         }
 
+        let selectedStations =
+            stations || [];
 
-        // ============================================
-        // DATE RANGE
-        // ============================================
+        if (stationId !== "ALL") {
+            selectedStations =
+                selectedStations.filter(
+                    (station) =>
+                        String(
+                            station.station_id
+                        ) ===
+                        String(stationId)
+                );
+        }
+
+        const stationIds =
+            selectedStations.map(
+                (station) =>
+                    station.station_id
+            );
+
+        // =================================================
+        // 2. GET READINGS FOR SELECTED DATE
+        // =================================================
 
         const startDate =
-            `${date}T00:00:00.000Z`;
+            `${observationDate}T00:00:00`;
 
         const endDate =
-            `${date}T23:59:59.999Z`;
+            `${observationDate}T23:59:59`;
 
-
-        // ============================================
-        // GET AQI
-        // ============================================
-
-        const { data: aqiData, error: aqiError } =
-            await supabase
-                .from("aqi_reading")
-                .select(`
-                    timestamp,
-                    aqi,
-                    category,
-                    dominant_pollutant
-                `)
-                .eq("station_id", stationId)
-                .gte("timestamp", startDate)
-                .lte("timestamp", endDate)
-                .order("timestamp", {
-                    ascending: false
-                })
-                .limit(1);
-
-
-        if (aqiError) {
-
-            console.error(
-                "AQI error:",
-                aqiError
-            );
-
-        }
-
-
-        const latestAQI =
-            aqiData && aqiData.length > 0
-                ? aqiData[0]
-                : null;
-
-
-        // ============================================
-        // GET POLLUTANT READINGS
-        // ============================================
-
-        const { data: readings, error: readingError } =
-            await supabase
-                .from("reading")
-                .select(`
-                    reading_id,
-                    timestamp,
-                    parameter,
-                    value,
-                    unit,
-                    quality_flag
-                `)
-                .eq("station_id", stationId)
-                .gte("timestamp", startDate)
-                .lte("timestamp", endDate)
-                .order("timestamp", {
-                    ascending: false
-                });
-
-
-        if (readingError) {
-
-            console.error(
-                "Reading error:",
-                readingError
-            );
-
-            return res.status(500).json({
-                status: "error",
-                message: readingError.message
+        const {
+            data: readings,
+            error: readingError
+        } = await supabase
+            .from("reading")
+            .select("*")
+            .in(
+                "station_id",
+                stationIds.length
+                    ? stationIds
+                    : [-1]
+            )
+            .gte(
+                "timestamp",
+                startDate
+            )
+            .lte(
+                "timestamp",
+                endDate
+            )
+            .order("timestamp", {
+                ascending: false
             });
 
+        if (readingError) {
+            throw readingError;
         }
 
+        // =================================================
+        // 3. GET AQI
+        // =================================================
 
-        // ============================================
-        // GET LATEST READING FOR EACH PARAMETER
-        // ============================================
+        const {
+            data: aqiRows,
+            error: aqiError
+        } = await supabase
+            .from("aqi_reading")
+            .select("*")
+            .in(
+                "station_id",
+                stationIds.length
+                    ? stationIds
+                    : [-1]
+            )
+            .gte(
+                "timestamp",
+                startDate
+            )
+            .lte(
+                "timestamp",
+                endDate
+            )
+            .order("timestamp", {
+                ascending: false
+            });
 
-        const latestReadings = {};
-
-
-        for (const reading of readings) {
-
-            if (
-                !latestReadings[
-                    reading.parameter
-                ]
-            ) {
-
-                latestReadings[
-                    reading.parameter
-                ] = reading;
-
-            }
-
+        if (aqiError) {
+            throw aqiError;
         }
 
+        // =================================================
+        // 4. CREATE REPORT FOR EACH STATION
+        // =================================================
 
-        // ============================================
-        // POLLUTANT LIST
-        // ============================================
+        const reports =
+            selectedStations.map(
+                (station) => {
 
-        const pollutantNames = [
-            "PM2.5",
-            "PM10",
-            "NO2",
-            "NO₂",
-            "SO2",
-            "SO₂",
-            "CO",
-            "O3",
-            "O₃",
-            "NH3",
-            "NH₃",
-            "Pb"
-        ];
+                    const stationReadings =
+                        (readings || []).filter(
+                            (row) =>
+                                row.station_id ===
+                                station.station_id
+                        );
 
+                    const stationAqi =
+                        (aqiRows || []).filter(
+                            (row) =>
+                                row.station_id ===
+                                station.station_id
+                        );
 
-        const pollutants = [];
+                    // -----------------------------
+                    // Average pollutant
+                    // -----------------------------
 
+                    const averageParameter =
+                        (parameters) => {
 
-        for (const parameter of pollutantNames) {
+                            const values =
+                                stationReadings
+                                    .filter(
+                                        (row) =>
+                                            parameters.includes(
+                                                row.parameter
+                                                    ?.toLowerCase()
+                                                    .trim()
+                                            )
+                                    )
+                                    .map(
+                                        (row) =>
+                                            Number(
+                                                row.value
+                                            )
+                                    )
+                                    .filter(
+                                        (value) =>
+                                            !Number.isNaN(
+                                                value
+                                            )
+                                    );
 
-            const reading =
-                latestReadings[parameter];
+                            if (
+                                values.length ===
+                                0
+                            ) {
+                                return null;
+                            }
 
+                            return (
+                                values.reduce(
+                                    (
+                                        sum,
+                                        value
+                                    ) =>
+                                        sum +
+                                        value,
+                                    0
+                                ) /
+                                values.length
+                            );
+                        };
 
-            if (reading) {
+                    const pm25 =
+                        averageParameter([
+                            "pm2.5",
+                            "pm25"
+                        ]);
 
-                pollutants.push({
-                    name: reading.parameter,
-                    value: reading.value,
-                    unit: reading.unit,
-                    qualityFlag:
-                        reading.quality_flag
-                });
+                    const pm10 =
+                        averageParameter([
+                            "pm10"
+                        ]);
 
-            }
+                    const no2 =
+                        averageParameter([
+                            "no2",
+                            "no₂"
+                        ]);
 
-        }
+                    // -----------------------------
+                    // Latest AQI
+                    // -----------------------------
 
+                    const latestAqi =
+                        stationAqi.length > 0
+                            ? stationAqi[0]
+                            : null;
 
-        // ============================================
-        // DATA AVAILABILITY
-        // ============================================
+                    // -----------------------------
+                    // Data availability
+                    // -----------------------------
 
-        const expectedReadings =
-            pollutantNames.length;
+                    const validReadings =
+                        stationReadings.filter(
+                            (row) =>
+                                row.quality_flag
+                                    ?.toLowerCase() ===
+                                "valid"
+                        ).length;
 
-        const availableReadings =
-            pollutants.length;
+                    const totalReadings =
+                        stationReadings.length;
 
+                    const availability =
+                        totalReadings > 0
+                            ? (
+                                  (validReadings /
+                                      totalReadings) *
+                                  100
+                              ).toFixed(1)
+                            : "0.0";
 
-        const dataAvailability =
-            expectedReadings > 0
-                ? (
-                    (
-                        availableReadings /
-                        expectedReadings
-                    ) * 100
-                ).toFixed(1) + "%"
-                : "0%";
+                    // -----------------------------
+                    // Compliance
+                    // -----------------------------
 
+                    const exceeded =
+                        (
+                            pm25 !== null &&
+                            pm25 > 60
+                        ) ||
+                        (
+                            pm10 !== null &&
+                            pm10 > 100
+                        ) ||
+                        (
+                            no2 !== null &&
+                            no2 > 80
+                        );
 
-        // ============================================
-        // RESPONSE
-        // ============================================
+                    return {
+
+                        stationId:
+                            station.station_id,
+
+                        station:
+                            station.name,
+
+                        ward:
+                            station.ward ||
+                            "N/A",
+
+                        zone:
+                            station.zone ||
+                            "N/A",
+
+                        pm25:
+                            pm25 !== null
+                                ? Number(
+                                      pm25.toFixed(
+                                          2
+                                      )
+                                  )
+                                : null,
+
+                        pm10:
+                            pm10 !== null
+                                ? Number(
+                                      pm10.toFixed(
+                                          2
+                                      )
+                                  )
+                                : null,
+
+                        no2:
+                            no2 !== null
+                                ? Number(
+                                      no2.toFixed(
+                                          2
+                                      )
+                                  )
+                                : null,
+
+                        aqi:
+                            latestAqi
+                                ? Number(
+                                      latestAqi.aqi
+                                  )
+                                : null,
+
+                        category:
+                            latestAqi
+                                ?.category ||
+                            "N/A",
+
+                        dominant:
+                            latestAqi
+                                ?.dominant_pollutant ||
+                            "N/A",
+
+                        availability:
+                            `${availability}%`,
+
+                        compliance:
+                            exceeded
+                                ? "Action Triggered"
+                                : "Compliant"
+                    };
+                }
+            );
+
+        // =================================================
+        // 5. RETURN
+        // =================================================
 
         return res.status(200).json({
 
             status: "success",
 
-            report: {
+            observationDate,
 
-                station: station.name,
+            count:
+                reports.length,
 
-                stationId:
-                    station.station_id,
-
-                ward:
-                    station.ward,
-
-                zone:
-                    station.zone,
-
-                latitude:
-                    station.latitude,
-
-                longitude:
-                    station.longitude,
-
-                stationType:
-                    station.station_type,
-
-                installationDate:
-                    station.installation_date,
-
-                stationStatus:
-                    station.status,
-
-                date,
-
-                aqi:
-                    latestAQI
-                        ? latestAQI.aqi
-                        : null,
-
-                category:
-                    latestAQI
-                        ? latestAQI.category
-                        : null,
-
-                dominantPollutant:
-                    latestAQI
-                        ? latestAQI.dominant_pollutant
-                        : null,
-
-                aqiTimestamp:
-                    latestAQI
-                        ? latestAQI.timestamp
-                        : null,
-
-                dataAvailability,
-
-                pollutants
-
-            }
-
+            data:
+                reports
         });
-
 
     } catch (error) {
 
         console.error(
-            "Report server error:",
+            "Report API error:",
             error
         );
-
 
         return res.status(500).json({
 
             status: "error",
 
             message:
-                "Server error"
-
+                error.message ||
+                "Failed to generate report."
         });
-
     }
-
 };
 
 
+// =====================================================
+// EXPORT
+// =====================================================
+
 module.exports = {
-    getReport
+    getReportData
 };

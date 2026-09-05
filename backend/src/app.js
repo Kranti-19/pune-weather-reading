@@ -30,8 +30,10 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 app.use("/api/dashboard", dashboardRoutes);
 
 // Alert Routes
-const alertRoutes = require("./routes/alertRoutes");
-app.use("/api/alerts", alertRoutes);
+
+const alertRoutes =require("./routes/alertRoutes");
+app.use("/api/alerts",alertRoutes);
+
 
 // Report Routes
 const reportRoutes = require("./routes/reportRoutes");
@@ -40,6 +42,18 @@ app.use("/api/reports", reportRoutes);
 // Station Routes
 const stationRoutes = require("./routes/stationRoutes");
 app.use("/api/stations", stationRoutes);
+
+//Analytics Routes
+const analyticsRoutes = require("./routes/analyticsRoutes");
+app.use("/api/analytics", analyticsRoutes);
+
+//Device Routes
+const deviceRoutes = require("./routes/deviceRoutes");
+app.use("/api/devices",deviceRoutes);
+
+//Sensor Routes
+const sensorRoutes = require("./routes/sensorRoutes");
+app.use( "/api/sensors",sensorRoutes);
 
 // Root Route
 app.get("/", (req, res) => {

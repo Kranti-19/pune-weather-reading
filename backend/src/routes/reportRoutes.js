@@ -1,17 +1,19 @@
 const express = require("express");
 
+const router =
+    express.Router();
+
 const {
-    getReport
-} = require("../controllers/reportController");
+    getReportData
+} = require(
+    "../controllers/reportController"
+);
 
-const router = express.Router();
 
-
-// GET /api/reports/:stationId?date=2026-08-20
-
+// GET /api/reports
 router.get(
-    "/:stationId",
-    getReport
+    "/",
+    getReportData
 );
 
 
