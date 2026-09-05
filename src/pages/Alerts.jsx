@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import React, { useState } from "react";
 import {
   AlertTriangle,
@@ -400,3 +401,5 @@ export default function Alerts() {
     </div>
   );
 }
+=======
+>>>>>>> Stashed changes

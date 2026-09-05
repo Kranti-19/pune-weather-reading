@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import React, { useState } from "react";
 import {
   Activity,
@@ -472,3 +473,5 @@ export default function Analytics() {
     </div>
   );
 }
+=======
+>>>>>>> Stashed changes
