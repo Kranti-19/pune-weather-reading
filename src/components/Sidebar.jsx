@@ -34,13 +34,13 @@ export default function Sidebar() {
       name: "Pune Areas",
       path: "/pune-areas",
       icon: MapPin,
-      badge: "5 Nodes"
+      
     },
     {
       name: "Alerts",
       path: "/alerts",
       icon: Bell,
-      badge: "2",
+      
       badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30"
     },
     {
@@ -92,20 +92,12 @@ export default function Sidebar() {
                 <span className="font-black text-sm text-white tracking-tight">PMC Weather</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
               </div>
-              <p className="text-[11px] font-semibold text-blue-300/80">CAAQM Air Portal</p>
+              
             </div>
           </div>
 
           {/* Real-Time Grid Status Capsule */}
-          <div className="mt-4 flex items-center justify-between px-3.5 py-2 rounded-2xl bg-slate-900/60 border border-slate-700/60 text-[11px] font-semibold backdrop-blur-md">
-            <span className="flex items-center gap-2 text-slate-300">
-              <Radio size={13} className="text-emerald-400 animate-ping" />
-              <span>Telemetry Grid</span>
-            </span>
-            <span className="text-emerald-300 font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30">
-              Active
-            </span>
-          </div>
+          
         </div>
 
         {/* 2. Primary Navigation */}

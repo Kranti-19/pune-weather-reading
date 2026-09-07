@@ -202,20 +202,14 @@ export default function Analytics() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
               Air Quality Analytics
             </h1>
 
-            <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold px-3 py-0.5 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-              {stationCount} Municipal Stations
-            </span>
+            
           </div>
 
-          <p className="text-xs text-slate-500 mt-0.5">
-            Diurnal multi-pollutant curves, dispersion compliance,
-            and station historical trends.
-          </p>
+          
         </div>
 
         <div className="flex items-center gap-3">
@@ -436,16 +430,9 @@ export default function Analytics() {
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
                 Historical Atmospheric Observation Curves
               </h2>
-
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                CPCB Standard
-              </span>
             </div>
 
-            <p className="text-xs text-slate-400 mt-0.5">
-              Actual AQI, PM2.5 and PM10 observations returned by
-              the backend.
-            </p>
+            
           </div>
 
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-bold">
@@ -600,9 +587,7 @@ export default function Analytics() {
             </span>
           </div>
 
-          <span className="text-slate-400 font-normal">
-            CPCB NAAQS Satisfactory Threshold: ≤ 100 AQI
-          </span>
+          
         </div>
       </div>
 
@@ -614,9 +599,7 @@ export default function Analytics() {
               National Ambient Air Quality Standards (NAAQS) Summary
             </h2>
 
-            <p className="text-xs text-slate-400">
-              Latest database observations vs. configured CPCB limits
-            </p>
+            
           </div>
 
           <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
@@ -703,9 +686,7 @@ export default function Analytics() {
               Station Air Quality Ranking & Severity
             </h2>
 
-            <p className="text-xs text-slate-400">
-              Latest AQI telemetry ordered by pollution severity
-            </p>
+            
           </div>
 
           <span className="text-xs font-bold text-slate-500">
@@ -799,14 +780,7 @@ export default function Analytics() {
         )}
 
         <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-semibold">
-          <span>
-            Continuous Ambient Air Quality Monitoring (CAAQM)
-            Network
-          </span>
-
-          <span>
-            Data source: Supabase via Node/Express API
-          </span>
+          
         </div>
       </div>
     </div>

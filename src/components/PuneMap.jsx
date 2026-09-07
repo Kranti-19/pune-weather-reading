@@ -11,18 +11,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getCPCBStatus } from "../utils/aqiUtils";
 
-/* =========================================================
-   DEFAULT PUNE CENTER
-========================================================= */
 
 const PUNE_CENTER = [18.5204, 73.8567];
-
-/* =========================================================
-   FIT MAP TO DATABASE STATIONS
-
-   This automatically moves/zooms the map according to
-   the actual latitude and longitude received from backend.
-========================================================= */
 
 function MapBounds({ stations }) {
   const map = useMap();
@@ -242,30 +232,15 @@ export default function PuneMap({
             Pune Municipal GIS Spatial Monitoring
           </h2>
 
-          <p className="text-xs text-slate-400 mt-0.5">
-            Exact geo-located CAAQM stations from the
-            municipal database
-          </p>
-
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
 
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-
-          {stationCount}{" "}
-          {stationCount === 1
-            ? "Station"
-            : "Stations"}{" "}
-          Monitored
-
+          
         </div>
 
       </div>
 
-      {/* ===================================================
-          MAP
-      =================================================== */}
 
       <div className="h-[420px] rounded-xl overflow-hidden border border-slate-200 relative z-0">
 
@@ -275,10 +250,6 @@ export default function PuneMap({
           scrollWheelZoom={true}
           className="h-full w-full"
         >
-
-          {/* =================================================
-              OPENSTREETMAP
-          ================================================= */}
 
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
@@ -586,10 +557,6 @@ export default function PuneMap({
       =================================================== */}
 
       <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-
-        <span className="font-semibold text-slate-500 text-[11px]">
-          CPCB AQI Bands:
-        </span>
 
         <div className="flex flex-wrap items-center gap-3">
 

@@ -1,4 +1,3 @@
-// <<<<<<< Updated upstream
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
@@ -186,24 +185,7 @@ export default function Login() {
       ====================================================== */}
       <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
 
-        {/* System Icon */}
-        <div className="flex items-center gap-3 bg-white/70 backdrop-blur-xl border border-white/60 px-4 py-2 rounded-2xl shadow-lg pointer-events-auto">
-
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center text-white shadow-md shadow-sky-500/30">
-            <CloudSun size={18} />
-          </div>
-
-          <div className="hidden sm:block">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Municipal AQMS
-            </p>
-
-            <p className="text-xs font-black text-slate-800">
-              Pune Environmental Grid
-            </p>
-          </div>
-
-        </div>
+       
 
         {/* Live Time + Humidity */}
         <div className="hidden sm:flex items-center gap-3 bg-white/70 backdrop-blur-xl border border-white/60 px-4 py-2 rounded-2xl shadow-lg text-slate-700 pointer-events-auto text-xs font-semibold">
@@ -256,10 +238,7 @@ export default function Login() {
               Environmental Grid
             </h2>
 
-            <p className="text-xs text-sky-100 font-medium mt-2 leading-relaxed opacity-90">
-              Real-time air quality monitoring, station telemetry,
-              environmental data and municipal alerts.
-            </p>
+            
 
           </div>
 
@@ -398,9 +377,7 @@ export default function Login() {
             -------------------------------------------------- */}
             <div>
 
-              <span className="text-[11px] font-bold uppercase tracking-widest text-sky-700 bg-sky-100/80 px-2.5 py-1 rounded-md">
-                Authorized Officer Access
-              </span>
+              
 
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
                 Welcome back
@@ -408,10 +385,7 @@ export default function Login() {
 
             </div>
 
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed max-w-md">
-              Sign in with your authorized municipal credentials
-              to access the Air Quality Monitoring Dashboard.
-            </p>
+            
 
             {/* =================================================
                 ERROR MESSAGE
@@ -597,20 +571,11 @@ export default function Login() {
 
               <div>
 
-                <p className="text-xs text-slate-500">
-                  Need access to the monitoring system?
-                </p>
-
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Contact your municipal system administrator.
-                </p>
+                
 
               </div>
 
-              <span className="text-xs font-bold text-slate-400 whitespace-nowrap">
-                PMC • AQMS
-              </span>
-
+              
             </div>
 
           </div>

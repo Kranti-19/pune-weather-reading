@@ -1,555 +1,334 @@
-// <<<<<<< Updated upstream
 import React, { useState } from "react";
 import {
   Wind,
-  Droplets,
-  Thermometer,
-  CloudRain,
-  Smile,
-  AlertTriangle,
-  CheckCircle2,
+  ShieldCheck,
+  Activity,
+  ArrowUpRight,
+  TrendingDown,
   RefreshCw,
   Clock,
   ChevronRight,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-  MapPin,
-  Activity,
-  Calendar,
-  Filter,
+  Droplets,
+  Thermometer,
+  Radio,
+  FileSpreadsheet,
   Layers,
-  Sparkles,
-  Info
+  MapPin
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts";
+
+// 24-Hour Observation Series
+const HOURLY_TRENDS = [
+  { time: "06:00", aqi: 48, pm25: 22, pm10: 50 },
+  { time: "08:00", aqi: 62, pm25: 34, pm10: 68 },
+  { time: "10:00", aqi: 75, pm25: 42, pm10: 85 },
+  { time: "12:00", aqi: 70, pm25: 39, pm10: 80 },
+  { time: "14:00", aqi: 84, pm25: 49, pm10: 95 },
+  { time: "16:00", aqi: 78, pm25: 44, pm10: 88 },
+  { time: "18:00", aqi: 68, pm25: 38, pm10: 78 },
+  { time: "20:00", aqi: 58, pm25: 30, pm10: 64 },
+];
+
+const WARD_HIGHLIGHTS = [
+  { code: "PMC-001", name: "Shivajinagar Central", ward: "Ward 7", zone: "Central Zone", aqi: 68, status: "Satisfactory", dominant: "PM2.5", pm25: 38.2, trend: "-4%" },
+  { code: "PMC-002", name: "Kothrud Depot Basin", ward: "Ward 10", zone: "West Zone", aqi: 54, status: "Satisfactory", dominant: "PM10", pm25: 28.1, trend: "-6%" },
+  { code: "PMC-003", name: "Hadapsar Industrial", ward: "Ward 15", zone: "East Zone", aqi: 134, status: "Moderate", dominant: "PM2.5", pm25: 84.6, trend: "+8%" },
+  { code: "PMC-004", name: "Katraj Lake Reserve", ward: "Ward 21", zone: "South Zone", aqi: 39, status: "Good", dominant: "O3", pm25: 18.4, trend: "-11%" },
+  { code: "PMC-005", name: "Hinjewadi Tech Corridor", ward: "Ward 25", zone: "North-West Zone", aqi: 82, status: "Satisfactory", dominant: "NO2", pm25: 44.0, trend: "+2%" },
+];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState("24 Hours");
-  const [chartMetric, setChartMetric] = useState("AQI");
+  const [activePollutant, setActivePollutant] = useState("aqi");
 
-  // Top 4 High-Tech KPI Cards with Sparklines & Visual Badges
-  const topMetrics = [
-    {
-      title: "Current Air Status",
-      value: "68",
-      unit: "AQI",
-      badge: "Satisfactory",
-      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      simpleMeaning: "Safe for outdoor walks & activities",
-      trend: "-6.2%",
-      isPositive: true,
-      sparkColor: "#2563eb",
-      points: "0,16 15,13 30,15 45,8 60,10 75,4 90,7 105,2",
-      icon: Wind,
-      iconBg: "bg-blue-50 text-blue-600"
-    },
-    {
-      title: "Main Smoke / Dust",
-      value: "38.2",
-      unit: "µg/m³",
-      badge: "PM2.5 Sourced",
-      badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-      simpleMeaning: "Traffic soot & construction dust",
-      trend: "+4.1%",
-      isPositive: false,
-      sparkColor: "#f43f5e",
-      points: "0,14 15,15 30,9 45,11 60,6 75,8 90,3 105,1",
-      icon: Activity,
-      iconBg: "bg-rose-50 text-rose-600"
-    },
-    {
-      title: "Active Stations",
-      value: "5 / 5",
-      unit: "Live",
-      badge: "100% Online",
-      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      simpleMeaning: "All city sensors transmitting valid data",
-      trend: "Optimal",
-      isPositive: true,
-      sparkColor: "#0284c7",
-      points: "0,5 15,7 30,5 45,9 60,8 75,11 90,10 105,13",
-      icon: ShieldCheck,
-      iconBg: "bg-sky-50 text-sky-600"
-    },
-    {
-      title: "Outdoor Weather",
-      value: "27.6°C",
-      unit: "74% RH",
-      badge: "Pleasant",
-      badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-      simpleMeaning: "Comfortable temperature across Pune",
-      trend: "Warm",
-      isPositive: true,
-      sparkColor: "#f59e0b",
-      points: "0,11 15,9 30,10 45,6 60,7 75,5 90,4 105,3",
-      icon: Thermometer,
-      iconBg: "bg-amber-50 text-amber-600"
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "Good":
+        return "bg-emerald-50 text-emerald-600 border border-emerald-200/80";
+      case "Satisfactory":
+        return "bg-green-50 text-green-700 border border-green-200/80";
+      case "Moderate":
+        return "bg-amber-50 text-amber-700 border border-amber-200/80";
+      case "Poor":
+        return "bg-orange-50 text-orange-700 border border-orange-200/80";
+      default:
+        return "bg-rose-50 text-rose-700 border border-rose-200/80";
     }
-  ];
-
-  // Ward ranking with active construction projects & infrastructure sites
-  const wardRankings = [
-    { 
-      rank: 1, 
-      projectName: "Amanora Gateway Towers (Phase 3)", 
-      siteType: "High-Rise Construction", 
-      location: "Hadapsar • Ward 15", 
-      aqi: 134, 
-      status: "Dust Mitigation Due", 
-      meaning: "Active concrete batching & excavation; water sprinklers required", 
-      pct: 72, 
-      color: "from-amber-500 to-orange-500", 
-      tag: "bg-amber-50 text-amber-800 border-amber-200" 
-    },
-    { 
-      rank: 2, 
-      projectName: "EON Free Zone Cluster C", 
-      siteType: "IT Park Expansion", 
-      location: "Kharadi • Ward 17", 
-      aqi: 82, 
-      status: "Covering Verified", 
-      meaning: "Dry debris covered with green mesh; anti-smog guns operational", 
-      pct: 50, 
-      color: "from-blue-600 to-sky-400", 
-      tag: "bg-blue-50 text-blue-700 border-blue-200" 
-    },
-    { 
-      rank: 3, 
-      projectName: "Pune Metro Line 3 Elevated Pier", 
-      siteType: "Infrastructure Transit", 
-      location: "Shivajinagar • Ward 7", 
-      aqi: 68, 
-      status: "Compliant", 
-      meaning: "Barricaded drilling zone; road sweeping vehicle active", 
-      pct: 42, 
-      color: "from-blue-600 to-sky-400", 
-      tag: "bg-blue-50 text-blue-700 border-blue-200" 
-    },
-    { 
-      rank: 4, 
-      projectName: "Godrej Hillside Township", 
-      siteType: "Residential Complex", 
-      location: "Mahalunge-Hinjewadi", 
-      aqi: 54, 
-      status: "Compliant", 
-      meaning: "Standard foundation work; boundary dust sensors normal", 
-      pct: 34, 
-      color: "from-blue-600 to-sky-400", 
-      tag: "bg-blue-50 text-blue-700 border-blue-200" 
-    },
-    { 
-      rank: 5, 
-      projectName: "Rohan Ekam Waterfront", 
-      siteType: "Commercial Tower", 
-      location: "Balewadi • Ward 9", 
-      aqi: 39, 
-      status: "Low Emission", 
-      meaning: "Internal finishing phase; zero exterior particulate drift", 
-      pct: 24, 
-      color: "from-emerald-500 to-teal-400", 
-      tag: "bg-emerald-50 text-emerald-800 border-emerald-200" 
-    }
-  ];
+  };
 
   return (
-    <div className="min-h-screen bg-[#edf2f7] text-slate-800 p-4 sm:p-6 lg:p-8 font-sans selection:bg-blue-600 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#edf3f8] text-slate-800 p-6 sm:p-8 lg:p-10 font-sans selection:bg-blue-600 selection:text-white">
       
-      {/* 1. Header with Breadcrumb, Live Indicator & Filter Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      {/* 1. Header Section matching PuneAreas */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-7">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
-            <span>Pune Municipal Corporation</span>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-1">
+            <span>Executive Command</span>
             <span>/</span>
-            <span className="text-blue-600 font-bold">CAAQM Air Quality Network</span>
+            <span className="text-blue-600 font-bold">Pune Municipal Corporation (PMC)</span>
           </div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Pune Environmental Command Portal
-            </h1>
-            <span className="hidden sm:inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live 5 Stations
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">Real-time air health observations, pollutant breakdown, and ward rankings.</p>
+  <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
+    Air Quality Command Portal
+  </h1>
+</div>
         </div>
 
-        {/* Action Controls */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 shadow-sm">
-            <Calendar size={14} className="text-slate-400" />
-            <span>Last 24 Hours</span>
-          </div>
-          <button 
+          <button
             onClick={() => window.location.reload()}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 transition"
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition"
           >
             <RefreshCw size={13} />
-            <span>Sync Live</span>
+            <span>Refresh Stations</span>
+          </button>
+          <button
+            onClick={() => window.print()}
+            
+            
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 transition"
+          >
+            <FileSpreadsheet size={14} />
+            <span>Export Roster (CSV)</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Top 4 High-Tech KPI Cards with Inline Splines & Uniform Baselines */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {topMetrics.map((kpi, idx) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={idx}
-              className="bg-white rounded-3xl p-5 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)] transition flex flex-col justify-between"
+      {/* 2. Matched Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-7">
+        
+        {/* Card 1: Citywide AQI */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-slate-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              City Ambient AQI
+            </span>
+            <div className="text-3xl font-black text-slate-900">68</div>
+            <span className="text-xs font-semibold text-emerald-600 mt-1 block">
+              Satisfactory Status
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Wind size={22} />
+          </div>
+        </div>
+
+        {/* Card 2: Active Nodes */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-slate-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              Telemetry Active
+            </span>
+            <div className="text-3xl font-black text-emerald-600">5 / 5</div>
+            <span className="text-xs font-medium text-slate-400 mt-1 block">
+              100% stations transmitting
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <Radio size={22} />
+          </div>
+        </div>
+
+        {/* Card 3: Dominant Particulate */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-slate-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              PM2.5 Primary Driver
+            </span>
+            <div className="text-3xl font-black text-slate-900">
+              38.2 <span className="text-xs font-bold text-slate-400">µg/m³</span>
+            </div>
+            <span className="text-xs font-medium text-slate-400 mt-1 block">
+              CPCB Standard: 60 µg/m³
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <Activity size={22} />
+          </div>
+        </div>
+
+        {/* Card 4: Microclimate */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-slate-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              Local Meteorology
+            </span>
+            <div className="text-3xl font-black text-slate-900">
+              27.6<span className="text-sm font-semibold text-slate-400">°C</span>
+            </div>
+            <span className="text-xs font-medium text-slate-400 mt-1 block">
+              74% RH • 11 km/h WNW
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <Thermometer size={22} />
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. 24-Hour Trend Visualizer */}
+      <div className="bg-white rounded-[26px] p-7 shadow-sm border border-slate-100/80 mb-7">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+              HISTORICAL TELEMETRY
+            </span>
+            <h2 className="text-base font-black text-slate-900 mt-1">24-Hour Air Quality Progression</h2>
+            <p className="text-xs text-slate-400">Hourly moving average curve calculated across the Pune sensor grid.</p>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => setActivePollutant("aqi")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                activePollutant === "aqi"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
             >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{kpi.title}</span>
-                  <div className={`w-8 h-8 rounded-2xl ${kpi.iconBg} flex items-center justify-center font-bold shadow-inner`}>
-                    <Icon size={16} />
-                  </div>
-                </div>
+              Overall AQI
+            </button>
+            <button
+              onClick={() => setActivePollutant("pm25")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                activePollutant === "pm25"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              PM2.5 (Fine)
+            </button>
+            <button
+              onClick={() => setActivePollutant("pm10")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                activePollutant === "pm10"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              PM10 (Coarse)
+            </button>
+          </div>
+        </div>
 
-                <div className="my-3 flex items-baseline justify-between">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-black text-slate-900 tracking-tight">{kpi.value}</span>
-                    <span className="text-xs font-semibold text-slate-400">{kpi.unit}</span>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${kpi.badgeColor}`}>
-                    {kpi.badge}
-                  </span>
-                </div>
-
-                <div className="text-[11px] text-slate-500 font-medium line-clamp-1">{kpi.simpleMeaning}</div>
-              </div>
-
-              {/* Sparkline & Trend Row with Parallel Baseline Alignment */}
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-end justify-between">
-                <span className={`text-xs font-bold ${kpi.isPositive ? "text-emerald-600" : "text-rose-600"}`}>
-                  {kpi.trend}
-                </span>
-                <div className="w-20 h-6">
-                  <svg viewBox="0 0 105 20" className="w-full h-full overflow-visible">
-                    <polyline
-                      fill="none"
-                      stroke={kpi.sparkColor}
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      points={kpi.points}
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={HOURLY_TRENDS} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="puneAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.16} />
+                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2f7" />
+              <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} tickLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#0f172a",
+                  borderRadius: "14px",
+                  border: "none",
+                  color: "#fff",
+                  fontSize: "12px",
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)"
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey={activePollutant}
+                stroke="#2563eb"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#puneAreaGradient)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* 3. Centerpiece: Glowing Diurnal Spline Wave Chart + Radial Donut Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+      {/* 4. Styled Table Matching Registry Section in PuneAreas */}
+      <div className="bg-white rounded-[26px] p-7 shadow-sm border border-slate-100/80">
         
-        {/* Left 8 Cols: Smooth Wave Spline Chart */}
-        <div className="lg:col-span-8 bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-slate-900">How Air Quality Changed Throughout The Day</h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                  Past 24 Hours
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">Air is cleanest early morning; slight dust rise during afternoon traffic peak.</p>
-            </div>
-
-            <div className="flex items-center bg-slate-100 p-1 rounded-2xl text-xs font-bold">
-              {["AQI", "Smoke (PM2.5)", "Dust (PM10)"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setChartMetric(tab)}
-                  className={`px-3 py-1.5 rounded-xl transition ${
-                    chartMetric === tab 
-                      ? "bg-white text-blue-600 shadow-sm font-black" 
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* SVG Wave Canvas */}
-          <div className="relative h-64 w-full flex flex-col justify-end">
-            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-40">
-              <div className="border-b border-dashed border-slate-200 w-full" />
-              <div className="border-b border-dashed border-slate-200 w-full" />
-              <div className="border-b border-dashed border-slate-200 w-full" />
-              <div className="border-b border-dashed border-slate-200 w-full" />
-            </div>
-
-            <div className="relative h-full w-full">
-              <svg viewBox="0 0 700 200" preserveAspectRatio="none" className="h-full w-full overflow-visible">
-                <defs>
-                  <linearGradient id="waveBlue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563eb" stopOpacity="0.28" />
-                    <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
-                  </linearGradient>
-                  <linearGradient id="waveSky" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.18" />
-                    <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Secondary Cyan Dispersion Wave */}
-                <path
-                  d="M0,140 C90,165 180,105 270,130 C370,160 460,80 550,110 C620,130 700,95 700,95 L700,200 L0,200 Z"
-                  fill="url(#waveSky)"
-                />
-                <path
-                  d="M0,140 C90,165 180,105 270,130 C370,160 460,80 550,110 C620,130 700,95 700,95"
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="3"
-                />
-
-                {/* Primary Royal Blue AQI Wave */}
-                <path
-                  d="M0,115 C85,80 170,140 260,90 C350,40 430,120 520,60 C590,30 650,85 700,50 L700,200 L0,200 Z"
-                  fill="url(#waveBlue)"
-                />
-                <path
-                  d="M0,115 C85,80 170,140 260,90 C350,40 430,120 520,60 C590,30 650,85 700,50"
-                  fill="none"
-                  stroke="#2563eb"
-                  strokeWidth="3.5"
-                />
-
-                {/* Active Highlight Pin on 14:00 */}
-                <circle cx="520" cy="60" r="6" fill="#2563eb" stroke="#ffffff" strokeWidth="3" />
-              </svg>
-
-              {/* Tooltip Card */}
-              <div className="absolute top-2 left-[74%] -translate-x-1/2 bg-slate-900 text-white px-3.5 py-2 rounded-2xl shadow-xl text-xs font-mono pointer-events-none">
-                <div className="text-sky-400 font-black">02:00 PM • 84 AQI</div>
-                <div className="text-[10px] text-slate-300">Afternoon Traffic Peak</div>
-              </div>
-            </div>
-
-            {/* Time X-Axis */}
-            <div className="flex justify-between text-[11px] font-bold text-slate-400 pt-3 border-t border-slate-100">
-              <span>12 AM</span>
-              <span>04 AM</span>
-              <span>08 AM</span>
-              <span>12 PM</span>
-              <span>04 PM</span>
-              <span>08 PM</span>
-              <span>11 PM</span>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 flex items-center justify-between text-xs text-slate-500 font-semibold border-t border-slate-100">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                <span>Overall City AQI</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-                <span>Breeze & Wind Dispersion</span>
-              </span>
-            </div>
-            <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
-              ✓ Both parameters within safe CPCB limits
-            </span>
-          </div>
-        </div>
-
-        {/* Right 4 Cols: Radial Donut Pollutant Distribution */}
-        <div className="lg:col-span-4 bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-black text-slate-900">What's in the Air?</h2>
-              <p className="text-xs text-slate-400">Main sources of pollution today</p>
-            </div>
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Live Breakdown</span>
-          </div>
-
-          {/* Radial Donut */}
-          <div className="relative my-6 flex items-center justify-center">
-            <svg className="w-48 h-48 -rotate-90" viewBox="0 0 36 36">
-              <path className="text-slate-100" strokeWidth="3.6" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path stroke="#2563eb" strokeDasharray="42, 100" strokeWidth="3.6" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path stroke="#38bdf8" strokeDasharray="26, 100" strokeDashoffset="-42" strokeWidth="3.6" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path stroke="#6366f1" strokeDasharray="18, 100" strokeDashoffset="-68" strokeWidth="3.6" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              <path stroke="#cbd5e1" strokeDasharray="14, 100" strokeDashoffset="-86" strokeWidth="3.6" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-            </svg>
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-              <span className="text-3xl font-black text-slate-900 tracking-tight">42%</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 mt-0.5">
-                Vehicle Smoke (PM2.5)
-              </span>
-            </div>
-          </div>
-
-          {/* Clean Plain Legend */}
-          <div className="space-y-2.5 pt-2 border-t border-slate-100 text-xs">
-            <div className="flex items-center justify-between font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                <span className="text-slate-800">Vehicle Soot & Exhaust (PM2.5)</span>
-              </div>
-              <span className="font-black text-slate-900">42%</span>
-            </div>
-            <div className="flex items-center justify-between font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-                <span className="text-slate-800">Road Dust & Sand (PM10)</span>
-              </div>
-              <span className="font-black text-slate-900">26%</span>
-            </div>
-            <div className="flex items-center justify-between font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                <span className="text-slate-800">Traffic Fuel Gases (NO2)</span>
-              </div>
-              <span className="font-black text-slate-900">18%</span>
-            </div>
-            <div className="flex items-center justify-between font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
-                <span className="text-slate-800">Factory & Natural Gases</span>
-              </div>
-              <span className="font-black text-slate-900">14%</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* 4. Bottom Section: Construction Sites Progress Bars & Simple CPCB Guide */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left 7 Cols: Construction Sites Air Quality Leaderboard */}
-        <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-black text-slate-900">Active Construction Sites & Building Projects</h2>
-              <p className="text-xs text-slate-400">CPCB particulate and dust emission audit for ongoing developments</p>
-            </div>
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
-              5 Sites Monitored
-            </span>
-          </div>
-
-          <div className="space-y-4 my-auto">
-            {wardRankings.map((site) => (
-              <div key={site.rank} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:border-blue-300 transition">
-                <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 text-xs font-mono font-black text-slate-400">#{site.rank}</span>
-                    <span className="text-slate-900 font-extrabold text-sm">{site.projectName}</span>
-                    <span className="text-slate-400 text-xs font-normal">({site.location})</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-slate-900 text-sm">{site.aqi} AQI</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${site.tag}`}>
-                      {site.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium mb-2">
-                  <span>{site.meaning}</span>
-                  <span className="text-slate-400 font-semibold text-[10px] uppercase">{site.siteType}</span>
-                </div>
-
-                {/* Gradient Progress Track */}
-                <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full bg-gradient-to-r ${site.color} transition-all duration-700`}
-                    style={{ width: `${site.pct}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-semibold">
-            <span>Violations reported automatically to: <strong>PMC Building Permission & Encroachment Dept</strong></span>
-          </div>
-        </div>
-
-        {/* Right 5 Cols: Universal Traffic Light Guide */}
-        <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] flex flex-col justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-black text-slate-900">Official Color Meaning Guide</h2>
-              <span className="text-xs font-bold text-slate-400 font-mono">(CPCB NAAQS)</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">Quick color guide to understand what each air number means</p>
-          </div>
-
-          <div className="space-y-2.5 my-4">
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 shrink-0" />
-                <div>
-                  <div className="font-black text-emerald-900">0 – 50 • Clean / Good</div>
-                  <div className="text-[11px] text-emerald-700">Mountain-fresh clean air. Perfect for everyone.</div>
-                </div>
-              </div>
-              <span className="font-bold text-emerald-800 text-[11px]">Katraj</span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-green-600 shrink-0" />
-                <div>
-                  <div className="font-black text-green-900">51 – 100 • Satisfactory (Today's Level)</div>
-                  <div className="text-[11px] text-green-700">Healthy normal air. Safe for sports and morning walks.</div>
-                </div>
-              </div>
-              <span className="font-bold text-green-800 text-[11px]">Shivajinagar</span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-amber-500 shrink-0" />
-                <div>
-                  <div className="font-black text-amber-900">101 – 200 • Moderate</div>
-                  <div className="text-[11px] text-amber-700">Noticeable dust. People with asthma should take care.</div>
-                </div>
-              </div>
-              <span className="font-bold text-amber-800 text-[11px]">Hadapsar</span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-orange-500 shrink-0" />
-                <div>
-                  <div className="font-black text-orange-900">201 – 300 • Poor / Unhealthy</div>
-                  <div className="text-[11px] text-orange-700">Wear dust masks. Avoid heavy outdoor exercise.</div>
-                </div>
-              </div>
-              <span className="text-[11px] text-orange-600 font-bold">0 Wards</span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full bg-rose-600 shrink-0" />
-                <div>
-                  <div className="font-black text-rose-900">301+ • Very Poor / Emergency</div>
-                  <div className="text-[11px] text-rose-700">Stay indoors with windows closed. Hazard level.</div>
-                </div>
-              </div>
-              <span className="text-[11px] text-rose-600 font-bold">0 Wards</span>
+              <h2 className="text-base font-black text-slate-900">
+                Registered CAAQM Station Registry
+              </h2>
+              
             </div>
           </div>
+          
+        </div>
 
-          <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200/60 text-blue-900 text-xs flex items-center gap-2">
-            <Info size={15} className="text-blue-600 shrink-0" />
-            <span>All values comply with India CPCB National Ambient Air Quality Standards.</span>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="pb-3.5 pl-2">Station Details</th>
+                <th className="pb-3.5">Ward & Zone</th>
+                <th className="pb-3.5">CPCB AQI</th>
+                <th className="pb-3.5">Dominant</th>
+                <th className="pb-3.5">PM2.5 Level</th>
+                <th className="pb-3.5">Status</th>
+                <th className="pb-3.5 pr-2 text-right">Trend</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {WARD_HIGHLIGHTS.map((stn) => (
+                <tr key={stn.code} className="hover:bg-slate-50/70 transition">
+                  
+                  {/* Station Name & Code */}
+                  <td className="py-4 pl-2">
+                    <span className="font-bold text-slate-900 block">{stn.name}</span>
+                    <span className="font-mono text-[11px] text-blue-600 font-semibold">{stn.code}</span>
+                  </td>
+
+                  {/* Ward / Zone */}
+                  <td className="py-4 text-slate-600 font-medium">
+                    {stn.ward}
+                    <span className="block text-[11px] text-slate-400">{stn.zone}</span>
+                  </td>
+
+                  {/* AQI Score */}
+                  <td className="py-4 font-mono text-base font-black text-slate-900">
+                    {stn.aqi}
+                  </td>
+
+                  {/* Dominant Pollutant */}
+                  <td className="py-4 font-semibold text-slate-700">
+                    {stn.dominant}
+                  </td>
+
+                  {/* PM2.5 Level */}
+                  <td className="py-4 font-mono font-semibold text-slate-800">
+                    {stn.pm25} <span className="text-slate-400 text-[10px]">µg/m³</span>
+                  </td>
+
+                  {/* Category Badge */}
+                  <td className="py-4">
+                    <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold ${getStatusBadge(stn.status)}`}>
+                      {stn.status}
+                    </span>
+                  </td>
+
+                  {/* 24h Trend */}
+                  <td className="py-4 pr-2 text-right font-mono font-bold text-slate-600">
+                    {stn.trend}
+                  </td>
+
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
       </div>
@@ -557,5 +336,3 @@ export default function Dashboard() {
     </div>
   );
 }
-// =======
-// >>>>>>> Stashed changes

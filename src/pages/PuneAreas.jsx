@@ -710,24 +710,19 @@ export default function PuneAreas() {
 
           <div className="flex items-center gap-3 flex-wrap">
 
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
               Pune Ward Monitoring Stations
             </h1>
 
             <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-0.5 rounded-full">
 
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-
-              {onlineStations} of {stations.length} Online
+              
 
             </span>
 
           </div>
 
-          <p className="text-xs text-slate-500 mt-0.5">
-            Continuous Ambient Air Quality Monitoring
-            (CAAQM) stations and spatial ward distribution.
-          </p>
+          
 
         </div>
 
@@ -776,23 +771,7 @@ export default function PuneAreas() {
 
           </button>
 
-          {/* EXPORT */}
-
-          <button
-            onClick={handleExportCSV}
-            disabled={
-              filteredStations.length === 0
-            }
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-
-            <Download size={14} />
-
-            <span>
-              Export Roster (CSV)
-            </span>
-
-          </button>
+          
 
         </div>
 
@@ -1036,18 +1015,6 @@ export default function PuneAreas() {
 
             </div>
 
-            <p className="text-xs text-slate-400 mt-0.5">
-              Showing {filteredStations.length} of{" "}
-              {stations.length} registered stations
-            </p>
-
-          </div>
-
-          <div className="text-xs text-slate-500 font-medium">
-            Protocol:{" "}
-            <strong className="text-slate-800">
-              CPCB Continuous 24h Sampling
-            </strong>
           </div>
 
         </div>
@@ -1391,10 +1358,6 @@ export default function PuneAreas() {
 
       </div>
 
-      {/* ===================================================
-          GIS MAP
-      =================================================== */}
-
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)]">
 
         <div className="flex items-center justify-between mb-4">
@@ -1412,11 +1375,6 @@ export default function PuneAreas() {
               </span>
 
             </div>
-
-            <p className="text-xs text-slate-400 mt-0.5">
-              Geospatial placement and real-time CPCB
-              air quality heat map across Pune wards
-            </p>
 
           </div>
 

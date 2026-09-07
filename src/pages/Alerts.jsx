@@ -376,27 +376,13 @@ export default function Alerts() {
 
                     <div className="flex items-center gap-3">
 
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                        <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
                             Alerts & Incident Management
                         </h1>
 
 
-                        <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold px-3 py-1 rounded-full">
-
-                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-
-                            {unresolvedCount}
-                            {" "}
-                            Actions Pending
-
-                        </span>
-
                     </div>
 
-
-                    <p className="text-xs text-slate-500 mt-0.5">
-                        Real-time CPCB threshold breaches, device telemetry timeouts, and ward field escalations.
-                    </p>
 
                 </div>
 
@@ -644,9 +630,7 @@ export default function Alerts() {
                         {" "}ESCALATIONS
                     </span>
 
-                    <span className="text-emerald-700">
-                        CPCB Automated Surveillance Engine Active
-                    </span>
+                    
 
                 </div>
 
@@ -926,25 +910,7 @@ export default function Alerts() {
                 FOOTER
             ================================================= */}
 
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex items-start gap-3">
-
-                <CheckCircle2
-                    size={18}
-                    className="text-blue-600 shrink-0 mt-0.5"
-                />
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-
-                    <strong className="text-slate-900">
-                        CPCB Protocol Alert Escalation:
-                    </strong>
-
-                    {" "}
-                    Alerts are generated when monitored parameters exceed configured thresholds or when monitoring equipment requires attention.
-
-                </p>
-
-            </div>
+            
 
         </div>
     );
