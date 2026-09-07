@@ -1,42 +1,41 @@
 const express = require("express");
 
-const router =
-    express.Router();
-
 const {
-    getAlerts,
-    getAlertById,
-    acknowledgeAlert,
-    resolveAlert
+  getAlerts,
+  acknowledgeAlert,
+  resolveAlert,
+  evaluateAlertRules,
+  getAlertConfigurations,
+  updateAlertConfiguration,
 } = require("../controllers/alertController");
 
+const router = express.Router();
 
-// Get all alerts
+router.get("/", getAlerts);
+
 router.get(
-    "/",
-    getAlerts
+  "/configurations",
+  getAlertConfigurations
 );
 
-
-// Get one alert
-router.get(
-    "/:id",
-    getAlertById
-);
-
-
-// Acknowledge
 router.patch(
-    "/:id/acknowledge",
-    acknowledgeAlert
+  "/configurations/:id",
+  updateAlertConfiguration
 );
 
+router.post(
+  "/evaluate",
+  evaluateAlertRules
+);
 
-// Resolve
 router.patch(
-    "/:id/resolve",
-    resolveAlert
+  "/:id/acknowledge",
+  acknowledgeAlert
 );
 
+router.patch(
+  "/:id/resolve",
+  resolveAlert
+);
 
 module.exports = router;

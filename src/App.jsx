@@ -18,6 +18,7 @@ import Maintenance from "./pages/Maintenance";
 import Reports from "./pages/Reports";
 
 import AddMonitoringSite from "./pages/AddMonitoringSite";
+import AdminAlertConfiguration from "./pages/AdminAlertConfiguration";
 
 import Layout from "./components/Layout";
 
@@ -154,6 +155,11 @@ function App() {
         <Route
           path="/admin/add-monitoring-site"
           element={<AddMonitoringSite />}
+        />
+
+        <Route
+          path="/admin/alert-configuration"
+          element={<AdminAlertConfiguration />}
         />
 
       </Routes>

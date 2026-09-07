@@ -1,7 +1,4 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
+import React, { useEffect, useState } from "react";
 
 import {
     AlertTriangle,
@@ -13,15 +10,255 @@ import {
     Cpu,
     ShieldAlert,
     Check,
-    Building2
+    Building2,
+    Play,
 } from "lucide-react";
 
 
-const API_URL =
-    "http://localhost:5000/api/alerts";
+// =========================================================
+// API
+// =========================================================
 
+const API_URL = "http://localhost:5000/api/alerts";
+
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+const getCategory = (alert) => {
+    const parameter = String(
+        alert?.parameter || ""
+    ).toLowerCase();
+
+    if (
+        parameter.includes("battery") ||
+        parameter.includes("network") ||
+        parameter.includes("connect") ||
+        parameter.includes("sensor fault") ||
+        parameter.includes("fault") ||
+        parameter.includes("offline")
+    ) {
+        return "Device & Battery";
+    }
+
+    if (
+        parameter.includes("maintenance") ||
+        parameter.includes("calibration")
+    ) {
+        return "Maintenance";
+    }
+
+    return "Air Quality / AQI";
+};
+
+
+const getSuggestedAction = (alert) => {
+    const parameter = String(
+        alert?.parameter || ""
+    ).toLowerCase();
+
+    if (parameter.includes("battery")) {
+        return "Check station power supply and replace or recharge the battery if required.";
+    }
+
+    if (
+        parameter.includes("network") ||
+        parameter.includes("connect")
+    ) {
+        return "Check network connectivity, gateway status and communication link.";
+    }
+
+    if (
+        parameter.includes("offline") ||
+        parameter.includes("station")
+    ) {
+        return "Verify station power, gateway connectivity and latest data transmission.";
+    }
+
+    if (
+        parameter.includes("sensor fault") ||
+        parameter.includes("fault")
+    ) {
+        return "Inspect the sensor, wiring and device status. Recalibrate or replace the sensor if required.";
+    }
+
+    if (parameter.includes("calibration")) {
+        return "Schedule sensor calibration according to the configured calibration period.";
+    }
+
+    if (parameter.includes("maintenance")) {
+        return "Schedule the required station or device maintenance.";
+    }
+
+    if (
+        parameter === "aqi" ||
+        parameter.includes("pm") ||
+        parameter.includes("no2") ||
+        parameter.includes("so2") ||
+        parameter.includes("co") ||
+        parameter.includes("o3")
+    ) {
+        return "Verify the pollutant reading and monitor air-quality conditions. Take appropriate operational action.";
+    }
+
+    return "Verify the reading and inspect the related station or sensor.";
+};
+
+
+const formatDateTime = (value) => {
+    if (!value) {
+        return "N/A";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
+};
+
+
+const getStatus = (acknowledgement) => {
+    if (
+        acknowledgement === "Acknowledged"
+    ) {
+        return "Acknowledged";
+    }
+
+    if (
+        acknowledgement === "Resolved"
+    ) {
+        return "Resolved";
+    }
+
+    return "Unresolved";
+};
+
+
+const getThresholdText = (alert) => {
+    if (alert?.threshold_rule) {
+        return alert.threshold_rule;
+    }
+
+    if (
+        alert?.warning_threshold !== null &&
+        alert?.warning_threshold !== undefined
+    ) {
+        return `Warning: ${alert.warning_threshold}`;
+    }
+
+    return "Configured threshold";
+};
+
+
+// =========================================================
+// CONVERT BACKEND ALERT TO UI ALERT
+// =========================================================
+
+const formatAlert = (alert) => {
+    const station = alert?.station || {};
+
+    const parameter =
+        alert?.parameter || "Unknown Alert";
+
+    const category =
+        getCategory(alert);
+
+    const actualValue =
+        alert?.actual_value !== null &&
+        alert?.actual_value !== undefined
+            ? alert.actual_value
+            : "N/A";
+
+    return {
+        alertId: String(
+            alert?.alert_id ?? ""
+        ),
+
+        id: `ALT-${alert?.alert_id ?? "N/A"}`,
+
+        category,
+
+        project:
+            station?.zone ||
+            "PMC AQMS",
+
+        parameter,
+
+        station:
+            station?.name ||
+            "Unknown Station",
+
+        stationId:
+            station?.station_id ||
+            alert?.station_id ||
+            null,
+
+        ward:
+            station?.ward ||
+            "N/A",
+
+        zone:
+            station?.zone ||
+            "N/A",
+
+        source:
+            alert?.sensor_id
+                ? `Sensor ${alert.sensor_id}`
+                : "AQMS",
+
+        severity:
+            alert?.severity ||
+            "Info",
+
+        actualValue,
+
+        threshold:
+            getThresholdText(alert),
+
+        timestamp:
+            formatDateTime(
+                alert?.started_time
+            ),
+
+        rawTimestamp:
+            alert?.started_time ||
+            null,
+
+        status:
+            getStatus(
+                alert?.acknowledgement
+            ),
+
+        suggestedAction:
+            getSuggestedAction(alert),
+
+        acknowledgement:
+            alert?.acknowledgement ||
+            null,
+
+        acknowledgedAt:
+            alert?.acknowledged_at ||
+            null,
+    };
+};
+
+
+// =========================================================
+// COMPONENT
+// =========================================================
 
 export default function Alerts() {
+
+    // -------------------------------------------------------
+    // STATE
+    // -------------------------------------------------------
 
     const [filterType, setFilterType] =
         useState("All Events");
@@ -40,6 +277,9 @@ export default function Alerts() {
 
     const [error, setError] =
         useState("");
+
+    const [evaluating, setEvaluating] =
+        useState(false);
 
 
     // =====================================================
@@ -61,23 +301,43 @@ export default function Alerts() {
 
             if (!response.ok) {
                 throw new Error(
-                    result.message ||
+                    result?.message ||
                     "Failed to load alerts."
                 );
             }
 
             if (
-                result.status !==
+                result?.status !==
                 "success"
             ) {
                 throw new Error(
-                    result.message ||
+                    result?.message ||
                     "Alert API failed."
                 );
             }
 
+            // IMPORTANT:
+            // Backend returns:
+            //
+            // {
+            //   status: "success",
+            //   alerts: [...]
+            // }
+            //
+            // NOT result.data
+
+            const backendAlerts =
+                Array.isArray(result?.alerts)
+                    ? result.alerts
+                    : [];
+
+            const formattedAlerts =
+                backendAlerts.map(
+                    formatAlert
+                );
+
             setAlerts(
-                result.data || []
+                formattedAlerts
             );
 
         } catch (err) {
@@ -88,9 +348,11 @@ export default function Alerts() {
             );
 
             setError(
-                err.message ||
+                err?.message ||
                 "Unable to connect to alert server."
             );
+
+            setAlerts([]);
 
         } finally {
 
@@ -100,7 +362,73 @@ export default function Alerts() {
 
 
     // =====================================================
-    // LOAD ALERTS
+    // RUN ALERT ENGINE
+    // POST /api/alerts/evaluate
+    // =====================================================
+
+    const runAlertEngine = async () => {
+
+        try {
+
+            setEvaluating(true);
+            setError("");
+
+            const response =
+                await fetch(
+                    `${API_URL}/evaluate`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                        },
+                    }
+                );
+
+            const result =
+                await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result?.message ||
+                    "Failed to evaluate alert rules."
+                );
+            }
+
+            if (
+                result?.status !==
+                "success"
+            ) {
+                throw new Error(
+                    result?.message ||
+                    "Alert engine failed."
+                );
+            }
+
+            // Reload alerts after evaluation
+            await fetchAlerts();
+
+        } catch (err) {
+
+            console.error(
+                "Alert engine error:",
+                err
+            );
+
+            setError(
+                err?.message ||
+                "Failed to run alert engine."
+            );
+
+        } finally {
+
+            setEvaluating(false);
+        }
+    };
+
+
+    // =====================================================
+    // INITIAL LOAD
     // =====================================================
 
     useEffect(() => {
@@ -111,30 +439,33 @@ export default function Alerts() {
 
 
     // =====================================================
-    // ACKNOWLEDGE
+    // ACKNOWLEDGE ALERT
     // =====================================================
 
     const handleAcknowledge = async (
         incident
     ) => {
 
+        if (!incident?.alertId) {
+            setError(
+                "Invalid alert ID."
+            );
+            return;
+        }
+
         try {
+
+            setError("");
 
             const response =
                 await fetch(
                     `${API_URL}/${incident.alertId}/acknowledge`,
                     {
                         method: "PATCH",
-
                         headers: {
                             "Content-Type":
-                                "application/json"
+                                "application/json",
                         },
-
-                        body: JSON.stringify({
-                            acknowledgement:
-                                "Acknowledged"
-                        })
                     }
                 );
 
@@ -143,7 +474,17 @@ export default function Alerts() {
 
             if (!response.ok) {
                 throw new Error(
-                    result.message ||
+                    result?.message ||
+                    "Failed to acknowledge alert."
+                );
+            }
+
+            if (
+                result?.status !==
+                "success"
+            ) {
+                throw new Error(
+                    result?.message ||
                     "Failed to acknowledge alert."
                 );
             }
@@ -157,7 +498,9 @@ export default function Alerts() {
                                 ? {
                                       ...alert,
                                       status:
-                                          "Acknowledged"
+                                          "Acknowledged",
+                                      acknowledgement:
+                                          "Acknowledged",
                                   }
                                 : alert
                     )
@@ -171,7 +514,7 @@ export default function Alerts() {
             );
 
             setError(
-                err.message ||
+                err?.message ||
                 "Failed to acknowledge alert."
             );
         }
@@ -179,20 +522,29 @@ export default function Alerts() {
 
 
     // =====================================================
-    // RESOLVE
+    // RESOLVE ALERT
     // =====================================================
 
     const handleResolve = async (
         incident
     ) => {
 
+        if (!incident?.alertId) {
+            setError(
+                "Invalid alert ID."
+            );
+            return;
+        }
+
         try {
+
+            setError("");
 
             const response =
                 await fetch(
                     `${API_URL}/${incident.alertId}/resolve`,
                     {
-                        method: "PATCH"
+                        method: "PATCH",
                     }
                 );
 
@@ -201,7 +553,17 @@ export default function Alerts() {
 
             if (!response.ok) {
                 throw new Error(
-                    result.message ||
+                    result?.message ||
+                    "Failed to resolve alert."
+                );
+            }
+
+            if (
+                result?.status !==
+                "success"
+            ) {
+                throw new Error(
+                    result?.message ||
                     "Failed to resolve alert."
                 );
             }
@@ -215,7 +577,9 @@ export default function Alerts() {
                                 ? {
                                       ...alert,
                                       status:
-                                          "Resolved"
+                                          "Resolved",
+                                      acknowledgement:
+                                          "Resolved",
                                   }
                                 : alert
                     )
@@ -229,7 +593,7 @@ export default function Alerts() {
             );
 
             setError(
-                err.message ||
+                err?.message ||
                 "Failed to resolve alert."
             );
         }
@@ -237,7 +601,7 @@ export default function Alerts() {
 
 
     // =====================================================
-    // FILTER
+    // FILTER ALERTS
     // =====================================================
 
     const filteredAlerts =
@@ -262,17 +626,30 @@ export default function Alerts() {
 
             const matchesSearch =
                 !query ||
-                item.station
-                    ?.toLowerCase()
+                String(
+                    item.station || ""
+                )
+                    .toLowerCase()
                     .includes(query) ||
-                item.parameter
-                    ?.toLowerCase()
+                String(
+                    item.parameter || ""
+                )
+                    .toLowerCase()
                     .includes(query) ||
-                item.id
-                    ?.toLowerCase()
+                String(
+                    item.id || ""
+                )
+                    .toLowerCase()
                     .includes(query) ||
-                item.project
-                    ?.toLowerCase()
+                String(
+                    item.project || ""
+                )
+                    .toLowerCase()
+                    .includes(query) ||
+                String(
+                    item.ward || ""
+                )
+                    .toLowerCase()
                     .includes(query);
 
             return (
@@ -320,7 +697,7 @@ export default function Alerts() {
 
 
     // =====================================================
-    // LOADING
+    // LOADING SCREEN
     // =====================================================
 
     if (loading) {
@@ -346,6 +723,10 @@ export default function Alerts() {
     }
 
 
+    // =====================================================
+    // PAGE
+    // =====================================================
+
     return (
 
         <div className="min-h-screen bg-[#edf2f7] text-slate-800 p-4 sm:p-6 lg:p-8 font-sans selection:bg-blue-600 selection:text-white">
@@ -365,7 +746,9 @@ export default function Alerts() {
                             Operational Surveillance
                         </span>
 
-                        <span>/</span>
+                        <span>
+                            /
+                        </span>
 
                         <span className="text-blue-600 font-bold">
                             CPCB Section 10 Protocol
@@ -380,25 +763,66 @@ export default function Alerts() {
                             Alerts & Incident Management
                         </h1>
 
-
                     </div>
-
 
                 </div>
 
 
-                <button
-                    onClick={fetchAlerts}
-                    className="self-start sm:self-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 transition"
-                >
+                <div className="flex flex-wrap items-center gap-2">
 
-                    <RefreshCw size={13} />
+                    {/* RUN ALERT ENGINE */}
 
-                    <span>
-                        Refresh Incident Stream
-                    </span>
+                    <button
+                        onClick={
+                            runAlertEngine
+                        }
+                        disabled={
+                            evaluating
+                        }
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-emerald-600/25 transition"
+                    >
 
-                </button>
+                        <Play
+                            size={13}
+                            className={
+                                evaluating
+                                    ? "animate-pulse"
+                                    : ""
+                            }
+                        />
+
+                        <span>
+                            {evaluating
+                                ? "Checking Rules..."
+                                : "Run Alert Engine"}
+                        </span>
+
+                    </button>
+
+
+                    {/* REFRESH */}
+
+                    <button
+                        onClick={
+                            fetchAlerts
+                        }
+                        disabled={
+                            loading
+                        }
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 transition"
+                    >
+
+                        <RefreshCw
+                            size={13}
+                        />
+
+                        <span>
+                            Refresh Incident Stream
+                        </span>
+
+                    </button>
+
+                </div>
 
             </div>
 
@@ -409,9 +833,20 @@ export default function Alerts() {
 
             {error && (
 
-                <div className="mb-5 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-xs font-medium">
+                <div className="mb-5 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-xs font-medium flex items-center justify-between gap-3">
 
-                    {error}
+                    <span>
+                        {error}
+                    </span>
+
+                    <button
+                        onClick={() =>
+                            setError("")
+                        }
+                        className="text-red-500 hover:text-red-700 font-black"
+                    >
+                        ×
+                    </button>
 
                 </div>
 
@@ -448,7 +883,9 @@ export default function Alerts() {
 
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black shadow-inner">
 
-                        <ShieldAlert size={24} />
+                        <ShieldAlert
+                            size={24}
+                        />
 
                     </div>
 
@@ -478,7 +915,9 @@ export default function Alerts() {
 
                     <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-black shadow-inner">
 
-                        <AlertOctagon size={24} />
+                        <AlertOctagon
+                            size={24}
+                        />
 
                     </div>
 
@@ -508,7 +947,9 @@ export default function Alerts() {
 
                     <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-black shadow-inner">
 
-                        <AlertTriangle size={24} />
+                        <AlertTriangle
+                            size={24}
+                        />
 
                     </div>
 
@@ -530,14 +971,16 @@ export default function Alerts() {
                         "All Events",
                         "Air Quality / AQI",
                         "Device & Battery",
-                        "Maintenance"
+                        "Maintenance",
                     ].map(
                         (cat) => (
 
                             <button
                                 key={cat}
                                 onClick={() =>
-                                    setFilterType(cat)
+                                    setFilterType(
+                                        cat
+                                    )
                                 }
                                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                                     filterType ===
@@ -622,6 +1065,7 @@ export default function Alerts() {
 
             <div className="space-y-4 mb-7">
 
+
                 <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-500">
 
                     <span>
@@ -630,7 +1074,9 @@ export default function Alerts() {
                         {" "}ESCALATIONS
                     </span>
 
-                    
+                    <span>
+                        {alerts.length} TOTAL
+                    </span>
 
                 </div>
 
@@ -649,8 +1095,35 @@ export default function Alerts() {
                         </h3>
 
                         <p className="text-xs text-slate-400 mt-1">
-                            No alerts match the current filters.
+                            {alerts.length === 0
+                                ? "No alerts are currently stored in the alert database."
+                                : "No alerts match the current filters."}
                         </p>
+
+
+                        {alerts.length === 0 && (
+
+                            <button
+                                onClick={
+                                    runAlertEngine
+                                }
+                                disabled={
+                                    evaluating
+                                }
+                                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold transition"
+                            >
+
+                                <Play
+                                    size={13}
+                                />
+
+                                {evaluating
+                                    ? "Checking..."
+                                    : "Run Alert Engine"}
+
+                            </button>
+
+                        )}
 
                     </div>
 
@@ -687,7 +1160,9 @@ export default function Alerts() {
                                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 
 
-                                        {/* LEFT */}
+                                        {/* =================================================
+                                            LEFT
+                                        ================================================= */}
 
                                         <div className="flex items-start gap-4">
 
@@ -702,17 +1177,23 @@ export default function Alerts() {
                                             >
 
                                                 {isCritical ? (
+
                                                     <AlertOctagon
                                                         size={22}
                                                     />
+
                                                 ) : isWarning ? (
+
                                                     <AlertTriangle
                                                         size={22}
                                                     />
+
                                                 ) : (
+
                                                     <Cpu
                                                         size={22}
                                                     />
+
                                                 )}
 
                                             </div>
@@ -792,7 +1273,9 @@ export default function Alerts() {
 
                                                     {" "}
 
-                                                    {incident.suggestedAction}
+                                                    {
+                                                        incident.suggestedAction
+                                                    }
 
                                                 </div>
 
@@ -801,7 +1284,9 @@ export default function Alerts() {
                                         </div>
 
 
-                                        {/* RIGHT */}
+                                        {/* =================================================
+                                            RIGHT
+                                        ================================================= */}
 
                                         <div className="flex flex-row lg:flex-col items-end justify-between lg:justify-center gap-3 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
 
@@ -810,7 +1295,9 @@ export default function Alerts() {
 
                                                 <div className="text-xl font-black text-slate-900">
 
-                                                    {incident.actualValue}
+                                                    {
+                                                        incident.actualValue
+                                                    }
 
                                                 </div>
 
@@ -821,17 +1308,23 @@ export default function Alerts() {
 
                                                     {" "}
 
-                                                    {incident.threshold}
+                                                    {
+                                                        incident.threshold
+                                                    }
 
                                                 </div>
 
 
                                                 <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400 mt-1 lg:justify-end">
 
-                                                    <Clock size={12} />
+                                                    <Clock
+                                                        size={12}
+                                                    />
 
                                                     <span>
-                                                        {incident.timestamp}
+                                                        {
+                                                            incident.timestamp
+                                                        }
                                                     </span>
 
                                                 </div>
@@ -839,7 +1332,9 @@ export default function Alerts() {
                                             </div>
 
 
-                                            {/* ACTION BUTTON */}
+                                            {/* =================================================
+                                                ACTION BUTTONS
+                                            ================================================= */}
 
                                             {incident.status ===
                                             "Unresolved" ? (
@@ -910,7 +1405,9 @@ export default function Alerts() {
                 FOOTER
             ================================================= */}
 
-            
+            <div className="text-center text-[10px] text-slate-400 pb-3">
+                PMC Air Quality Monitoring System • Alert & Incident Management
+            </div>
 
         </div>
     );
