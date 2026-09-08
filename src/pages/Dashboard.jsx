@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Wind,
   Radio,
@@ -103,6 +104,7 @@ const AREA_HOURLY_TRENDS = {
 
 const STATIONS = [
   {
+    id: 1,
     code: "PMC-001",
     name: "Shivajinagar Central",
     ward: "Ward 7",
@@ -117,6 +119,7 @@ const STATIONS = [
     trend: "-4%"
   },
   {
+    id: 2,
     code: "PMC-002",
     name: "Kothrud Depot Basin",
     ward: "Ward 10",
@@ -131,6 +134,7 @@ const STATIONS = [
     trend: "-6%"
   },
   {
+    id: 3,
     code: "PMC-003",
     name: "Hadapsar Industrial",
     ward: "Ward 15",
@@ -145,6 +149,7 @@ const STATIONS = [
     trend: "+8%"
   },
   {
+    id: 4,
     code: "PMC-004",
     name: "Katraj Lake Reserve",
     ward: "Ward 21",
@@ -159,6 +164,7 @@ const STATIONS = [
     trend: "-11%"
   },
   {
+    id: 5,
     code: "PMC-005",
     name: "Hinjewadi Tech Corridor",
     ward: "Ward 25",
@@ -231,13 +237,14 @@ const CustomAreaTooltip = ({ active, payload, label, activeMetric }) => {
 ========================================================= */
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [activePollutant, setActivePollutant] = useState("aqi");
   const [selectedArea, setSelectedArea] = useState("all");
 
   const currentHourlyData = AREA_HOURLY_TRENDS[selectedArea] || AREA_HOURLY_TRENDS.all;
 
   /* =======================================================
-     REQUIRED 7 KPIs
+     REQUIRED 7 KPIs (WITH NAVIGATION PATHS)
   ======================================================= */
 
   const KPI_DATA = [
@@ -250,6 +257,7 @@ export default function Dashboard() {
       iconBg: "bg-blue-50",
       iconColor: "text-blue-600",
       valueColor: "text-slate-900",
+      path: "/pune-areas",
     },
     {
       title: "Active Stations",
@@ -260,6 +268,7 @@ export default function Dashboard() {
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
       valueColor: "text-emerald-600",
+      path: "/pune-areas",
     },
     {
       title: "Offline Stations",
@@ -270,6 +279,7 @@ export default function Dashboard() {
       iconBg: "bg-slate-100",
       iconColor: "text-slate-500",
       valueColor: "text-slate-900",
+      path: "/device-health",
     },
     {
       title: "High AQI Areas",
@@ -280,6 +290,7 @@ export default function Dashboard() {
       iconBg: "bg-amber-50",
       iconColor: "text-amber-600",
       valueColor: "text-amber-600",
+      path: "/station/PMC-003",
     },
     {
       title: "Active Alerts",
@@ -290,6 +301,7 @@ export default function Dashboard() {
       iconBg: "bg-rose-50",
       iconColor: "text-rose-600",
       valueColor: "text-rose-600",
+      path: "/alerts",
     },
     {
       title: "Data Availability",
@@ -300,6 +312,7 @@ export default function Dashboard() {
       iconBg: "bg-indigo-50",
       iconColor: "text-indigo-600",
       valueColor: "text-indigo-600",
+      path: "/reports",
     },
     {
       title: "Sensor Health",
@@ -310,6 +323,7 @@ export default function Dashboard() {
       iconBg: "bg-teal-50",
       iconColor: "text-teal-600",
       valueColor: "text-slate-900",
+      path: "/device-health",
     },
   ];
 
@@ -418,7 +432,7 @@ export default function Dashboard() {
       </div>
 
       {/* =====================================================
-          7 REQUIRED KPI CARDS
+          7 REQUIRED KPI CARDS (CLICKABLE)
       ===================================================== */}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5 mb-6">
@@ -428,10 +442,18 @@ export default function Dashboard() {
           return (
             <div
               key={kpi.title}
-              className="bg-white rounded-[16px] px-3 py-3 shadow-sm border border-slate-100 flex items-center justify-between gap-2 min-w-0 hover:shadow-md transition"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (kpi.path) navigate(kpi.path);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && kpi.path) navigate(kpi.path);
+              }}
+              className="bg-white rounded-[16px] px-3 py-3 shadow-sm border border-slate-100 flex items-center justify-between gap-2 min-w-0 cursor-pointer hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 select-none group"
             >
-              <div className="min-w-0 flex-1">
-                <span className="text-[8.5px] font-bold uppercase tracking-tight text-slate-400 block mb-1 whitespace-nowrap overflow-hidden text-ellipsis">
+              <div className="min-w-0 flex-1 text-left">
+                <span className="text-[8.5px] font-bold uppercase tracking-tight text-slate-400 block mb-1 whitespace-nowrap overflow-hidden text-ellipsis group-hover:text-blue-600 transition-colors">
                   {kpi.title}
                 </span>
 
@@ -448,7 +470,9 @@ export default function Dashboard() {
                 </span>
               </div>
 
-              <div className={`w-8 h-8 flex-shrink-0 rounded-lg ${kpi.iconBg} ${kpi.iconColor} flex items-center justify-center`}>
+              <div
+                className={`w-8 h-8 flex-shrink-0 rounded-lg ${kpi.iconBg} ${kpi.iconColor} flex items-center justify-center group-hover:scale-105 transition-transform`}
+              >
                 <Icon size={16} />
               </div>
             </div>
@@ -665,7 +689,60 @@ export default function Dashboard() {
           MUNICIPAL GIS STATION COVERAGE MAP
       ===================================================== */}
 
-      
+      <div className="bg-white rounded-[22px] p-5 sm:p-6 shadow-sm border border-slate-100 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-black text-slate-900">
+                Municipal GIS Station Coverage
+              </h2>
+              <span className="text-[9px] font-mono font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100">
+                Live Geofence
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              Geospatial placement and real-time CPCB air quality heat map across Pune wards
+            </p>
+          </div>
+
+          <span className="text-[10px] font-semibold text-blue-600 flex items-center gap-1">
+            <Navigation size={12} />
+            5 database stations mapped
+          </span>
+        </div>
+
+        <div className="w-full h-[400px] rounded-xl overflow-hidden border border-slate-200/80 shadow-inner">
+          <PuneMap stations={STATIONS} />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 mt-4 pt-3 border-t border-slate-100 text-[9.5px] font-bold text-slate-600">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            Good (0–50)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#84cc16]"></span>
+            Satisfactory (51–100)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            Moderate (101–200)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+            Poor (201–300)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            Very Poor (301–400)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-800"></span>
+            Severe (401–500)
+          </span>
+        </div>
+      </div>
+
       {/* =====================================================
           ACTIVE ALERTS
       ===================================================== */}
@@ -728,7 +805,7 @@ export default function Dashboard() {
           STATION REGISTRY
       ===================================================== */}
 
-      <div className="bg-white rounded-[22px] p-5 sm:p-6 shadow-sm border border-slate-100">
+      <div className="bg-white rounded-[22px] p-5 sm:p-6 shadow-sm border border-slate-100 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div>
             <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -831,65 +908,9 @@ export default function Dashboard() {
       ===================================================== */}
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4 text-[9px] text-slate-400">
-        
+        <span>Air Quality Monitoring System • PMC</span>
+        <span>Monitoring 5 registered stations</span>
       </div>
-
-      <div className="bg-white rounded-[22px] p-5 sm:p-6 shadow-sm border border-slate-100 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-black text-slate-900">
-                Municipal GIS Station Coverage
-              </h2>
-              <span className="text-[9px] font-mono font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100">
-                Live Geofence
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              Geospatial placement and real-time CPCB air quality heat map across Pune wards
-            </p>
-          </div>
-
-          <span className="text-[10px] font-semibold text-blue-600 flex items-center gap-1">
-            <Navigation size={12} />
-            5 database stations mapped
-          </span>
-        </div>
-
-        {/* Embedded Leaflet Map */}
-        <div className="w-full h-[400px] rounded-xl overflow-hidden border border-slate-200/80 shadow-inner">
-          <PuneMap stations={STATIONS} />
-        </div>
-
-        {/* CPCB Category Scale Legend */}
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 mt-4 pt-3 border-t border-slate-100 text-[9.5px] font-bold text-slate-600">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            Good (0–50)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#84cc16]"></span>
-            Satisfactory (51–100)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-            Moderate (101–200)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
-            Poor (201–300)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-            Very Poor (301–400)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-800"></span>
-            Severe (401–500)
-          </span>
-        </div>
-      </div>
-
 
     </div>
   );
