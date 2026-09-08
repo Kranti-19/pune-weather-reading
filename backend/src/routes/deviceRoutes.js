@@ -3,35 +3,116 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  getDevices,
-  getDeviceById,
-  getDevicesByStation,
-  createDevice,
-  updateDevice,
-  deleteDevice,
+    getDevices,
+    getDeviceStatus,
+    deviceHeartbeat,
+    getDeviceById,
+    getDevicesByStation,
+    createDevice,
+    updateDevice,
+    deleteDevice,
 } = require("../controllers/deviceController");
 
 
-// GET all devices
-router.get("/", getDevices);
+// ============================================================
+// GET ALL DEVICES
+// GET /api/devices
+// ============================================================
 
-// CREATE device
-router.post("/", createDevice);
-
-// GET devices belonging to a station
 router.get(
-  "/station/:stationId",
-  getDevicesByStation
+    "/",
+    getDevices
 );
 
-// GET one device
-router.get("/:id", getDeviceById);
 
-// UPDATE device
-router.patch("/:id", updateDevice);
+// ============================================================
+// GET REAL-TIME DEVICE STATUS
+// GET /api/devices/status
+//
+// Returns:
+// - Online devices
+// - Offline devices
+// - Last seen
+// - Battery
+// - Network status
+// ============================================================
 
-// DELETE device
-router.delete("/:id", deleteDevice);
+router.get(
+    "/status",
+    getDeviceStatus
+);
+
+
+// ============================================================
+// CREATE DEVICE
+// POST /api/devices
+// ============================================================
+
+router.post(
+    "/",
+    createDevice
+);
+
+
+// ============================================================
+// GET DEVICES BELONGING TO A STATION
+// GET /api/devices/station/:stationId
+// ============================================================
+
+router.get(
+    "/station/:stationId",
+    getDevicesByStation
+);
+
+
+// ============================================================
+// DEVICE HEARTBEAT
+// POST /api/devices/:id/heartbeat
+//
+// For now:
+// Device Simulator → this endpoint
+//
+// Later:
+// Real ESP32/Gateway → this endpoint
+// ============================================================
+
+router.post(
+    "/:id/heartbeat",
+    deviceHeartbeat
+);
+
+
+// ============================================================
+// GET ONE DEVICE
+// GET /api/devices/:id
+// ============================================================
+
+router.get(
+    "/:id",
+    getDeviceById
+);
+
+
+// ============================================================
+// UPDATE DEVICE
+// PATCH /api/devices/:id
+// ============================================================
+
+router.patch(
+    "/:id",
+    updateDevice
+);
+
+
+// ============================================================
+// DELETE DEVICE
+// DELETE /api/devices/:id
+// ============================================================
+
+router.delete(
+    "/:id",
+    deleteDevice
+);
 
 
 module.exports = router;

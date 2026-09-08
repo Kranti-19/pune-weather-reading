@@ -10,6 +10,12 @@ console.log(
     process.env.SUPABASE_SECRET_KEY ? "YES" : "NO"
 );
 
+
+const {
+    startDeviceSimulator,
+} = require("./src/services/deviceSimulator");
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+     startDeviceSimulator();
 });

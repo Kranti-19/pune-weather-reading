@@ -55,6 +55,13 @@ app.use("/api/devices",deviceRoutes);
 const sensorRoutes = require("./routes/sensorRoutes");
 app.use( "/api/sensors",sensorRoutes);
 
+
+
+
+
+
+
+
 // Root Route
 app.get("/", (req, res) => {
     res.json({
