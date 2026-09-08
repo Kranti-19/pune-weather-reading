@@ -3,24 +3,194 @@
 const supabase = require("../config/supabase");
 
 // =====================================================
+// HELPERS
+// =====================================================
+
+const num = (value, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const lower = (value) =>
+    String(value || "")
+        .trim()
+        .toLowerCase();
+
+const getAqiCategory = (aqi) => {
+    const value = num(aqi);
+
+    if (value <= 50) return "Good";
+    if (value <= 100) return "Satisfactory";
+    if (value <= 200) return "Moderate";
+    if (value <= 300) return "Poor";
+    if (value <= 400) return "Very Poor";
+
+    return "Severe";
+};
+
+const isActiveAlert = (alert) => {
+    const status = lower(
+        alert?.acknowledgement
+    );
+
+    return (
+        status === "" ||
+        status === "acknowledged"
+    );
+};
+
+const isValidQuality = (flag) => {
+    const value = lower(flag);
+
+    return [
+        "valid",
+        "available",
+        "good",
+        "ok",
+    ].includes(value);
+};
+
+const isOnlineStatus = (status) => {
+    const value = lower(status);
+
+    return [
+        "online",
+        "active",
+        "connected",
+        "healthy",
+    ].includes(value);
+};
+
+const getSensorHealth = (status) => {
+    const value = lower(status);
+
+    if (
+        [
+            "failed",
+            "fail",
+            "fault",
+            "error",
+            "offline",
+        ].includes(value)
+    ) {
+        return "Failed";
+    }
+
+    if (
+        [
+            "warning",
+            "warn",
+            "suspect",
+        ].includes(value)
+    ) {
+        return "Warning";
+    }
+
+    if (
+        [
+            "maintenance",
+            "maintain",
+        ].includes(value)
+    ) {
+        return "Maintenance";
+    }
+
+    return "Healthy";
+};
+
+// =====================================================
+// POLLUTANT CONFIGURATION
+// =====================================================
+
+const POLLUTANTS = [
+    {
+        key: "pm25",
+        names: ["pm2.5", "pm25", "pm2_5"],
+        name: "PM2.5",
+        unit: "µg/m³",
+        standard: 60,
+    },
+    {
+        key: "pm10",
+        names: ["pm10"],
+        name: "PM10",
+        unit: "µg/m³",
+        standard: 100,
+    },
+    {
+        key: "no2",
+        names: ["no2", "no₂"],
+        name: "NO₂",
+        unit: "µg/m³",
+        standard: 80,
+    },
+    {
+        key: "so2",
+        names: ["so2", "so₂"],
+        name: "SO₂",
+        unit: "µg/m³",
+        standard: 80,
+    },
+    {
+        key: "co",
+        names: ["co"],
+        name: "CO",
+        unit: "mg/m³",
+        standard: 2,
+    },
+    {
+        key: "o3",
+        names: ["o3", "o₃"],
+        name: "O₃",
+        unit: "µg/m³",
+        standard: 100,
+    },
+    {
+        key: "nh3",
+        names: ["nh3", "nh₃"],
+        name: "NH₃",
+        unit: "µg/m³",
+        standard: 400,
+    },
+    {
+        key: "pb",
+        names: ["pb"],
+        name: "Pb",
+        unit: "µg/m³",
+        standard: 1,
+    },
+];
+
+// =====================================================
 // GET DASHBOARD
+//
 // GET /api/dashboard
-// GET /api/dashboard?area=Baner&range=24h
+// GET /api/dashboard?range=24h
+// GET /api/dashboard?range=7d
+// GET /api/dashboard?range=30d
+// GET /api/dashboard?area=Hadapsar
 // =====================================================
 
 const getDashboard = async (req, res) => {
     try {
-        const { area, range = "24h" } = req.query;
+        const {
+            area,
+            range = "24h",
+        } = req.query;
 
         // =================================================
-        // 1. GET STATIONS
+        // 1. STATIONS
         // =================================================
 
-        const { data: allStations, error: stationError } =
-            await supabase
-                .from("station")
-                .select("*")
-                .order("station_id", { ascending: true });
+        const {
+            data: allStations,
+            error: stationError,
+        } = await supabase
+            .from("station")
+            .select("*")
+            .order("station_id", {
+                ascending: true,
+            });
 
         if (stationError) {
             throw stationError;
@@ -28,607 +198,174 @@ const getDashboard = async (req, res) => {
 
         let stations = allStations || [];
 
-        // Area filtering
+        // Optional area filter
         if (area) {
-            const search = area.trim().toLowerCase();
+            const search = lower(area);
 
-            stations = stations.filter((station) => {
-                const name =
-                    station.name?.toLowerCase() || "";
+            stations = stations.filter(
+                (station) => {
+                    const name =
+                        lower(station.name);
 
-                const ward =
-                    station.ward?.toLowerCase() || "";
+                    const ward =
+                        lower(station.ward);
 
-                const zone =
-                    station.zone?.toLowerCase() || "";
+                    const zone =
+                        lower(station.zone);
 
-                return (
-                    name.includes(search) ||
-                    ward.includes(search) ||
-                    zone.includes(search)
-                );
-            });
+                    return (
+                        name.includes(search) ||
+                        ward.includes(search) ||
+                        zone.includes(search)
+                    );
+                }
+            );
         }
 
-        const stationIds = stations.map(
-            (station) => station.station_id
-        );
+        const stationIds =
+            stations.map(
+                (station) =>
+                    station.station_id
+            );
 
         // =================================================
-        // 2. GET AQI READINGS
+        // 2. DEVICES
         // =================================================
 
-        const { data: aqiRows, error: aqiError } =
-            await supabase
-                .from("aqi_reading")
-                .select("*")
-                .order("timestamp", {
-                    ascending: false
-                })
-                .limit(5000);
+        const {
+            data: allDevices,
+            error: deviceError,
+        } = await supabase
+            .from("device")
+            .select("*");
 
-        if (aqiError) {
-            throw aqiError;
+        if (deviceError) {
+            throw deviceError;
         }
 
-        // Latest AQI per station
-        const latestAqiByStation = {};
+        const devices =
+            (allDevices || []).filter(
+                (device) =>
+                    stationIds.includes(
+                        device.station_id
+                    )
+            );
 
-        for (const row of aqiRows || []) {
-            if (!latestAqiByStation[row.station_id]) {
-                latestAqiByStation[row.station_id] = row;
-            }
-        }
+        const deviceIds =
+            devices.map(
+                (device) =>
+                    device.device_id
+            );
 
         // =================================================
-        // 3. GET SENSOR DATA
+        // 3. SENSORS
         // =================================================
 
-        const { data: sensors, error: sensorError } =
-            await supabase
-                .from("sensor")
-                .select("*");
+        const {
+            data: allSensors,
+            error: sensorError,
+        } = await supabase
+            .from("sensor")
+            .select("*");
 
         if (sensorError) {
             throw sensorError;
         }
 
+        const sensors =
+            (allSensors || []).filter(
+                (sensor) =>
+                    deviceIds.includes(
+                        sensor.device_id
+                    )
+            );
+
         // =================================================
-        // 4. GET ALERTS
+        // 4. AQI READINGS
         // =================================================
 
-        const { data: alerts, error: alertError } =
-            await supabase
-                .from("alert")
+        let aqiRows = [];
+
+        if (stationIds.length > 0) {
+            const {
+                data,
+                error,
+            } = await supabase
+                .from("aqi_reading")
                 .select("*")
-                .order("started_time", {
-                    ascending: false
-                });
+                .in(
+                    "station_id",
+                    stationIds
+                )
+                .order("timestamp", {
+                    ascending: false,
+                })
+                .limit(20000);
 
-        if (alertError) {
-            throw alertError;
+            if (error) {
+                throw error;
+            }
+
+            aqiRows = data || [];
         }
 
-        const selectedAlerts = (alerts || []).filter(
-            (alert) =>
-                stationIds.includes(alert.station_id)
-        );
-
-        const activeAlerts = selectedAlerts.filter(
-            (alert) =>
-                !alert.acknowledgement
-        );
-
         // =================================================
-        // 5. GET POLLUTANT READINGS
+        // 5. LATEST AQI PER STATION
         // =================================================
 
-        const { data: readings, error: readingError } =
-            await supabase
+        const latestAqiByStation = {};
+
+        for (const row of aqiRows) {
+            if (
+                !latestAqiByStation[
+                    row.station_id
+                ]
+            ) {
+                latestAqiByStation[
+                    row.station_id
+                ] = row;
+            }
+        }
+
+        // =================================================
+        // 6. POLLUTANT READINGS
+        // =================================================
+
+        let readingRows = [];
+
+        if (stationIds.length > 0) {
+            const {
+                data,
+                error,
+            } = await supabase
                 .from("reading")
                 .select("*")
+                .in(
+                    "station_id",
+                    stationIds
+                )
                 .order("timestamp", {
-                    ascending: false
+                    ascending: false,
                 })
-                .limit(10000);
+                .limit(30000);
 
-        if (readingError) {
-            throw readingError;
-        }
+            if (error) {
+                throw error;
+            }
 
-        const selectedReadings = (readings || []).filter(
-            (row) =>
-                stationIds.includes(row.station_id)
-        );
-
-        // =================================================
-        // 6. GET WEATHER READINGS
-        // =================================================
-
-        const { data: weatherRows, error: weatherError } =
-            await supabase
-                .from("weather_readings")
-                .select(`
-                    id,
-                    site_id,
-                    temperature,
-                    humidity,
-                    wind_speed,
-                    wind_direction,
-                    rainfall,
-                    pressure,
-                    recorded_at,
-                    sites (
-                        id,
-                        site_name,
-                        location,
-                        latitude,
-                        longitude,
-                        site_type,
-                        status
-                    )
-                `)
-                .order("recorded_at", {
-                    ascending: false
-                })
-                .limit(5000);
-
-        if (weatherError) {
-            throw weatherError;
+            readingRows = data || [];
         }
 
         // =================================================
-        // 7. LATEST WEATHER PER SITE
+        // 7. LATEST POLLUTANT READING
+        // PER STATION + PARAMETER
         // =================================================
-
-        const latestWeatherBySite = {};
-
-        for (const row of weatherRows || []) {
-            if (!latestWeatherBySite[row.site_id]) {
-                latestWeatherBySite[row.site_id] = row;
-            }
-        }
-
-        let latestWeather =
-            Object.values(latestWeatherBySite);
-
-        // Match weather sites with selected station/area
-        if (area) {
-            const search = area.trim().toLowerCase();
-
-            latestWeather = latestWeather.filter(
-                (row) => {
-                    const siteName =
-                        row.sites?.site_name
-                            ?.toLowerCase() || "";
-
-                    const location =
-                        row.sites?.location
-                            ?.toLowerCase() || "";
-
-                    return (
-                        siteName.includes(search) ||
-                        location.includes(search)
-                    );
-                }
-            );
-
-            // Fallback: match selected station names
-            if (latestWeather.length === 0) {
-                const stationNames = stations.map(
-                    (station) =>
-                        station.name?.toLowerCase() || ""
-                );
-
-                latestWeather =
-                    Object.values(
-                        latestWeatherBySite
-                    ).filter((row) => {
-                        const siteName =
-                            row.sites?.site_name
-                                ?.toLowerCase() || "";
-
-                        return stationNames.some(
-                            (stationName) =>
-                                siteName.includes(
-                                    stationName
-                                ) ||
-                                stationName.includes(
-                                    siteName
-                                )
-                        );
-                    });
-            }
-        }
-
-        // =================================================
-        // 8. WEATHER AVERAGES
-        // =================================================
-
-        const weather = {
-            temp: null,
-            humidity: null,
-            wind: null,
-            pressure: null,
-            windDirection: null,
-            rainfall: null
-        };
-
-        if (latestWeather.length > 0) {
-
-            const average = (values) => {
-                const validValues = values
-                    .map(Number)
-                    .filter(
-                        (value) =>
-                            !Number.isNaN(value)
-                    );
-
-                if (validValues.length === 0) {
-                    return null;
-                }
-
-                return (
-                    validValues.reduce(
-                        (sum, value) =>
-                            sum + value,
-                        0
-                    ) / validValues.length
-                );
-            };
-
-            const temperature = average(
-                latestWeather.map(
-                    (row) => row.temperature
-                )
-            );
-
-            const humidity = average(
-                latestWeather.map(
-                    (row) => row.humidity
-                )
-            );
-
-            const windSpeed = average(
-                latestWeather.map(
-                    (row) => row.wind_speed
-                )
-            );
-
-            const pressure = average(
-                latestWeather.map(
-                    (row) => row.pressure
-                )
-            );
-
-            const windDirection = average(
-                latestWeather.map(
-                    (row) => row.wind_direction
-                )
-            );
-
-            const rainfall = average(
-                latestWeather.map(
-                    (row) => row.rainfall
-                )
-            );
-
-            if (temperature !== null) {
-                weather.temp =
-                    `${temperature.toFixed(1)} °C`;
-            }
-
-            if (humidity !== null) {
-                weather.humidity =
-                    `${humidity.toFixed(0)} %`;
-            }
-
-            if (windSpeed !== null) {
-                weather.wind =
-                    `${windSpeed.toFixed(1)} m/s`;
-            }
-
-            if (pressure !== null) {
-                weather.pressure =
-                    `${pressure.toFixed(1)} hPa`;
-            }
-
-            if (windDirection !== null) {
-                weather.windDirection =
-                    `${windDirection.toFixed(0)}°`;
-            }
-
-            if (rainfall !== null) {
-                weather.rainfall =
-                    `${rainfall.toFixed(1)} mm`;
-            }
-        }
-
-        // =================================================
-        // 9. CITY / AREA AQI
-        // =================================================
-
-        const selectedAqiRows = Object.values(
-            latestAqiByStation
-        ).filter((row) =>
-            stationIds.includes(row.station_id)
-        );
-
-        let cityAqi = 0;
-
-        if (selectedAqiRows.length > 0) {
-            const total = selectedAqiRows.reduce(
-                (sum, row) =>
-                    sum + Number(row.aqi || 0),
-                0
-            );
-
-            cityAqi = Math.round(
-                total / selectedAqiRows.length
-            );
-        }
-
-        const currentAqiRow =
-            selectedAqiRows.length > 0
-                ? selectedAqiRows.reduce(
-                      (latest, row) => {
-                          if (!latest) return row;
-
-                          return new Date(
-                              row.timestamp
-                          ) >
-                              new Date(
-                                  latest.timestamp
-                              )
-                              ? row
-                              : latest;
-                      },
-                      null
-                  )
-                : null;
-
-        const currentAqi = area
-            ? Number(currentAqiRow?.aqi || 0)
-            : cityAqi;
-
-        // =================================================
-        // 10. DOMINANT POLLUTANT
-        // =================================================
-
-        let dominant =
-            currentAqiRow?.dominant_pollutant ||
-            "N/A";
-
-        // =================================================
-        // 11. ACTIVE STATIONS
-        // =================================================
-
-        const totalStations =
-            stations.length;
-
-        const onlineStations =
-            stations.filter((station) => {
-                const status =
-                    station.status
-                        ?.toLowerCase();
-
-                return (
-                    status === "online" ||
-                    status === "active"
-                );
-            }).length;
-
-        const offlineStations =
-            totalStations -
-            onlineStations;
-
-        const dataAvailability =
-            totalStations > 0
-                ? (
-                      (onlineStations /
-                          totalStations) *
-                      100
-                  ).toFixed(1)
-                : "0.0";
-
-        // =================================================
-        // 12. CRITICAL WARDS
-        // =================================================
-
-        const criticalWards =
-            selectedAqiRows.filter(
-                (row) =>
-                    Number(row.aqi) > 200
-            ).length;
-
-        // =================================================
-        // 13. SENSOR HEALTH
-        // =================================================
-
-        const selectedStationSensors =
-            (sensors || []).filter((sensor) => {
-
-                const matchingDevice =
-                    true;
-
-                return matchingDevice;
-            });
-
-        const healthySensors =
-            selectedStationSensors.filter(
-                (sensor) => {
-                    const status =
-                        sensor.status
-                            ?.toLowerCase();
-
-                    return (
-                        status === "healthy" ||
-                        status === "online" ||
-                        status === "active"
-                    );
-                }
-            ).length;
-
-        const warningSensors =
-            selectedStationSensors.filter(
-                (sensor) => {
-                    const status =
-                        sensor.status
-                            ?.toLowerCase();
-
-                    return (
-                        status === "warning" ||
-                        status === "warn"
-                    );
-                }
-            ).length;
-
-        const failedSensors =
-            selectedStationSensors.filter(
-                (sensor) => {
-                    const status =
-                        sensor.status
-                            ?.toLowerCase();
-
-                    return (
-                        status === "failed" ||
-                        status === "fail" ||
-                        status === "offline"
-                    );
-                }
-            ).length;
-
-        // =================================================
-        // 14. DATA QUALITY
-        // =================================================
-
-        const qualityRows =
-            selectedReadings.filter(
-                (row) =>
-                    row.quality_flag
-            );
-
-        const totalQualityRows =
-            qualityRows.length;
-
-        const qualityCount = (value) =>
-            qualityRows.filter(
-                (row) =>
-                    row.quality_flag
-                        ?.toLowerCase() ===
-                    value
-            ).length;
-
-        const availableCount =
-            qualityCount("valid") ||
-            qualityCount("available");
-
-        const suspectCount =
-            qualityCount("suspect");
-
-        const missingCount =
-            qualityCount("missing");
-
-        const invalidCount =
-            qualityCount("invalid");
-
-        const percentage = (count) => {
-            if (totalQualityRows === 0) {
-                return "--";
-            }
-
-            return `${(
-                (count / totalQualityRows) *
-                100
-            ).toFixed(1)}%`;
-        };
-
-        const dataQuality = {
-            available:
-                totalQualityRows > 0
-                    ? percentage(availableCount)
-                    : `${dataAvailability}%`,
-
-            suspect:
-                percentage(suspectCount),
-
-            missing:
-                percentage(missingCount),
-
-            invalid:
-                percentage(invalidCount)
-        };
-
-        // =================================================
-        // 15. POLLUTANTS
-        // =================================================
-
-        const pollutantDefinitions = [
-            {
-                key: "pm25",
-                names: ["pm2.5", "pm25"],
-                name: "PM2.5",
-                standard: 60,
-                unit: "µg/m³"
-            },
-            {
-                key: "pm10",
-                names: ["pm10"],
-                name: "PM10",
-                standard: 100,
-                unit: "µg/m³"
-            },
-            {
-                key: "no2",
-                names: ["no2", "no₂"],
-                name: "NO₂",
-                standard: 80,
-                unit: "µg/m³"
-            },
-            {
-                key: "so2",
-                names: ["so2", "so₂"],
-                name: "SO₂",
-                standard: 80,
-                unit: "µg/m³"
-            },
-            {
-                key: "co",
-                names: ["co"],
-                name: "CO",
-                standard: 2,
-                unit: "mg/m³"
-            },
-            {
-                key: "o3",
-                names: ["o3", "o₃"],
-                name: "O₃",
-                standard: 100,
-                unit: "µg/m³"
-            },
-            {
-                key: "nh3",
-                names: ["nh3", "nh₃"],
-                name: "NH₃",
-                standard: 400,
-                unit: "µg/m³"
-            },
-            {
-                key: "pb",
-                names: ["pb"],
-                name: "Pb",
-                standard: 1,
-                unit: "µg/m³"
-            }
-        ];
 
         const latestReadingMap = {};
 
-        for (const row of selectedReadings) {
+        for (const row of readingRows) {
             const parameter =
-                row.parameter
-                    ?.toLowerCase()
-                    .trim();
+                lower(row.parameter);
 
             const key =
                 `${row.station_id}_${parameter}`;
@@ -638,26 +375,587 @@ const getDashboard = async (req, res) => {
             }
         }
 
-        const pollutants =
-            pollutantDefinitions.map(
-                (pollutant) => {
+        // =================================================
+        // 8. ALERTS
+        // =================================================
 
-                    const matchingRows =
+        let alertRows = [];
+
+        if (stationIds.length > 0) {
+            const {
+                data,
+                error,
+            } = await supabase
+                .from("alert")
+                .select("*")
+                .in(
+                    "station_id",
+                    stationIds
+                )
+                .order("started_time", {
+                    ascending: false,
+                })
+                .limit(500);
+
+            if (error) {
+                throw error;
+            }
+
+            alertRows = data || [];
+        }
+
+        const activeAlerts =
+            alertRows.filter(
+                isActiveAlert
+            );
+
+        // =================================================
+        // 9. WEATHER
+        // =================================================
+
+        const {
+            data: weatherRows,
+            error: weatherError,
+        } = await supabase
+            .from("weather_readings")
+            .select(`
+                id,
+                site_id,
+                temperature,
+                humidity,
+                wind_speed,
+                wind_direction,
+                rainfall,
+                pressure,
+                recorded_at,
+                sites (
+                    id,
+                    site_name,
+                    location,
+                    latitude,
+                    longitude,
+                    site_type,
+                    status
+                )
+            `)
+            .order("recorded_at", {
+                ascending: false,
+            })
+            .limit(10000);
+
+        if (weatherError) {
+            throw weatherError;
+        }
+
+        // =================================================
+        // 10. LATEST WEATHER PER SITE
+        // =================================================
+
+        const latestWeatherMap = {};
+
+        for (
+            const row of weatherRows || []
+        ) {
+            if (
+                !latestWeatherMap[
+                    row.site_id
+                ]
+            ) {
+                latestWeatherMap[
+                    row.site_id
+                ] = row;
+            }
+        }
+
+        let latestWeather =
+            Object.values(
+                latestWeatherMap
+            );
+
+        // Match weather with selected area/stations
+        if (area) {
+            const search =
+                lower(area);
+
+            const matchingStationNames =
+                stations.map(
+                    (station) =>
+                        lower(
+                            station.name
+                        )
+                );
+
+            latestWeather =
+                latestWeather.filter(
+                    (row) => {
+                        const siteName =
+                            lower(
+                                row.sites
+                                    ?.site_name
+                            );
+
+                        const location =
+                            lower(
+                                row.sites
+                                    ?.location
+                            );
+
+                        return (
+                            siteName.includes(
+                                search
+                            ) ||
+                            location.includes(
+                                search
+                            ) ||
+                            matchingStationNames.some(
+                                (
+                                    stationName
+                                ) =>
+                                    siteName.includes(
+                                        stationName
+                                    ) ||
+                                    stationName.includes(
+                                        siteName
+                                    )
+                            )
+                        );
+                    }
+                );
+        }
+
+        // =================================================
+        // 11. WEATHER SUMMARY
+        // =================================================
+
+        const average = (
+            values
+        ) => {
+            const valid =
+                values
+                    .map(Number)
+                    .filter(
+                        (value) =>
+                            Number.isFinite(
+                                value
+                            )
+                    );
+
+            if (!valid.length) {
+                return null;
+            }
+
+            return (
+                valid.reduce(
+                    (sum, value) =>
+                        sum + value,
+                    0
+                ) / valid.length
+            );
+        };
+
+        const weather = {
+            temperature: null,
+            humidity: null,
+            windSpeed: null,
+            windDirection: null,
+            pressure: null,
+            rainfall: null,
+        };
+
+        if (
+            latestWeather.length
+        ) {
+            const temperature =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.temperature
+                    )
+                );
+
+            const humidity =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.humidity
+                    )
+                );
+
+            const windSpeed =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.wind_speed
+                    )
+                );
+
+            const windDirection =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.wind_direction
+                    )
+                );
+
+            const pressure =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.pressure
+                    )
+                );
+
+            const rainfall =
+                average(
+                    latestWeather.map(
+                        (row) =>
+                            row.rainfall
+                    )
+                );
+
+            weather.temperature =
+                temperature !== null
+                    ? Number(
+                          temperature.toFixed(
+                              1
+                          )
+                      )
+                    : null;
+
+            weather.humidity =
+                humidity !== null
+                    ? Number(
+                          humidity.toFixed(
+                              0
+                          )
+                      )
+                    : null;
+
+            weather.windSpeed =
+                windSpeed !== null
+                    ? Number(
+                          windSpeed.toFixed(
+                              1
+                          )
+                      )
+                    : null;
+
+            weather.windDirection =
+                windDirection !== null
+                    ? Number(
+                          windDirection.toFixed(
+                              0
+                          )
+                      )
+                    : null;
+
+            weather.pressure =
+                pressure !== null
+                    ? Number(
+                          pressure.toFixed(
+                              1
+                          )
+                      )
+                    : null;
+
+            weather.rainfall =
+                rainfall !== null
+                    ? Number(
+                          rainfall.toFixed(
+                              1
+                          )
+                      )
+                    : null;
+        }
+
+        // =================================================
+        // 12. CURRENT AQI
+        // =================================================
+
+        const latestAqiRows =
+            Object.values(
+                latestAqiByStation
+            );
+
+        let overallAqi = 0;
+
+        if (
+            latestAqiRows.length
+        ) {
+            overallAqi =
+                Math.round(
+                    latestAqiRows.reduce(
+                        (
+                            total,
+                            row
+                        ) =>
+                            total +
+                            num(
+                                row.aqi
+                            ),
+                        0
+                    ) /
+                        latestAqiRows.length
+                );
+        }
+
+        const currentAqiRow =
+            latestAqiRows.reduce(
+                (
+                    latest,
+                    row
+                ) => {
+                    if (!latest) {
+                        return row;
+                    }
+
+                    return new Date(
+                        row.timestamp
+                    ) >
+                        new Date(
+                            latest.timestamp
+                        )
+                        ? row
+                        : latest;
+                },
+                null
+            );
+
+        const currentAqi = area
+            ? num(
+                  currentAqiRow?.aqi
+              )
+            : overallAqi;
+
+        const category =
+            currentAqiRow?.category ||
+            getAqiCategory(
+                currentAqi
+            );
+
+        const dominant =
+            currentAqiRow
+                ?.dominant_pollutant ||
+            "N/A";
+
+        // =================================================
+        // 13. STATION ONLINE/OFFLINE
+        // =================================================
+
+        const now = Date.now();
+
+        const stationOnlineMap = {};
+
+        for (
+            const station of stations
+        ) {
+            const stationDevices =
+                devices.filter(
+                    (device) =>
+                        device.station_id ===
+                        station.station_id
+                );
+
+            let online = false;
+
+            if (
+                stationDevices.length
+            ) {
+                online =
+                    stationDevices.some(
+                        (device) => {
+                            const network =
+                                lower(
+                                    device.network_status
+                                );
+
+                            const status =
+                                lower(
+                                    device.status
+                                );
+
+                            const lastSeen =
+                                device.last_seen_at
+                                    ? new Date(
+                                          device.last_seen_at
+                                      ).getTime()
+                                    : 0;
+
+                            const recentlySeen =
+                                lastSeen > 0 &&
+                                now -
+                                    lastSeen <=
+                                    30 *
+                                        60 *
+                                        1000;
+
+                            return (
+                                network ===
+                                    "connected" ||
+                                network ===
+                                    "online" ||
+                                status ===
+                                    "online" ||
+                                status ===
+                                    "active" ||
+                                recentlySeen
+                            );
+                        }
+                    );
+            } else {
+                online =
+                    isOnlineStatus(
+                        station.status
+                    );
+            }
+
+            stationOnlineMap[
+                station.station_id
+            ] = online;
+        }
+
+        const totalStations =
+            stations.length;
+
+        const onlineStations =
+            stations.filter(
+                (station) =>
+                    stationOnlineMap[
+                        station.station_id
+                    ]
+            ).length;
+
+        const offlineStations =
+            totalStations -
+            onlineStations;
+
+        // =================================================
+        // 14. DATA AVAILABILITY
+        // =================================================
+
+        let hoursBack = 24;
+
+        if (range === "7d") {
+            hoursBack =
+                24 * 7;
+        }
+
+        if (range === "30d") {
+            hoursBack =
+                24 * 30;
+        }
+
+        const rangeStart =
+            Date.now() -
+            hoursBack *
+                60 *
+                60 *
+                1000;
+
+        const availabilityRows =
+            aqiRows.filter(
+                (row) =>
+                    new Date(
+                        row.timestamp
+                    ).getTime() >=
+                    rangeStart
+            );
+
+        const receivedSlots =
+            new Set();
+
+        availabilityRows.forEach(
+            (row) => {
+                const date =
+                    new Date(
+                        row.timestamp
+                    );
+
+                const hourKey =
+                    `${row.station_id}_${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}-${date.getUTCHours()}`;
+
+                receivedSlots.add(
+                    hourKey
+                );
+            }
+        );
+
+        const expectedSlots =
+            totalStations *
+            hoursBack;
+
+        const dataAvailability =
+            expectedSlots > 0
+                ? Math.min(
+                      100,
+                      (
+                          receivedSlots.size /
+                              expectedSlots
+                      ) *
+                          100
+                  )
+                : 0;
+
+        // =================================================
+        // 15. SENSOR HEALTH
+        // =================================================
+
+        const healthySensors =
+            sensors.filter(
+                (sensor) =>
+                    getSensorHealth(
+                        sensor.status
+                    ) ===
+                    "Healthy"
+            ).length;
+
+        const warningSensors =
+            sensors.filter(
+                (sensor) =>
+                    getSensorHealth(
+                        sensor.status
+                    ) ===
+                    "Warning"
+            ).length;
+
+        const maintenanceSensors =
+            sensors.filter(
+                (sensor) =>
+                    getSensorHealth(
+                        sensor.status
+                    ) ===
+                    "Maintenance"
+            ).length;
+
+        const failedSensors =
+            sensors.filter(
+                (sensor) =>
+                    getSensorHealth(
+                        sensor.status
+                    ) ===
+                    "Failed"
+            ).length;
+
+        // =================================================
+        // 16. CURRENT POLLUTANTS
+        // =================================================
+
+        const pollutants =
+            POLLUTANTS.map(
+                (pollutant) => {
+                    const rows =
                         Object.values(
                             latestReadingMap
-                        ).filter((row) => {
+                        ).filter(
+                            (row) =>
+                                pollutant.names.includes(
+                                    lower(
+                                        row.parameter
+                                    )
+                                )
+                        );
 
-                            const parameter =
-                                row.parameter
-                                    ?.toLowerCase()
-                                    .trim();
-
-                            return pollutant.names.includes(
-                                parameter
-                            );
-                        });
-
-                    matchingRows.sort(
+                    rows.sort(
                         (a, b) =>
                             new Date(
                                 b.timestamp
@@ -668,7 +966,14 @@ const getDashboard = async (req, res) => {
                     );
 
                     const row =
-                        matchingRows[0];
+                        rows[0];
+
+                    const value =
+                        row
+                            ? num(
+                                  row.value
+                              )
+                            : null;
 
                     return {
                         key:
@@ -677,12 +982,7 @@ const getDashboard = async (req, res) => {
                         name:
                             pollutant.name,
 
-                        value:
-                            row
-                                ? Number(
-                                      row.value
-                                  )
-                                : null,
+                        value,
 
                         unit:
                             row?.unit ||
@@ -693,176 +993,596 @@ const getDashboard = async (req, res) => {
 
                         qualityFlag:
                             row?.quality_flag ||
-                            "Valid"
+                            "N/A",
+
+                        timestamp:
+                            row?.timestamp ||
+                            null,
+
+                        status:
+                            value === null
+                                ? "No Data"
+                                : value >
+                                  pollutant.standard
+                                ? "Above Standard"
+                                : "Good",
                     };
                 }
             );
 
         // =================================================
-        // 16. WARD / STATION RANKING
+        // 17. STATION DATA
         // =================================================
 
-        const wards = stations
-            .map((station) => {
+        const stationData =
+            stations.map(
+                (station) => {
+                    const stationId =
+                        station.station_id;
 
-                const aqi =
-                    latestAqiByStation[
-                        station.station_id
-                    ];
+                    const aqiRow =
+                        latestAqiByStation[
+                            stationId
+                        ];
 
-                return {
-                    id:
-                        `ST-${station.station_id}`,
+                    const stationReadings =
+                        readingRows.filter(
+                            (row) =>
+                                row.station_id ===
+                                stationId
+                        );
 
-                    name:
-                        station.name,
+                    const findLatest =
+                        (
+                            names
+                        ) => {
+                            const matching =
+                                stationReadings
+                                    .filter(
+                                        (
+                                            row
+                                        ) =>
+                                            names.includes(
+                                                lower(
+                                                    row.parameter
+                                                )
+                                            )
+                                    )
+                                    .sort(
+                                        (
+                                            a,
+                                            b
+                                        ) =>
+                                            new Date(
+                                                b.timestamp
+                                            ) -
+                                            new Date(
+                                                a.timestamp
+                                            )
+                                    );
 
-                    ward:
-                        station.ward ||
-                        "N/A",
+                            return matching[0];
+                        };
 
-                    zone:
-                        station.zone ||
-                        "N/A",
+                    const pm25 =
+                        findLatest([
+                            "pm2.5",
+                            "pm25",
+                            "pm2_5",
+                        ]);
 
-                    aqi:
-                        aqi
-                            ? Number(
-                                  aqi.aqi
-                              )
-                            : 0
-                };
-            })
-            .filter(
-                (item) =>
-                    item.aqi > 0
-            )
-            .sort(
-                (a, b) =>
-                    b.aqi - a.aqi
+                    const pm10 =
+                        findLatest([
+                            "pm10",
+                        ]);
+
+                    const stationSensors =
+                        sensors.filter(
+                            (sensor) => {
+                                const device =
+                                    devices.find(
+                                        (
+                                            item
+                                        ) =>
+                                            item.device_id ===
+                                            sensor.device_id
+                                    );
+
+                                return (
+                                    device?.station_id ===
+                                    stationId
+                                );
+                            }
+                        );
+
+                    let health =
+                        "Healthy";
+
+                    const healthValues =
+                        stationSensors.map(
+                            (
+                                sensor
+                            ) =>
+                                getSensorHealth(
+                                    sensor.status
+                                )
+                        );
+
+                    if (
+                        healthValues.includes(
+                            "Failed"
+                        )
+                    ) {
+                        health =
+                            "Failed";
+                    } else if (
+                        healthValues.includes(
+                            "Warning"
+                        )
+                    ) {
+                        health =
+                            "Warning";
+                    } else if (
+                        healthValues.includes(
+                            "Maintenance"
+                        )
+                    ) {
+                        health =
+                            "Maintenance";
+                    }
+
+                    const aqi =
+                        num(
+                            aqiRow?.aqi
+                        );
+
+                    return {
+                        stationId:
+                            stationId,
+
+                        station_id:
+                            stationId,
+
+                        code:
+                            `PMC-${String(
+                                stationId
+                            ).padStart(
+                                3,
+                                "0"
+                            )}`,
+
+                        name:
+                            station.name,
+
+                        ward:
+                            station.ward ||
+                            "N/A",
+
+                        zone:
+                            station.zone ||
+                            "N/A",
+
+                        latitude:
+                            num(
+                                station.latitude
+                            ),
+
+                        longitude:
+                            num(
+                                station.longitude
+                            ),
+
+                        stationType:
+                            station.station_type ||
+                            "CAAQM",
+
+                        status:
+                            getAqiCategory(
+                                aqi
+                            ),
+
+                        aqi,
+
+                        dominant:
+                            aqiRow
+                                ?.dominant_pollutant ||
+                            "N/A",
+
+                        pm25:
+                            pm25
+                                ? num(
+                                      pm25.value
+                                  )
+                                : null,
+
+                        pm10:
+                            pm10
+                                ? num(
+                                      pm10.value
+                                  )
+                                : null,
+
+                        health,
+
+                        online:
+                            Boolean(
+                                stationOnlineMap[
+                                    stationId
+                                ]
+                            ),
+
+                        timestamp:
+                            aqiRow?.timestamp ||
+                            null,
+                    };
+                }
             );
 
         // =================================================
-        // 17. AQI TREND
+        // 18. WARD-WISE AQI
         // =================================================
 
-        let hoursBack = 24;
+        const wardMap = {};
 
-        if (range === "7d") {
-            hoursBack = 24 * 7;
-        }
+        stationData.forEach(
+            (station) => {
+                const ward =
+                    station.ward ||
+                    "Unknown";
 
-        if (range === "30d") {
-            hoursBack = 24 * 30;
-        }
+                if (!wardMap[ward]) {
+                    wardMap[ward] = {
+                        ward,
+                        values: [],
+                        stationCount: 0,
+                    };
+                }
 
-        const trendStart =
-            Date.now() -
-            hoursBack *
-                60 *
-                60 *
-                1000;
+                if (
+                    station.aqi >
+                    0
+                ) {
+                    wardMap[
+                        ward
+                    ].values.push(
+                        station.aqi
+                    );
+                }
 
-        const trendRows =
-            (aqiRows || []).filter(
+                wardMap[
+                    ward
+                ].stationCount++;
+            }
+        );
+
+        const wards =
+            Object.values(
+                wardMap
+            )
+                .map(
+                    (ward) => ({
+                        ward:
+                            ward.ward,
+
+                        aqi:
+                            ward.values.length
+                                ? Math.round(
+                                      ward.values.reduce(
+                                          (
+                                              sum,
+                                              value
+                                          ) =>
+                                              sum +
+                                              value,
+                                          0
+                                      ) /
+                                          ward
+                                              .values
+                                              .length
+                                  )
+                                : 0,
+
+                        stationCount:
+                            ward.stationCount,
+                    })
+                )
+                .filter(
+                    (ward) =>
+                        ward.aqi > 0
+                )
+                .sort(
+                    (a, b) =>
+                        b.aqi - a.aqi
+                );
+
+        // =================================================
+        // 19. TREND
+        // =================================================
+
+        const trendMap = {};
+
+        // AQI trend
+        aqiRows
+            .filter(
+                (row) =>
+                    new Date(
+                        row.timestamp
+                    ).getTime() >=
+                    rangeStart
+            )
+            .forEach(
                 (row) => {
-
-                    if (
-                        !stationIds.includes(
-                            row.station_id
-                        )
-                    ) {
-                        return false;
-                    }
-
-                    return (
+                    const date =
                         new Date(
                             row.timestamp
-                        ).getTime() >=
-                        trendStart
+                        );
+
+                    let bucket;
+
+                    if (
+                        range ===
+                        "24h"
+                    ) {
+                        bucket =
+                            new Date(
+                                date
+                            );
+
+                        bucket.setMinutes(
+                            0,
+                            0,
+                            0
+                        );
+                    } else if (
+                        range ===
+                        "7d"
+                    ) {
+                        bucket =
+                            new Date(
+                                date
+                            );
+
+                        bucket.setMinutes(
+                            0,
+                            0,
+                            0
+                        );
+                    } else {
+                        bucket =
+                            new Date(
+                                date
+                            );
+
+                        bucket.setHours(
+                            0,
+                            0,
+                            0,
+                            0
+                        );
+                    }
+
+                    const key =
+                        bucket.toISOString();
+
+                    if (
+                        !trendMap[key]
+                    ) {
+                        trendMap[key] = {
+                            date:
+                                bucket,
+
+                            aqi: [],
+
+                            pm25: [],
+
+                            pm10: [],
+                        };
+                    }
+
+                    trendMap[
+                        key
+                    ].aqi.push(
+                        num(row.aqi)
                     );
                 }
             );
 
-        const trendMap = {};
+        // Pollutant trend
+        readingRows
+            .filter(
+                (row) =>
+                    new Date(
+                        row.timestamp
+                    ).getTime() >=
+                    rangeStart
+            )
+            .forEach(
+                (row) => {
+                    const date =
+                        new Date(
+                            row.timestamp
+                        );
 
-        for (const row of trendRows) {
+                    let bucket;
 
-            const date =
-                new Date(row.timestamp);
+                    if (
+                        range ===
+                        "30d"
+                    ) {
+                        bucket =
+                            new Date(
+                                date
+                            );
 
-            let key;
+                        bucket.setHours(
+                            0,
+                            0,
+                            0,
+                            0
+                        );
+                    } else {
+                        bucket =
+                            new Date(
+                                date
+                            );
 
-            if (range === "24h") {
-                key =
-                    `${date.getHours()
-                        .toString()
-                        .padStart(2, "0")}:00`;
-            } else if (range === "7d") {
+                        bucket.setMinutes(
+                            0,
+                            0,
+                            0
+                        );
+                    }
 
-                key =
-                    `${date.getMonth() + 1}/${
-                        date.getDate()
-                    } ${
-                        date.getHours()
-                            .toString()
-                            .padStart(2, "0")
-                    }:00`;
+                    const key =
+                        bucket.toISOString();
 
-            } else {
+                    if (
+                        !trendMap[key]
+                    ) {
+                        trendMap[key] = {
+                            date:
+                                bucket,
 
-                key =
-                    `${date.getMonth() + 1}/${
-                        date.getDate()
-                    }`;
-            }
+                            aqi: [],
 
-            if (!trendMap[key]) {
-                trendMap[key] = {
-                    time: key,
-                    values: [],
-                    val: 0
-                };
-            }
+                            pm25: [],
 
-            trendMap[key].values.push(
-                Number(row.aqi || 0)
+                            pm10: [],
+                        };
+                    }
+
+                    const parameter =
+                        lower(
+                            row.parameter
+                        );
+
+                    if (
+                        [
+                            "pm2.5",
+                            "pm25",
+                            "pm2_5",
+                        ].includes(
+                            parameter
+                        )
+                    ) {
+                        trendMap[
+                            key
+                        ].pm25.push(
+                            num(
+                                row.value
+                            )
+                        );
+                    }
+
+                    if (
+                        parameter ===
+                        "pm10"
+                    ) {
+                        trendMap[
+                            key
+                        ].pm10.push(
+                            num(
+                                row.value
+                            )
+                        );
+                    }
+                }
             );
-        }
+
+        const avg = (
+            values
+        ) => {
+            if (
+                !values.length
+            ) {
+                return null;
+            }
+
+            return (
+                values.reduce(
+                    (
+                        sum,
+                        value
+                    ) =>
+                        sum +
+                        value,
+                    0
+                ) /
+                values.length
+            );
+        };
+
+        const formatTrendTime =
+            (date) => {
+                if (
+                    range ===
+                    "30d"
+                ) {
+                    return `${date.getDate()}/${date.getMonth() + 1}`;
+                }
+
+                return `${String(
+                    date.getHours()
+                ).padStart(
+                    2,
+                    "0"
+                )}:00`;
+            };
 
         const trends =
             Object.values(
                 trendMap
             )
-                .map((item) => {
-
-                    const total =
-                        item.values.reduce(
-                            (sum, value) =>
-                                sum + value,
-                            0
-                        );
-
-                    return {
+                .sort(
+                    (a, b) =>
+                        a.date -
+                        b.date
+                )
+                .map(
+                    (item) => ({
                         time:
-                            item.time,
+                            formatTrendTime(
+                                item.date
+                            ),
 
-                        val:
-                            Math.round(
-                                total /
-                                    item.values
-                                        .length
-                            )
-                    };
-                })
-                .sort((a, b) =>
-                    a.time.localeCompare(
-                        b.time
-                    )
+                        aqi:
+                            item.aqi.length
+                                ? Math.round(
+                                      avg(
+                                          item.aqi
+                                      )
+                                  )
+                                : null,
+
+                        pm25:
+                            item.pm25.length
+                                ? Number(
+                                      avg(
+                                          item.pm25
+                                      ).toFixed(
+                                          1
+                                      )
+                                  )
+                                : null,
+
+                        pm10:
+                            item.pm10.length
+                                ? Number(
+                                      avg(
+                                          item.pm10
+                                      ).toFixed(
+                                          1
+                                      )
+                                  )
+                                : null,
+
+                        timestamp:
+                            item.date.toISOString(),
+                    })
                 );
 
         // =================================================
-        // 18. TELEMETRY
+        // 20. TELEMETRY
         // =================================================
 
         const latestAqiTime =
@@ -872,8 +1592,20 @@ const getDashboard = async (req, res) => {
                   ).getTime()
                 : 0;
 
+        const latestReadingTime =
+            readingRows.length
+                ? Math.max(
+                      ...readingRows.map(
+                          (row) =>
+                              new Date(
+                                  row.timestamp
+                              ).getTime()
+                      )
+                  )
+                : 0;
+
         const latestWeatherTime =
-            latestWeather.length > 0
+            latestWeather.length
                 ? Math.max(
                       ...latestWeather.map(
                           (row) =>
@@ -887,56 +1619,136 @@ const getDashboard = async (req, res) => {
         const latestDataTime =
             Math.max(
                 latestAqiTime,
+                latestReadingTime,
                 latestWeatherTime
             );
 
         const telemetryStatus =
-            latestDataTime &&
+            latestDataTime > 0 &&
             Date.now() -
                 latestDataTime <
-                30 * 60 * 1000
+                30 *
+                    60 *
+                    1000
                 ? "Live"
                 : "Delayed";
 
         // =================================================
-        // 19. FINAL RESPONSE
+        // 21. DATA QUALITY
         // =================================================
 
-        res.status(200).json({
+        const qualityRows =
+            readingRows.filter(
+                (row) =>
+                    row.quality_flag
+            );
+
+        const validQuality =
+            qualityRows.filter(
+                (row) =>
+                    isValidQuality(
+                        row.quality_flag
+                    )
+            ).length;
+
+        const suspectQuality =
+            qualityRows.filter(
+                (row) =>
+                    lower(
+                        row.quality_flag
+                    ) ===
+                    "suspect"
+            ).length;
+
+        const invalidQuality =
+            qualityRows.filter(
+                (row) =>
+                    [
+                        "invalid",
+                        "failed",
+                        "fault",
+                        "error",
+                        "out_of_range",
+                    ].includes(
+                        lower(
+                            row.quality_flag
+                        )
+                    )
+            ).length;
+
+        const dataQuality = {
+            available:
+                qualityRows.length
+                    ? `${(
+                          (validQuality /
+                              qualityRows.length) *
+                          100
+                      ).toFixed(1)}%`
+                    : "0%",
+
+            suspect:
+                qualityRows.length
+                    ? `${(
+                          (suspectQuality /
+                              qualityRows.length) *
+                          100
+                      ).toFixed(1)}%`
+                    : "0%",
+
+            invalid:
+                qualityRows.length
+                    ? `${(
+                          (invalidQuality /
+                              qualityRows.length) *
+                          100
+                      ).toFixed(1)}%`
+                    : "0%",
+        };
+
+        // =================================================
+        // 22. CRITICAL / HIGH AQI WARDS
+        // =================================================
+
+        const highAqiAreas =
+            stationData.filter(
+                (station) =>
+                    station.aqi >
+                    100
+            ).length;
+
+        // =================================================
+        // 23. FINAL RESPONSE
+        // =================================================
+
+        return res.status(200).json({
             status: "success",
 
             data: {
+                title:
+                    "Pune Municipal Corporation",
+
                 name:
-                    area
-                        ? (
-                              stations[0]
-                                  ?.name ||
-                              area
-                          )
-                        : "Pune PMC Air Quality Command Center",
+                    area ||
+                    "Pune",
 
                 wardInfo:
-                    area
-                        ? `Ward ${
-                              stations[0]
-                                  ?.ward ||
-                              "N/A"
-                          } • ${
-                              stations[0]
-                                  ?.zone ||
-                              "N/A"
-                          }`
-                        : "CPCB Guideline Framework Monitoring • Central Ward Network",
+                    area ||
+                    "Citywide Monitoring Network",
 
                 aqi:
                     currentAqi,
 
                 category:
-                    currentAqiRow
-                        ?.category ||
-                    "N/A",
+                    category,
 
-                dominant,
+                dominant:
+                    dominant,
+
+                totalStations,
+
+                onlineStations,
+
+                offlineStations,
 
                 activeStations:
                     `${onlineStations}/${totalStations}`,
@@ -945,23 +1757,38 @@ const getDashboard = async (req, res) => {
                     `${onlineStations} Online • ${offlineStations} Offline`,
 
                 criticalWards:
-                    criticalWards,
+                    highAqiAreas,
 
                 activeAlerts:
                     activeAlerts.length,
 
                 dataAvailability:
-                    `${dataAvailability}%`,
-
-                sensorHealth:
-                    healthySensors,
-
-                sensorBreakdown:
-                    `${healthySensors} Healthy • ${warningSensors} Warn • ${failedSensors} Fail`,
-
-                dataQuality,
+                    Number(
+                        dataAvailability.toFixed(
+                            1
+                        )
+                    ),
 
                 telemetryStatus,
+
+                sensorHealth: {
+                    healthy:
+                        healthySensors,
+
+                    warning:
+                        warningSensors,
+
+                    maintenance:
+                        maintenanceSensors,
+
+                    failed:
+                        failedSensors,
+
+                    total:
+                        sensors.length,
+                },
+
+                dataQuality,
 
                 pollutants,
 
@@ -971,29 +1798,29 @@ const getDashboard = async (req, res) => {
 
                 wards,
 
-                stations,
+                stations:
+                    stationData,
 
                 alerts:
-                    activeAlerts
-            }
+                    activeAlerts,
+            },
         });
-
     } catch (error) {
-
         console.error(
             "Dashboard error:",
             error
         );
 
-        res.status(500).json({
+        return res.status(500).json({
             status: "error",
+
             message:
                 error.message ||
-                "Failed to load dashboard data."
+                "Failed to load dashboard data.",
         });
     }
 };
 
 module.exports = {
-    getDashboard
+    getDashboard,
 };

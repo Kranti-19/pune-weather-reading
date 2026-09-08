@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+
 import {
   CloudSun,
   Wind,
@@ -14,6 +15,10 @@ import {
   ArrowRight,
   Activity,
   Database,
+  MapPin,
+  Building2,
+  Leaf,
+  BarChart3,
 } from "lucide-react";
 
 export default function Login() {
@@ -24,39 +29,17 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [time, setTime] = useState("");
 
-  // --------------------------------------------------
-  // LIVE CLOCK - INDIA
-  // --------------------------------------------------
-  useEffect(() => {
-    const updateTime = () => {
-      setTime(
-        new Date().toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })
-      );
-    };
-
-    updateTime();
-
-    const interval = setInterval(updateTime, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // --------------------------------------------------
+  // ==========================================
   // LOGIN
-  // --------------------------------------------------
+  // ==========================================
+
   const handleLogin = async (e) => {
     e.preventDefault();
-
     setError("");
 
     if (!userId.trim() || !password) {
-      setError("Please enter both your PMC User ID and password.");
+      setError("Please enter both your User ID and password.");
       return;
     }
 
@@ -72,22 +55,12 @@ export default function Login() {
       );
 
       if (response.data?.status === "success") {
-        // Store authentication token
         if (response.data?.session?.access_token) {
-          localStorage.setItem(
-            "token",
-            response.data.session.access_token
-          );
+          localStorage.setItem("token", response.data.session.access_token);
         }
-
-        // Store logged-in user information
         if (response.data?.user) {
-          localStorage.setItem(
-            "user",
-            JSON.stringify(response.data.user)
-          );
+          localStorage.setItem("user", JSON.stringify(response.data.user));
         }
-
         navigate("/dashboard");
       } else {
         setError(
@@ -97,384 +70,224 @@ export default function Login() {
       }
     } catch (err) {
       console.error("Login error:", err);
-
-      setError(
-        err.response?.data?.message ||
-          "Invalid PMC User ID or password."
-      );
+      setError(err.response?.data?.message || "Invalid User ID or password.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center p-4 sm:p-8 font-sans selection:bg-sky-500 selection:text-white overflow-hidden bg-slate-100">
-
-      {/* =====================================================
-          ANIMATIONS
-      ====================================================== */}
-      <style>{`
-        @keyframes floatSlow {
-          0%, 100% {
-            transform: translateY(0px);
-          }
-
-          50% {
-            transform: translateY(-12px);
-          }
-        }
-
-        @keyframes sunPulse {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 0.45;
-          }
-
-          50% {
-            transform: scale(1.15);
-            opacity: 0.75;
-          }
-        }
-
-        @keyframes cloudDrift {
-          0% {
-            transform: translateX(-40px);
-          }
-
-          50% {
-            transform: translateX(40px);
-          }
-
-          100% {
-            transform: translateX(-40px);
-          }
-        }
-
-        .animate-float {
-          animation: floatSlow 6s ease-in-out infinite;
-        }
-
-        .animate-pulse-sun {
-          animation: sunPulse 8s ease-in-out infinite;
-        }
-
-        .animate-drift {
-          animation: cloudDrift 20s ease-in-out infinite;
-        }
-      `}</style>
-
-      {/* =====================================================
-          BACKGROUND
-      ====================================================== */}
+    <div className="relative min-h-screen w-full overflow-hidden font-sans flex flex-col bg-slate-900">
+      {/* Background image */}
       <div
-        className="absolute inset-0 bg-cover bg-center scale-105"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2560&auto=format&fit=crop')`,
-        }}
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/pune-bg.jpg')" }}
       />
 
-      <div className="absolute inset-0 bg-gradient-to-tr from-sky-900/40 via-sky-500/20 to-amber-200/35 backdrop-blur-[2px]" />
+      {/* Gradient overlays for legibility */}
+      <div className="absolute inset-0 bg-slate-950/20" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#062B50]/45 via-[#0B63B6]/15 to-[#061827]/50" />
 
-      {/* Ambient light */}
-      <div className="absolute -top-24 right-1/4 w-[550px] h-[550px] bg-amber-300/30 rounded-full blur-[140px] pointer-events-none animate-pulse-sun" />
-
-      <div className="absolute -bottom-28 left-1/4 w-[500px] h-[500px] bg-cyan-300/25 rounded-full blur-[140px] pointer-events-none" />
-
-      {/* =====================================================
-          TOP TELEMETRY BAR
-      ====================================================== */}
-      <div className="absolute top-6 left-6 right-6 flex items-center justify-between z-20 pointer-events-none">
-
-       
-
-        {/* Live Time + Humidity */}
-        <div className="hidden sm:flex items-center gap-3 bg-white/70 backdrop-blur-xl border border-white/60 px-4 py-2 rounded-2xl shadow-lg text-slate-700 pointer-events-auto text-xs font-semibold">
-
-          <div className="flex items-center gap-1.5 text-sky-700">
-            <Droplets size={14} />
-            <span>68%</span>
+      {/* ==========================================
+          TOP BRANDING
+      ========================================== */}
+      <header className="relative z-20 flex items-start justify-between px-6 sm:px-10 lg:px-14 pt-6 sm:pt-8">
+        <div className="flex items-center gap-3 text-white">
+          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full border border-white/50 bg-white/10 backdrop-blur-md flex items-center justify-center">
+            <Building2 size={24} className="text-white" />
           </div>
-
-          <span className="text-slate-300">•</span>
-
-          <span className="text-slate-500 font-mono">
-            {time || "12:00 PM"}
-          </span>
-
-        </div>
-      </div>
-
-      {/* =====================================================
-          MAIN LOGIN CARD
-      ====================================================== */}
-      <div className="relative z-10 w-full max-w-4xl rounded-[36px] overflow-hidden shadow-[0_30px_90px_rgba(14,116,144,0.35)] border border-white/80 bg-white/40 backdrop-blur-2xl grid grid-cols-1 md:grid-cols-12 min-h-[580px]">
-
-        {/* ===================================================
-            LEFT PANEL
-        ==================================================== */}
-        <div className="md:col-span-5 bg-gradient-to-br from-sky-600/90 via-blue-600/80 to-indigo-700/90 p-8 sm:p-10 flex flex-col justify-between text-white relative overflow-hidden">
-
-          {/* Decorative clouds */}
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/20 rounded-full blur-2xl pointer-events-none animate-drift" />
-
-          <div className="absolute bottom-4 -left-12 w-56 h-56 bg-sky-300/20 rounded-full blur-3xl pointer-events-none" />
-
-          {/* -------------------------------------------------
-              PRODUCT INTRO
-          -------------------------------------------------- */}
-          <div className="relative z-10">
-
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md border border-white/30 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide shadow-sm">
-
-              <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
-
-              <span>LIVE MONITORING</span>
-
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-black mt-6 tracking-tight leading-tight drop-shadow-sm">
-              Pune Municipal
-              <br />
-              Environmental Grid
-            </h2>
-
+          <div>
             
-
+            <p className="text-[7px] sm:text-[9px] uppercase tracking-[0.22em] text-white/65 mt-1">
+              Cleaner Air ·  Greener Tomorrow
+            </p>
           </div>
+        </div>
 
-          {/* =================================================
-              AQI FEATURE CARD
-          ================================================== */}
-          <div className="relative z-10 my-6 bg-white/15 backdrop-blur-xl border border-white/30 rounded-3xl p-5 shadow-xl animate-float">
+        <div className="hidden sm:flex items-start gap-2 text-white/85">
+          <Leaf size={25} className="text-emerald-200 mt-1" />
+          <div>
+            <p className="text-sm font-medium">Breathe Better</p>
+            
+            <div className="w-8 h-px bg-white/50 mt-2" />
+          </div>
+        </div>
+      </header>
 
-            <div className="flex items-center justify-between">
+      {/* ==========================================
+          MAIN CONTENT
+      ========================================== */}
+      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6">
+        <div className="w-full max-w-[680px] h-auto md:h-[460px] grid grid-cols-1 md:grid-cols-[42%_58%] overflow-hidden rounded-[24px] border border-white/25 shadow-[0_25px_60px_rgba(0,0,0,0.35)]">
+          {/* ==========================================
+              LEFT MONITORING PANEL
+          ========================================== */}
+          <section className="relative bg-gradient-to-br from-[#063E73]/95 via-[#075BA5]/95 to-[#08396B]/95 text-white p-6 sm:p-8 overflow-hidden">
+            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/5" />
+            <div className="absolute bottom-0 -left-16 w-52 h-52 rounded-full bg-sky-400/10" />
 
-              <div>
-
-                <span className="text-[10px] font-bold uppercase tracking-widest text-sky-200">
-                  Shivajinagar Central
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="inline-flex self-start items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-300/20 text-[9px] font-bold tracking-wide">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 animate-ping opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
                 </span>
+                LIVE AIR QUALITY MONITORING
+              </div>
 
-                <div className="flex items-baseline gap-2 mt-1">
+              <div className="mt-6">
+                
+                <div className="flex gap-3 mt-2 items-start">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+                    <CloudSun size={21} />
+                  </div>
+                  <h1 className="text-xl sm:text-[25px] font-black leading-tight">
+                    Air Quality
+                    <br />
+                    Monitoring System
+                  </h1>
+                </div>
+                
+              </div>
 
-                  <span className="text-5xl font-black">
-                    42
-                  </span>
-
-                  <span className="text-sm font-bold text-emerald-200">
-                    AQI
-                  </span>
-
+              {/* AQI CARD */}
+              <div className="mt-5 bg-white/[0.10] backdrop-blur-md border border-white/15 rounded-2xl p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-blue-200">
+                      <MapPin size={11} />
+                      <span className="text-[9px] font-bold tracking-wide">
+                        SHIVAJINAGAR CENTRAL
+                      </span>
+                    </div>
+                    <div className="flex items-end gap-2 mt-2">
+                      <span className="text-4xl font-black leading-none">42</span>
+                      <span className="text-xs font-bold text-blue-100 mb-1">AQI</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full bg-emerald-400/20 text-[8px] font-bold text-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                      GOOD AIR QUALITY
+                    </span>
+                  </div>
+                  <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-amber-300">
+                    <Activity size={22} />
+                  </div>
                 </div>
 
-                <span className="inline-flex mt-1 px-2 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/30 text-[10px] font-bold text-emerald-100">
-                  Good • CPCB
-                </span>
+                <div className="border-t border-white/15 mt-4 pt-3">
+                  <div className="flex justify-between text-[9px]">
+                    <span className="text-blue-200">Dominant Pollutant</span>
+                    <span className="font-bold">PM2.5 · 18 µg/m³</span>
+                  </div>
+                </div>
 
+                <div className="grid grid-cols-3 mt-3 text-[9px] text-blue-100">
+                  <div className="flex items-center gap-1">
+                    <Thermometer size={11} />
+                    28.4°C
+                  </div>
+                  <div className="flex items-center gap-1 justify-center">
+                    <Droplets size={11} />
+                    68%
+                  </div>
+                  <div className="flex items-center gap-1 justify-end">
+                    <Wind size={11} />
+                    10 km/h
+                  </div>
+                </div>
               </div>
 
-              <div className="w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-amber-300 shadow-inner">
-                <Activity size={30} />
-              </div>
-
-            </div>
-
-            {/* Dominant pollutant */}
-            <div className="mt-4 pt-3 border-t border-white/20">
-
-              <div className="flex items-center justify-between text-xs">
-
-                <span className="text-sky-200">
-                  Dominant Pollutant
-                </span>
-
-                <span className="font-bold text-white">
-                  PM2.5 • 18 µg/m³
-                </span>
-
-              </div>
-
-            </div>
-
-            {/* Weather context */}
-            <div className="mt-3 flex items-center justify-between text-xs font-semibold">
-
-              <div className="flex items-center gap-1.5 text-sky-100">
-                <Thermometer size={13} />
-                <span>28.4°C</span>
-              </div>
-
-              <div className="flex items-center gap-1 text-sky-100">
-                <Droplets size={13} />
-                <span>68%</span>
-              </div>
-
-              <div className="flex items-center gap-1 text-sky-100">
-                <Wind size={13} />
-                <span>10 km/h WNW</span>
-              </div>
-
-            </div>
-
-          </div>
-
-          {/* =================================================
-              BOTTOM AQMS KPIs
-          ================================================== */}
-          <div className="grid grid-cols-2 gap-2.5 relative z-10 text-xs">
-
-            {/* Active Stations */}
-            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-3 border border-white/20">
-
-              <div className="flex items-center gap-1.5">
-
-                <Activity size={12} className="text-emerald-200" />
-
-                <span className="text-[10px] text-sky-200 font-semibold uppercase">
-                  Active Stations
-                </span>
-
-              </div>
-
-              <span className="text-lg font-black mt-0.5 block">
-                5 / 5 Online
-              </span>
-
-            </div>
-
-            {/* Data Availability */}
-            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-3 border border-white/20">
-
-              <div className="flex items-center gap-1.5">
-
-                <Database size={12} className="text-emerald-200" />
-
-                <span className="text-[10px] text-sky-200 font-semibold uppercase">
-                  Data Availability
-                </span>
-
-              </div>
-
-              <span className="text-lg font-black mt-0.5 block">
-                98.7% Today
-              </span>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* ===================================================
-            RIGHT LOGIN PANEL
-        ==================================================== */}
-        <div className="md:col-span-7 bg-white/80 backdrop-blur-3xl p-8 sm:p-12 flex flex-col justify-between">
-
-          <div>
-
-            {/* -------------------------------------------------
-                LOGIN HEADER
-            -------------------------------------------------- */}
-            <div>
-
+              {/* BOTTOM KPIs */}
               
 
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
-                Welcome back
-              </h1>
+              
+            </div>
+          </section>
 
+          {/* ==========================================
+              RIGHT LOGIN PANEL
+          ========================================== */}
+          <section className="bg-white/95 backdrop-blur-xl p-7 sm:p-9 flex flex-col">
+            <div>
+              <div className="flex items-center gap-2 text-[#075BA5]">
+                <ShieldCheck size={15} />
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
+                  Authorized Access
+                </span>
+              </div>
+              <h2 className="text-[27px] sm:text-[32px] font-black text-slate-900 mt-3 tracking-tight">
+                Welcome back
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-1.5">
+                Sign in to access the PMC Air Quality Monitoring Dashboard.
+              </p>
             </div>
 
-            
-
-            {/* =================================================
-                ERROR MESSAGE
-            ================================================== */}
             {error && (
               <div
                 role="alert"
-                className="mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-rose-700 text-xs font-semibold shadow-sm"
+                className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-[11px] font-semibold"
               >
-
-                <AlertCircle
-                  size={16}
-                  className="shrink-0 text-rose-500"
-                />
-
-                <span className="flex-1">
-                  {error}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setError("")}
-                  aria-label="Dismiss error"
-                  className="font-bold text-base leading-none hover:text-rose-900"
-                >
+                <AlertCircle size={15} />
+                <span className="flex-1">{error}</span>
+                <button type="button" onClick={() => setError("")} className="font-bold">
                   ×
                 </button>
-
               </div>
             )}
 
-            {/* =================================================
-                LOGIN FORM
-            ================================================== */}
-            <form
-              onSubmit={handleLogin}
-              className="mt-7 space-y-5"
-            >
-
-              {/* PMC USER ID */}
+            <form onSubmit={handleLogin} className="mt-6 space-y-4">
+              {/* USER ID */}
               <div>
-
                 <label
                   htmlFor="userId"
-                  className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5 pl-1"
+                  className="block text-[9px] font-bold uppercase tracking-wider text-slate-700 mb-1.5"
                 >
-                  PMC User ID
+                  Officer / User ID
                 </label>
-
-                <input
-                  id="userId"
-                  type="text"
-                  value={userId}
-                  onChange={(e) => {
-                    setUserId(e.target.value);
-                    setError("");
-                  }}
-                  placeholder="Enter your PMC User ID"
-                  autoComplete="username"
-                  required
-                  disabled={loading}
-                  className="w-full px-4 py-3.5 bg-slate-50/90 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-sky-500 rounded-2xl text-xs font-semibold text-slate-900 outline-none transition shadow-sm focus:ring-4 focus:ring-sky-500/15 disabled:opacity-60"
-                />
-
+                <div className="relative">
+                  <Building2
+                    size={15}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    id="userId"
+                    type="text"
+                    value={userId}
+                    onChange={(e) => {
+                      setUserId(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="Enter your registered User ID"
+                    autoComplete="username"
+                    required
+                    disabled={loading}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-900 outline-none transition focus:bg-white focus:border-[#075BA5] focus:ring-4 focus:ring-blue-500/10 disabled:opacity-60"
+                  />
+                </div>
               </div>
 
               {/* PASSWORD */}
               <div>
-
-                <div className="flex items-center justify-between mb-1.5 pl-1">
-
+                <div className="flex items-center justify-between mb-1.5">
                   <label
                     htmlFor="password"
-                    className="block text-[11px] font-bold uppercase tracking-wider text-slate-700"
+                    className="text-[9px] font-bold uppercase tracking-wider text-slate-700"
                   >
                     Password
                   </label>
-
                   <Link
                     to="/forgot-password"
-                    className="text-xs font-bold text-sky-600 hover:text-sky-800 transition"
+                    className="text-[9px] font-bold text-[#075BA5] hover:text-[#063E73]"
                   >
                     Forgot password?
                   </Link>
-
                 </div>
-
                 <div className="relative">
-
+                  <ShieldCheck
+                    size={15}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
                   <input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -487,105 +300,70 @@ export default function Login() {
                     autoComplete="current-password"
                     required
                     disabled={loading}
-                    className="w-full pl-4 pr-11 py-3.5 bg-slate-50/90 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-sky-500 rounded-2xl text-xs font-semibold text-slate-900 outline-none transition shadow-sm focus:ring-4 focus:ring-sky-500/15 disabled:opacity-60"
+                    className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-900 outline-none transition focus:bg-white focus:border-[#075BA5] focus:ring-4 focus:ring-blue-500/10 disabled:opacity-60"
                   />
-
                   <button
                     type="button"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
+                    onClick={() => setShowPassword(!showPassword)}
                     disabled={loading}
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-700 transition disabled:opacity-50"
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-700"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
-
                 </div>
-
               </div>
 
-              {/* SECURITY INFORMATION */}
-              <div className="flex items-center gap-2 px-1 text-xs text-emerald-600 font-semibold">
-
-                <ShieldCheck size={15} />
-
-                <span>
-                  Secure authorized officer portal
-                </span>
-
+              {/* REMEMBER ME */}
+              <div className="flex items-center gap-2 text-[10px] text-slate-600">
+                <input
+                  type="checkbox"
+                  id="remember"
+                  className="w-3.5 h-3.5 accent-[#075BA5]"
+                />
+                <label htmlFor="remember">Remember me</label>
               </div>
 
               {/* LOGIN BUTTON */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-sky-500/30 hover:shadow-sky-500/50 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#075BA5] to-[#063E73] hover:from-[#0869BD] hover:to-[#052F59] text-white text-[10px] font-bold tracking-wide shadow-lg shadow-blue-900/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
-
                 {loading ? (
                   <>
-                    <Loader2
-                      size={16}
-                      className="animate-spin text-white"
-                    />
-
-                    <span>
-                      Signing in...
-                    </span>
+                    <Loader2 size={16} className="animate-spin" />
+                    Signing in...
                   </>
                 ) : (
                   <>
-                    <span>
-                      Login to Monitoring Dashboard
-                    </span>
-
-                    <ArrowRight
-                      size={15}
-                      className="group-hover:translate-x-1 transition-transform"
-                    />
+                    LOGIN TO MONITORING DASHBOARD
+                    <ArrowRight size={15} />
                   </>
                 )}
-
               </button>
 
+              
             </form>
 
-          </div>
-
-          {/* =================================================
-              FOOTER
-          ================================================== */}
-          <div className="mt-8 pt-4 border-t border-slate-200/80">
-
-            <div className="flex items-center justify-between gap-4">
-
-              <div>
-
-                
-
-              </div>
-
-              
-            </div>
-
-          </div>
-
+            {/* FOOTER */}
+            
+          </section>
         </div>
+      </main>
 
+      {/* ==========================================
+          BOTTOM SLOGAN
+      ========================================== */}
+      <div className="relative z-20 hidden sm:flex justify-end px-10 lg:px-14 pb-4 text-white/70">
+        <div className="flex items-center gap-3 text-[8px] uppercase tracking-[0.2em]">
+          <span>Our City</span>
+          <span className="w-1 h-1 rounded-full bg-white/60" />
+          <span>Our Air</span>
+          <span className="w-1 h-1 rounded-full bg-white/60" />
+          <span>Our Responsibility</span>
+        </div>
       </div>
-
     </div>
   );
 }
-// =======
-// >>>>>>> Stashed changes

@@ -1,5 +1,9 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  useNavigate,
+} from "react-router-dom";
+
 import {
   LayoutDashboard,
   MapPin,
@@ -8,229 +12,690 @@ import {
   FileText,
   Settings,
   LogOut,
-  Radio,
-  CloudRain,
-  Cpu,
-  ShieldCheck
+  Activity,
+  Waves,
+  RadioTower,
 } from "lucide-react";
 
 export default function Sidebar() {
   const navigate = useNavigate();
 
+  // =====================================================
+  // LOGOUT
+  // =====================================================
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+
     navigate("/login");
   };
+
+  // =====================================================
+  // MAIN NAVIGATION
+  // =====================================================
 
   const navItems = [
     {
       name: "Dashboard",
       path: "/dashboard",
       icon: LayoutDashboard,
-      badge: null
     },
     {
       name: "Pune Areas",
       path: "/pune-areas",
       icon: MapPin,
-      
     },
     {
       name: "Alerts",
       path: "/alerts",
       icon: Bell,
-      
-      badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30"
     },
     {
       name: "Analytics",
       path: "/analytics",
       icon: BarChart3,
-      badge: null
     },
     {
       name: "Reports",
       path: "/reports",
       icon: FileText,
-      badge: null
-    }
+    },
   ];
+
+  // =====================================================
+  // ADMIN NAVIGATION
+  // =====================================================
 
   const adminItems = [
     {
       name: "Device Health",
       path: "/device-health",
-      icon: Cpu,
+      icon: RadioTower,
       badge: "QA/QC",
-      badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
     },
     {
       name: "Settings",
       path: "/settings",
       icon: Settings,
-      badge: null
-    }
+    },
   ];
 
-  return (
-    <aside className="w-64 bg-gradient-to-b from-[#0b1329] via-[#0f1c3f] to-[#090e1f] text-slate-200 border-r border-slate-800/80 h-screen flex flex-col justify-between select-none sticky top-0 shrink-0 font-sans z-30 shadow-[4px_0_24px_rgba(0,0,0,0.35)] relative overflow-hidden">
-      
-      {/* Background Ambient Glow Orbs */}
-      <div className="absolute -top-16 -left-16 w-44 h-44 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-20 -right-16 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+  // =====================================================
+  // NAVIGATION ITEM
+  // =====================================================
 
-      {/* 1. Header: Municipal Brand Identity */}
-      <div className="relative z-10">
-        <div className="p-6 pb-5 border-b border-slate-800/70">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 shrink-0 border border-white/20">
-              <CloudRain size={22} className="drop-shadow-sm" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-sm text-white tracking-tight">PMC Weather</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+  const NavigationItem = ({
+    item,
+  }) => {
+    const Icon = item.icon;
+
+    return (
+      <NavLink
+        to={item.path}
+        className={({ isActive }) => `
+          relative
+          group
+          flex
+          items-center
+          justify-between
+          w-full
+          px-3
+          py-2.5
+          rounded-xl
+          text-[13px]
+          font-semibold
+          transition-all
+          duration-200
+          border
+          ${
+            isActive
+              ? `
+                bg-gradient-to-r
+                from-[#4F46E5]
+                to-[#6366F1]
+                text-white
+                border-[#4F46E5]
+                shadow-[0_7px_18px_rgba(79,70,229,0.20)]
+              `
+              : `
+                bg-transparent
+                text-[#526176]
+                border-transparent
+                hover:bg-[#EEF2FF]
+                hover:text-[#4338CA]
+              `
+          }
+        `}
+      >
+        {({ isActive }) => (
+          <>
+            {/* LEFT SIDE */}
+
+            <div className="flex items-center gap-3">
+
+              {/* ICON BOX */}
+
+              <div
+                className={`
+                  w-8
+                  h-8
+                  rounded-lg
+                  flex
+                  items-center
+                  justify-center
+                  shrink-0
+                  transition-all
+                  ${
+                    isActive
+                      ? "bg-white/15 text-white"
+                      : "bg-white text-[#64748B] shadow-[0_1px_4px_rgba(15,23,42,0.05)] group-hover:text-[#4F46E5]"
+                  }
+                `}
+              >
+                <Icon
+                  size={17}
+                  strokeWidth={
+                    isActive
+                      ? 2.4
+                      : 2
+                  }
+                />
               </div>
-              
+
+              <span>
+                {item.name}
+              </span>
+
             </div>
+
+            {/* BADGE */}
+
+            {item.badge && (
+              <span
+                className={`
+                  px-2
+                  py-1
+                  rounded-md
+                  text-[8px]
+                  font-extrabold
+                  tracking-wide
+                  ${
+                    isActive
+                      ? "bg-white/15 text-white"
+                      : "bg-[#EEFDF7] text-[#059669] border border-[#D1FAE5]"
+                  }
+                `}
+              >
+                {item.badge}
+              </span>
+            )}
+
+          </>
+        )}
+      </NavLink>
+    );
+  };
+
+  // =====================================================
+  // SIDEBAR
+  // =====================================================
+
+  return (
+    <aside
+      className="
+        w-[270px]
+        min-w-[270px]
+        h-screen
+        sticky
+        top-0
+        z-40
+        flex
+        flex-col
+        bg-[#F7F8FC]
+        text-[#1E293B]
+        border-r
+        border-[#E5E7EB]
+        font-sans
+        select-none
+        shrink-0
+      "
+    >
+
+      {/* =================================================
+          BRAND AREA
+      ================================================= */}
+
+      <div
+        className="
+          h-[108px]
+          px-6
+          flex
+          items-center
+          bg-white
+          border-b
+          border-[#E7EAF0]
+        "
+      >
+
+        <div className="flex items-center gap-3">
+
+          {/* =================================================
+              NEW CUSTOM AIR QUALITY LOGO
+          ================================================= */}
+
+          <div
+            className="
+              relative
+              w-[48px]
+              h-[48px]
+              rounded-[15px]
+              bg-gradient-to-br
+              from-[#4F46E5]
+              via-[#6366F1]
+              to-[#06B6D4]
+              flex
+              items-center
+              justify-center
+              shrink-0
+              shadow-[0_7px_18px_rgba(79,70,229,0.22)]
+              overflow-hidden
+            "
+          >
+
+            {/* DECORATIVE CIRCLE */}
+
+            <div
+              className="
+                absolute
+                -right-3
+                -top-3
+                w-7
+                h-7
+                rounded-full
+                bg-white/10
+              "
+            />
+
+            {/* AIR WAVE */}
+
+            <div className="relative">
+
+              <Waves
+                size={27}
+                strokeWidth={2.4}
+                className="text-white"
+              />
+
+            </div>
+
+            {/* SENSOR DOT */}
+
+            <span
+              className="
+                absolute
+                bottom-[8px]
+                right-[9px]
+                w-[5px]
+                h-[5px]
+                rounded-full
+                bg-[#A7F3D0]
+                shadow-[0_0_6px_rgba(167,243,208,0.9)]
+              "
+            />
+
           </div>
 
-          {/* Real-Time Grid Status Capsule */}
-          
+          {/* =================================================
+              BRAND TEXT
+          ================================================= */}
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <span
+                className="
+                  text-[16px]
+                  font-extrabold
+                  tracking-[-0.02em]
+                  text-[#172033]
+                "
+              >
+                PMC Weather
+              </span>
+
+              <span
+                className="
+                  w-[7px]
+                  h-[7px]
+                  rounded-full
+                  bg-[#10B981]
+                "
+              />
+
+            </div>
+
+            <div
+              className="
+                mt-1
+                text-[9px]
+                font-semibold
+                tracking-[0.02em]
+                text-[#94A3B8]
+              "
+            >
+              AIR QUALITY • MONITORING
+            </div>
+
+          </div>
+
         </div>
 
-        {/* 2. Primary Navigation */}
-        <div className="px-3.5 py-4 space-y-5">
-          
-          {/* Main Monitoring Section */}
-          <div>
-            <span className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-2 font-mono">
-              Monitoring Core
-            </span>
-            <nav className="space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.name}
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `group flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-bold transition-all duration-200 relative ${
-                        isActive
-                          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/30 translate-x-1"
-                          : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <Icon
-                            size={17}
-                            className={`${
-                              isActive ? "text-white" : "text-slate-400 group-hover:text-blue-400"
-                            } transition-colors`}
-                          />
-                          <span>{item.name}</span>
-                        </div>
-
-                        {item.badge && (
-                          <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-                              isActive
-                                ? "bg-white/20 text-white border-white/30"
-                                : item.badgeColor || "bg-blue-500/20 text-blue-300 border-blue-400/30"
-                            }`}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* Configuration & System Admin Section */}
-          <div>
-            <span className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-2 font-mono">
-              System Admin
-            </span>
-            <nav className="space-y-1">
-              {adminItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.name}
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `group flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-bold transition-all duration-200 relative ${
-                        isActive
-                          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/30 translate-x-1"
-                          : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <Icon
-                            size={17}
-                            className={`${
-                              isActive ? "text-white" : "text-slate-400 group-hover:text-blue-400"
-                            } transition-colors`}
-                          />
-                          <span>{item.name}</span>
-                        </div>
-
-                        {item.badge && (
-                          <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-                              isActive
-                                ? "bg-white/20 text-white border-white/30"
-                                : item.badgeColor || "bg-blue-500/20 text-blue-300 border-blue-400/30"
-                            }`}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </nav>
-          </div>
-
-        </div>
       </div>
 
-      {/* 3. Bottom Hardware Health Dock & Officer Profile */}
-      <div className="p-4 border-t border-slate-800/80 space-y-3 bg-slate-950/40 backdrop-blur-md relative z-10">
-        
-        
-        {/* Officer Card with Inline Logout */}
-        <div className="flex items-center justify-between p-2 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-md">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-500/40 text-blue-300 font-black text-xs flex items-center justify-center shrink-0">
-              PO
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-black text-white truncate">PMC Officer</p>
-              <p className="text-[10px] text-slate-400 font-medium truncate">Ward Administrator</p>
-            </div>
+      {/* =================================================
+          MAIN NAVIGATION
+      ================================================= */}
+
+      <div
+        className="
+          flex-1
+          overflow-y-auto
+          px-4
+          py-6
+        "
+      >
+
+        {/* =================================================
+            MONITORING CORE
+        ================================================= */}
+
+        <div className="mb-8">
+
+          <div className="flex items-center gap-2 px-3 mb-3">
+
+            <span
+              className="
+                w-5
+                h-[1px]
+                bg-[#CBD5E1]
+              "
+            />
+
+            <span
+              className="
+                text-[9px]
+                font-extrabold
+                uppercase
+                tracking-[0.16em]
+                text-[#94A3B8]
+              "
+            >
+              Monitoring Core
+            </span>
+
           </div>
 
-          <button
-            onClick={handleLogout}
-            title="Sign Out"
-            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+          <nav className="space-y-1.5">
+
+            {navItems.map(
+              (item) => (
+                <NavigationItem
+                  key={
+                    item.name
+                  }
+                  item={
+                    item
+                  }
+                />
+              )
+            )}
+
+          </nav>
+
+        </div>
+
+        {/* =================================================
+            SYSTEM ADMIN
+        ================================================= */}
+
+        <div>
+
+          <div className="flex items-center gap-2 px-3 mb-3">
+
+            <span
+              className="
+                w-5
+                h-[1px]
+                bg-[#CBD5E1]
+              "
+            />
+
+            <span
+              className="
+                text-[9px]
+                font-extrabold
+                uppercase
+                tracking-[0.16em]
+                text-[#94A3B8]
+              "
+            >
+              System Admin
+            </span>
+
+          </div>
+
+          <nav className="space-y-1.5">
+
+            {adminItems.map(
+              (item) => (
+                <NavigationItem
+                  key={
+                    item.name
+                  }
+                  item={
+                    item
+                  }
+                />
+              )
+            )}
+
+          </nav>
+
+        </div>
+
+      </div>
+
+      {/* =================================================
+          BOTTOM AREA
+      ================================================= */}
+
+      <div
+        className="
+          px-4
+          py-4
+          bg-white
+          border-t
+          border-[#E7EAF0]
+        "
+      >
+
+        {/* =================================================
+            LIVE SYSTEM STATUS
+        ================================================= */}
+
+        <div
+          className="
+            relative
+            flex
+            items-center
+            justify-between
+            px-3
+            py-2.5
+            mb-3
+            rounded-xl
+            bg-gradient-to-r
+            from-[#F0FDF9]
+            to-[#F0F9FF]
+            border
+            border-[#D9F3EA]
+          "
+        >
+
+          <div className="flex items-center gap-2.5">
+
+            {/* STATUS ICON */}
+
+            <div
+              className="
+                w-7
+                h-7
+                rounded-lg
+                bg-white
+                border
+                border-[#D9F3EA]
+                flex
+                items-center
+                justify-center
+              "
+            >
+              <Activity
+                size={14}
+                className="text-[#10B981]"
+              />
+            </div>
+
+            <div>
+
+              <p
+                className="
+                  text-[9px]
+                  font-bold
+                  text-[#64748B]
+                "
+              >
+                System Status
+              </p>
+
+              <p
+                className="
+                  text-[10px]
+                  font-extrabold
+                  text-[#059669]
+                "
+              >
+                All systems operational
+              </p>
+
+            </div>
+
+          </div>
+
+          <span
+            className="
+              w-2
+              h-2
+              rounded-full
+              bg-[#10B981]
+              shadow-[0_0_7px_rgba(16,185,129,0.55)]
+            "
+          />
+
+        </div>
+
+        {/* =================================================
+            OFFICER PROFILE
+        ================================================= */}
+
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            p-2.5
+            rounded-xl
+            bg-[#F8FAFC]
+            border
+            border-[#E2E8F0]
+            shadow-[0_2px_7px_rgba(15,23,42,0.04)]
+          "
+        >
+
+          <div
+            className="
+              flex
+              items-center
+              gap-3
+              min-w-0
+            "
           >
-            <LogOut size={16} />
+
+            {/* PROFILE */}
+
+            <div
+              className="
+                relative
+                w-10
+                h-10
+                rounded-xl
+                bg-gradient-to-br
+                from-[#EEF2FF]
+                to-[#E0F2FE]
+                border
+                border-[#D9E2FF]
+                flex
+                items-center
+                justify-center
+                shrink-0
+              "
+            >
+
+              <span
+                className="
+                  text-[11px]
+                  font-black
+                  text-[#4F46E5]
+                "
+              >
+                PO
+              </span>
+
+              <span
+                className="
+                  absolute
+                  bottom-[-1px]
+                  right-[-1px]
+                  w-2.5
+                  h-2.5
+                  rounded-full
+                  bg-[#10B981]
+                  border-2
+                  border-white
+                "
+              />
+
+            </div>
+
+            {/* USER */}
+
+            <div className="min-w-0">
+
+              <p
+                className="
+                  text-[12px]
+                  font-extrabold
+                  text-[#1E293B]
+                  truncate
+                "
+              >
+                PMC Officer
+              </p>
+
+              <p
+                className="
+                  text-[9px]
+                  font-medium
+                  text-[#94A3B8]
+                  mt-0.5
+                  truncate
+                "
+              >
+                Ward Administrator
+              </p>
+
+            </div>
+
+          </div>
+
+          {/* LOGOUT */}
+
+          <button
+            onClick={
+              handleLogout
+            }
+            title="Sign Out"
+            className="
+              w-8
+              h-8
+              rounded-lg
+              flex
+              items-center
+              justify-center
+              text-[#94A3B8]
+              hover:text-[#EF4444]
+              hover:bg-[#FEF2F2]
+              transition-all
+              duration-200
+              shrink-0
+            "
+          >
+            <LogOut
+              size={16}
+              strokeWidth={2}
+            />
           </button>
+
         </div>
 
       </div>
