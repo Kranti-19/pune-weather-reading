@@ -59,7 +59,8 @@ app.use( "/api/sensors",sensorRoutes);
 
 
 
-
+const weatherRoutes = require("./routes/weatherRoutes");
+app.use("/api/weather", weatherRoutes);
 
 
 // Root Route

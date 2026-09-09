@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   NavLink,
   useNavigate,
@@ -12,23 +12,116 @@ import {
   FileText,
   Settings,
   LogOut,
-  Activity,
-  Waves,
+  Wind,
   RadioTower,
 } from "lucide-react";
 
 export default function Sidebar() {
   const navigate = useNavigate();
 
+  const [user, setUser] = useState(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // =====================================================
+  // GET LOGGED-IN USER
+  // =====================================================
+
+  useEffect(() => {
+    try {
+      const storedUser =
+        localStorage.getItem("user");
+
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    } catch (error) {
+      console.error(
+        "Unable to read logged-in user:",
+        error
+      );
+    }
+  }, []);
+
+  // =====================================================
+  // USER DETAILS
+  // =====================================================
+
+  const fullName =
+    user?.fullName || "PMC Officer";
+
+  const pmcUserId =
+    user?.pmcUserId || "PMC User";
+
+  // =====================================================
+  // INITIALS
+  // =====================================================
+
+  const getInitials = (name) => {
+    if (!name) return "PO";
+
+    const parts =
+      name.trim().split(/\s+/);
+
+    if (parts.length === 1) {
+      return parts[0]
+        .substring(0, 2)
+        .toUpperCase();
+    }
+
+    return (
+      parts[0][0] +
+      parts[parts.length - 1][0]
+    ).toUpperCase();
+  };
+
+  const initials = getInitials(fullName);
+
   // =====================================================
   // LOGOUT
   // =====================================================
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+  const handleLogout = async () => {
+    if (loggingOut) return;
 
-    navigate("/login");
+    setLoggingOut(true);
+
+    try {
+      const token =
+        localStorage.getItem("token");
+
+      if (token) {
+        try {
+          await fetch(
+            "http://localhost:5000/api/auth/logout",
+            {
+              method: "POST",
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+                "Content-Type":
+                  "application/json",
+              },
+            }
+          );
+        } catch (error) {
+          console.warn(
+            "Backend logout failed:",
+            error
+          );
+        }
+      }
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      setUser(null);
+
+      navigate("/login", {
+        replace: true,
+      });
+
+      setLoggingOut(false);
+    }
   };
 
   // =====================================================
@@ -85,85 +178,91 @@ export default function Sidebar() {
   // NAVIGATION ITEM
   // =====================================================
 
-  const NavigationItem = ({
-    item,
-  }) => {
+  const NavigationItem = ({ item }) => {
     const Icon = item.icon;
 
     return (
       <NavLink
         to={item.path}
         className={({ isActive }) => `
-          relative
           group
           flex
           items-center
           justify-between
+
           w-full
+          h-[45px]
+
           px-3
-          py-2.5
           rounded-xl
-          text-[13px]
-          font-semibold
+
+          border
+
           transition-all
           duration-200
-          border
+
           ${
             isActive
               ? `
-                bg-gradient-to-r
-                from-[#4F46E5]
-                to-[#6366F1]
+                bg-[#7BBDE8]
+                border-[#7BBDE8]
                 text-white
-                border-[#4F46E5]
-                shadow-[0_7px_18px_rgba(79,70,229,0.20)]
+                shadow-[0_4px_10px_rgba(73,118,159,0.16)]
               `
               : `
                 bg-transparent
-                text-[#526176]
                 border-transparent
-                hover:bg-[#EEF2FF]
-                hover:text-[#4338CA]
+                text-white
+                hover:bg-[#4E8EA2]
+                hover:border-[#6EA2B3]
               `
           }
         `}
       >
         {({ isActive }) => (
           <>
-            {/* LEFT SIDE */}
+            {/* LEFT */}
 
             <div className="flex items-center gap-3">
 
-              {/* ICON BOX */}
+              {/* ICON */}
 
               <div
                 className={`
                   w-8
                   h-8
                   rounded-lg
+
                   flex
                   items-center
                   justify-center
+
                   shrink-0
-                  transition-all
+
                   ${
                     isActive
-                      ? "bg-white/15 text-white"
-                      : "bg-white text-[#64748B] shadow-[0_1px_4px_rgba(15,23,42,0.05)] group-hover:text-[#4F46E5]"
+                      ? "bg-white/20 text-white"
+                      : "bg-white/10 text-[#E2F0F6]"
                   }
                 `}
               >
                 <Icon
                   size={17}
                   strokeWidth={
-                    isActive
-                      ? 2.4
-                      : 2
+                    isActive ? 2.4 : 2
                   }
                 />
               </div>
 
-              <span>
+              {/* NAME */}
+
+              <span
+                className="
+                  text-[13px]
+                  font-semibold
+                  whitespace-nowrap
+                "
+              >
                 {item.name}
               </span>
 
@@ -173,24 +272,25 @@ export default function Sidebar() {
 
             {item.badge && (
               <span
-                className={`
+                className="
                   px-2
                   py-1
+
                   rounded-md
+
+                  bg-white/15
+
+                  border
+                  border-white/25
+
                   text-[8px]
-                  font-extrabold
-                  tracking-wide
-                  ${
-                    isActive
-                      ? "bg-white/15 text-white"
-                      : "bg-[#EEFDF7] text-[#059669] border border-[#D1FAE5]"
-                  }
-                `}
+                  font-bold
+                  text-white
+                "
               >
                 {item.badge}
               </span>
             )}
-
           </>
         )}
       </NavLink>
@@ -206,109 +306,125 @@ export default function Sidebar() {
       className="
         w-[270px]
         min-w-[270px]
+
         h-screen
+
         sticky
         top-0
+
         z-40
+
         flex
         flex-col
-        bg-[#F7F8FC]
-        text-[#1E293B]
+
+        bg-[#49769F]
+
+        text-white
+
         border-r
-        border-[#E5E7EB]
+        border-[#3F668A]
+
         font-sans
+
         select-none
+
         shrink-0
+
+        overflow-hidden
       "
     >
 
       {/* =================================================
-          BRAND AREA
+          BRAND HEADER
       ================================================= */}
 
       <div
         className="
-          h-[108px]
+          h-[88px]
+          min-h-[88px]
+
           px-6
+
           flex
           items-center
-          bg-white
+
+          bg-[#49769F]
+
           border-b
-          border-[#E7EAF0]
+          border-white/15
+
+          shrink-0
         "
       >
 
         <div className="flex items-center gap-3">
 
-          {/* =================================================
-              NEW CUSTOM AIR QUALITY LOGO
-          ================================================= */}
+          {/* LOGO */}
 
           <div
             className="
               relative
-              w-[48px]
-              h-[48px]
-              rounded-[15px]
-              bg-gradient-to-br
-              from-[#4F46E5]
-              via-[#6366F1]
-              to-[#06B6D4]
+
+              w-[46px]
+              h-[46px]
+
+              rounded-2xl
+
+              bg-[#BDD8E9]
+
               flex
               items-center
               justify-center
+
               shrink-0
-              shadow-[0_7px_18px_rgba(79,70,229,0.22)]
-              overflow-hidden
+
+              shadow-[0_4px_12px_rgba(30,70,100,0.18)]
             "
           >
 
-            {/* DECORATIVE CIRCLE */}
-
             <div
               className="
-                absolute
-                -right-3
-                -top-3
-                w-7
-                h-7
-                rounded-full
-                bg-white/10
+                w-[35px]
+                h-[35px]
+
+                rounded-xl
+
+                bg-[#4E8EA2]
+
+                flex
+                items-center
+                justify-center
               "
-            />
-
-            {/* AIR WAVE */}
-
-            <div className="relative">
-
-              <Waves
-                size={27}
+            >
+              <Wind
+                size={22}
                 strokeWidth={2.4}
                 className="text-white"
               />
-
             </div>
-
-            {/* SENSOR DOT */}
 
             <span
               className="
                 absolute
-                bottom-[8px]
-                right-[9px]
-                w-[5px]
-                h-[5px]
+
+                top-[5px]
+                right-[5px]
+
+                w-[6px]
+                h-[6px]
+
                 rounded-full
-                bg-[#A7F3D0]
-                shadow-[0_0_6px_rgba(167,243,208,0.9)]
+
+                bg-[#7BBDE8]
+
+                border
+                border-white
               "
             />
 
           </div>
 
-          {/* =================================================
-              BRAND TEXT
-          ================================================= */}
+          {/* BRAND */}
 
           <div>
 
@@ -318,8 +434,9 @@ export default function Sidebar() {
                 className="
                   text-[16px]
                   font-extrabold
-                  tracking-[-0.02em]
-                  text-[#172033]
+                  tracking-tight
+                  text-white
+                  whitespace-nowrap
                 "
               >
                 PMC Weather
@@ -330,7 +447,7 @@ export default function Sidebar() {
                   w-[7px]
                   h-[7px]
                   rounded-full
-                  bg-[#10B981]
+                  bg-[#BDD8E9]
                 "
               />
 
@@ -338,14 +455,19 @@ export default function Sidebar() {
 
             <div
               className="
-                mt-1
+                mt-0.5
+
                 text-[9px]
-                font-semibold
-                tracking-[0.02em]
-                text-[#94A3B8]
+                font-bold
+
+                tracking-[0.07em]
+
+                text-[#E2F0F6]
+
+                whitespace-nowrap
               "
             >
-              AIR QUALITY • MONITORING
+              AIR QUALITY MONITORING
             </div>
 
           </div>
@@ -355,15 +477,19 @@ export default function Sidebar() {
       </div>
 
       {/* =================================================
-          MAIN NAVIGATION
+          NAVIGATION
       ================================================= */}
 
       <div
         className="
           flex-1
-          overflow-y-auto
-          px-4
-          py-6
+
+          px-5
+
+          pt-5
+          pb-3
+
+          overflow-hidden
         "
       >
 
@@ -371,43 +497,33 @@ export default function Sidebar() {
             MONITORING CORE
         ================================================= */}
 
-        <div className="mb-8">
+        <div>
 
-          <div className="flex items-center gap-2 px-3 mb-3">
+          <div
+            className="
+              px-2
+              mb-2
 
-            <span
-              className="
-                w-5
-                h-[1px]
-                bg-[#CBD5E1]
-              "
-            />
+              text-[10px]
+              font-extrabold
 
-            <span
-              className="
-                text-[9px]
-                font-extrabold
-                uppercase
-                tracking-[0.16em]
-                text-[#94A3B8]
-              "
-            >
-              Monitoring Core
-            </span>
+              uppercase
 
+              tracking-[0.13em]
+
+              text-[#BDD8E9]
+            "
+          >
+            Monitoring Core
           </div>
 
-          <nav className="space-y-1.5">
+          <nav className="space-y-1">
 
             {navItems.map(
               (item) => (
                 <NavigationItem
-                  key={
-                    item.name
-                  }
-                  item={
-                    item
-                  }
+                  key={item.name}
+                  item={item}
                 />
               )
             )}
@@ -417,46 +533,52 @@ export default function Sidebar() {
         </div>
 
         {/* =================================================
+            DIVIDER
+        ================================================= */}
+
+        <div
+          className="
+            mx-2
+
+            my-4
+
+            h-px
+
+            bg-white/15
+          "
+        />
+
+        {/* =================================================
             SYSTEM ADMIN
         ================================================= */}
 
         <div>
 
-          <div className="flex items-center gap-2 px-3 mb-3">
+          <div
+            className="
+              px-2
+              mb-2
 
-            <span
-              className="
-                w-5
-                h-[1px]
-                bg-[#CBD5E1]
-              "
-            />
+              text-[10px]
+              font-extrabold
 
-            <span
-              className="
-                text-[9px]
-                font-extrabold
-                uppercase
-                tracking-[0.16em]
-                text-[#94A3B8]
-              "
-            >
-              System Admin
-            </span>
+              uppercase
 
+              tracking-[0.13em]
+
+              text-[#BDD8E9]
+            "
+          >
+            System Admin
           </div>
 
-          <nav className="space-y-1.5">
+          <nav className="space-y-1">
 
             {adminItems.map(
               (item) => (
                 <NavigationItem
-                  key={
-                    item.name
-                  }
-                  item={
-                    item
-                  }
+                  key={item.name}
+                  item={item}
                 />
               )
             )}
@@ -468,145 +590,71 @@ export default function Sidebar() {
       </div>
 
       {/* =================================================
-          BOTTOM AREA
+          LOGGED-IN USER
       ================================================= */}
 
       <div
         className="
           px-4
-          py-4
-          bg-white
+          py-3
+
+          bg-[#4E8EA2]
+
           border-t
-          border-[#E7EAF0]
+          border-white/15
+
+          shrink-0
         "
       >
 
-        {/* =================================================
-            LIVE SYSTEM STATUS
-        ================================================= */}
-
-        <div
-          className="
-            relative
-            flex
-            items-center
-            justify-between
-            px-3
-            py-2.5
-            mb-3
-            rounded-xl
-            bg-gradient-to-r
-            from-[#F0FDF9]
-            to-[#F0F9FF]
-            border
-            border-[#D9F3EA]
-          "
-        >
-
-          <div className="flex items-center gap-2.5">
-
-            {/* STATUS ICON */}
-
-            <div
-              className="
-                w-7
-                h-7
-                rounded-lg
-                bg-white
-                border
-                border-[#D9F3EA]
-                flex
-                items-center
-                justify-center
-              "
-            >
-              <Activity
-                size={14}
-                className="text-[#10B981]"
-              />
-            </div>
-
-            <div>
-
-              <p
-                className="
-                  text-[9px]
-                  font-bold
-                  text-[#64748B]
-                "
-              >
-                System Status
-              </p>
-
-              <p
-                className="
-                  text-[10px]
-                  font-extrabold
-                  text-[#059669]
-                "
-              >
-                All systems operational
-              </p>
-
-            </div>
-
-          </div>
-
-          <span
-            className="
-              w-2
-              h-2
-              rounded-full
-              bg-[#10B981]
-              shadow-[0_0_7px_rgba(16,185,129,0.55)]
-            "
-          />
-
-        </div>
-
-        {/* =================================================
-            OFFICER PROFILE
-        ================================================= */}
-
         <div
           className="
             flex
             items-center
             justify-between
+
             p-2.5
+
             rounded-xl
-            bg-[#F8FAFC]
+
+            bg-[#BDD8E9]
+
             border
-            border-[#E2E8F0]
-            shadow-[0_2px_7px_rgba(15,23,42,0.04)]
+            border-white/20
+
+            shadow-[0_3px_9px_rgba(30,70,100,0.12)]
           "
         >
+
+          {/* USER */}
 
           <div
             className="
               flex
               items-center
-              gap-3
+              gap-2.5
+
               min-w-0
             "
           >
 
-            {/* PROFILE */}
+            {/* AVATAR */}
 
             <div
               className="
                 relative
+
                 w-10
                 h-10
+
                 rounded-xl
-                bg-gradient-to-br
-                from-[#EEF2FF]
-                to-[#E0F2FE]
-                border
-                border-[#D9E2FF]
+
+                bg-[#49769F]
+
                 flex
                 items-center
                 justify-center
+
                 shrink-0
               "
             >
@@ -615,85 +663,133 @@ export default function Sidebar() {
                 className="
                   text-[11px]
                   font-black
-                  text-[#4F46E5]
+                  text-white
                 "
               >
-                PO
+                {initials}
               </span>
+
+              {/* ONLINE */}
 
               <span
                 className="
                   absolute
+
                   bottom-[-1px]
                   right-[-1px]
+
                   w-2.5
                   h-2.5
+
                   rounded-full
-                  bg-[#10B981]
+
+                  bg-[#4CAF78]
+
                   border-2
-                  border-white
+                  border-[#BDD8E9]
                 "
               />
 
             </div>
 
-            {/* USER */}
+            {/* DETAILS */}
 
-            <div className="min-w-0">
+            <div
+              className="
+                min-w-0
+                max-w-[145px]
+              "
+            >
 
               <p
                 className="
                   text-[12px]
                   font-extrabold
-                  text-[#1E293B]
+
+                  text-[#263F55]
+
                   truncate
                 "
+                title={fullName}
               >
-                PMC Officer
+                {fullName}
               </p>
 
               <p
                 className="
                   text-[9px]
-                  font-medium
-                  text-[#94A3B8]
+                  font-semibold
+
+                  text-[#49769F]
+
                   mt-0.5
+
                   truncate
                 "
+                title={pmcUserId}
               >
-                Ward Administrator
+                PMC ID: {pmcUserId}
               </p>
 
             </div>
 
           </div>
 
-          {/* LOGOUT */}
+          {/* =================================================
+              LOGOUT
+          ================================================= */}
 
           <button
-            onClick={
-              handleLogout
-            }
-            title="Sign Out"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Logout"
             className="
               w-8
               h-8
+
               rounded-lg
+
               flex
               items-center
               justify-center
-              text-[#94A3B8]
-              hover:text-[#EF4444]
-              hover:bg-[#FEF2F2]
-              transition-all
-              duration-200
+
               shrink-0
+
+              text-[#49769F]
+
+              hover:bg-white/40
+              hover:text-[#263F55]
+
+              transition-all
+
+              disabled:opacity-50
+              disabled:cursor-not-allowed
             "
           >
-            <LogOut
-              size={16}
-              strokeWidth={2}
-            />
+
+            {loggingOut ? (
+              <span
+                className="
+                  w-4
+                  h-4
+
+                  rounded-full
+
+                  border-2
+                  border-[#49769F]
+
+                  border-t-transparent
+
+                  animate-spin
+                "
+              />
+            ) : (
+              <LogOut
+                size={17}
+                strokeWidth={2.2}
+              />
+            )}
+
           </button>
 
         </div>
