@@ -57,10 +57,14 @@ app.use( "/api/sensors",sensorRoutes);
 
 
 
-
-
+//whether API
 const weatherRoutes = require("./routes/weatherRoutes");
 app.use("/api/weather", weatherRoutes);
+
+
+//AQI API
+const airQualityRoutes = require("./routes/airQualityRoutes");
+app.use("/api/air-quality", airQualityRoutes);
 
 
 // Root Route

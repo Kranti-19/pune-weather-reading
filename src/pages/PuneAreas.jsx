@@ -710,7 +710,10 @@ export default function PuneAreas() {
 
           <div className="flex items-center gap-3 flex-wrap">
 
-            <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
+            <h1
+                style={{ fontFamily: "'Space Grotesk', 'Plus Jakarta Sans', sans-serif" }}
+                className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-none"
+              >
               Pune Ward Monitoring Stations
             </h1>
 

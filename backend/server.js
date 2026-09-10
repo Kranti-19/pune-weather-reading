@@ -10,6 +10,8 @@ console.log(
     process.env.SUPABASE_SECRET_KEY ? "YES" : "NO"
 );
 
+console.log("WAQI token exists:", !!process.env.WAQI_TOKEN);
+
 
 const {
     startDeviceSimulator,
