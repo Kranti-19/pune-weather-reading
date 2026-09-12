@@ -2,6 +2,9 @@
 // =======
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AirQualityCalendar from "../components/AirQualityCalendar";
+import MajorPollutantGrid from "../components/MajorPollutantGrid";
+import WardPollutionLeaderboard from "../components/WardPollutionLeaderboard";
 
 import {
   Wind,
@@ -68,9 +71,6 @@ const getAqiClass = (value) => {
   return "bg-rose-50 text-rose-700 border-rose-200";
 };
 
-// Shared severity scale — used by the map, ward chart, station chart,
-// trend chart and their legends so the same color always means the
-// same thing across the whole dashboard.
 const AQI_SCALE = [
   { max: 50, label: "Good", color: "#4ade80" },
   { max: 100, label: "Satisfactory", color: "#a3e635" },
@@ -83,52 +83,6 @@ const AQI_SCALE = [
 const getChartColor = (value) => {
   const aqi = numberValue(value);
   return (AQI_SCALE.find((band) => aqi <= band.max) || AQI_SCALE[AQI_SCALE.length - 1]).color;
-};
-
-const formatPollutantLabel = (rawName) => {
-  const key = String(rawName || "").toUpperCase().trim();
-  switch (key) {
-    case "PM2.5":
-    case "PM25":
-      return <>PM<sub className="font-bold">2.5</sub></>;
-    case "PM10":
-      return <>PM<sub className="font-bold">10</sub></>;
-    case "NO2":
-      return <>NO<sub className="font-bold">2</sub></>;
-    case "SO2":
-      return <>SO<sub className="font-bold">2</sub></>;
-    case "O3":
-      return <>O<sub className="font-bold">3</sub></>;
-    case "NH3":
-      return <>NH<sub className="font-bold">3</sub></>;
-    case "CO":
-      return <>CO</>;
-    case "PB":
-      return <>Pb</>;
-    default:
-      return rawName;
-  }
-};
-
-const getPollutantStatus = (pollutant) => {
-  if (pollutant?.value === null || pollutant?.value === undefined) {
-    return {
-      label: "No Data",
-      className: "bg-slate-100 text-slate-500",
-    };
-  }
-
-  if (numberValue(pollutant.value) > numberValue(pollutant.standard)) {
-    return {
-      label: "High",
-      className: "bg-red-100 text-red-700",
-    };
-  }
-
-  return {
-    label: "Good",
-    className: "bg-emerald-100 text-emerald-700",
-  };
 };
 
 const getAlertClass = (severity) => {
@@ -164,10 +118,6 @@ const formatTime = (timestamp) => {
     hour12: true,
   });
 };
-
-// =====================================================
-// X AXIS WRAPPED LABEL
-// =====================================================
 
 const wrapText = (text, maxCharacters = 12) => {
   if (!text) return [];
@@ -213,10 +163,6 @@ function WrappedXAxisTick({ x, y, payload, maxCharacters = 12 }) {
   );
 }
 
-// =====================================================
-// SHARED CHART TOOLTIPS
-// =====================================================
-
 function TooltipShell({ label, children }) {
   return (
     <div className="bg-slate-900/95 backdrop-blur-sm text-white border border-slate-800 rounded-xl shadow-xl px-3.5 py-2.5 min-w-[140px]">
@@ -256,8 +202,6 @@ const TrendTooltip = ({ active, payload, label }) => {
   );
 };
 
-// Used by Ward-wise and Station-wise AQI charts — surfaces the category
-// name and its color swatch, not just the raw number.
 const AqiBarTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
   const value = numberValue(payload[0].value);
@@ -279,8 +223,6 @@ const AqiBarTooltip = ({ active, payload, label }) => {
   );
 };
 
-// Used by Pollutant Levels chart — shows the reading against its
-// regulatory standard so "why is this red" is answered inline.
 const PollutantBarTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
   const point = payload[0].payload || {};
@@ -320,13 +262,7 @@ const PollutantBarTooltip = ({ active, payload, label }) => {
   );
 };
 
-// A near-transparent tint that fills the hovered category's full-height
-// column — replaces Recharts' default flat-grey cursor rectangle.
 const chartCursor = { fill: "#2563eb", fillOpacity: 0.05, radius: 6 };
-
-// =====================================================
-// COMPACT AQI SEVERITY LEGEND (reused under bar charts)
-// =====================================================
 
 function AqiScaleLegend({ className = "" }) {
   return (
@@ -345,7 +281,7 @@ function AqiScaleLegend({ className = "" }) {
 }
 
 // =====================================================
-// DASHBOARD
+// MAIN DASHBOARD COMPONENT
 // =====================================================
 
 export default function Dashboard() {
@@ -360,7 +296,6 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [range, setRange] = useState("24h");
 
-  // Fetch Current Pune Weather
   const fetchPuneWeather = async () => {
     try {
       setWeatherLoading(true);
@@ -382,7 +317,6 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch Dashboard
   const fetchDashboard = async (showRefresh = false) => {
     try {
       if (showRefresh) setRefreshing(true);
@@ -477,9 +411,6 @@ export default function Dashboard() {
     [trends]
   );
 
-  // The trend line is coloured by the *current* AQI's severity band so
-  // the chart's accent colour always agrees with the KPI card above it,
-  // rather than being a fixed blue regardless of how bad the air is.
   const trendAccent = getChartColor(aqi);
 
   if (loading && !dashboard) {
@@ -522,9 +453,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#eef3f7] text-slate-800 p-3.5 sm:p-6 font-sans">
       
       {/* =================================================
-          HEADER WITH STYLED PORTAL TITLE
+          HEADER
       ================================================= */}
-
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 px-1">
         <div>
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
@@ -539,16 +469,13 @@ export default function Dashboard() {
             </div>
 
             <div>
-              {/* Space Grotesk / Bold Headline Font for Portal */}
               <h1
                 style={{ fontFamily: "'Space Grotesk', 'Plus Jakarta Sans', sans-serif" }}
                 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-none"
               >
                 Air Quality Command Portal
               </h1>
-              <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-1">
-                Real-time CAAQM sensory observations and municipal dispersion metrics
-              </p>
+              
             </div>
           </div>
         </div>
@@ -573,7 +500,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ERROR NOTICE */}
       {error && (
         <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800">
           Latest telemetry refresh timed out. Retaining synchronized database metrics.
@@ -581,11 +507,9 @@ export default function Dashboard() {
       )}
 
       {/* =================================================
-          ROW 1 - KPI CARDS (ENHANCED VALUES)
+          ROW 1 - KPI CARDS
       ================================================= */}
-
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-        {/* AQI */}
         <button
           type="button"
           onClick={() => navigate("/analytics")}
@@ -612,7 +536,6 @@ export default function Dashboard() {
           </div>
         </button>
 
-        {/* TOTAL STATIONS */}
         <button
           type="button"
           onClick={() => navigate("/pune-areas")}
@@ -634,7 +557,6 @@ export default function Dashboard() {
           </div>
         </button>
 
-        {/* ONLINE STATIONS */}
         <button
           type="button"
           onClick={() => navigate("/device-health")}
@@ -656,7 +578,6 @@ export default function Dashboard() {
           </div>
         </button>
 
-        {/* OFFLINE STATIONS */}
         <button
           type="button"
           onClick={() => navigate("/device-health")}
@@ -680,7 +601,6 @@ export default function Dashboard() {
           </div>
         </button>
 
-        {/* ACTIVE ALERTS */}
         <button
           type="button"
           onClick={() => navigate("/alerts")}
@@ -704,7 +624,6 @@ export default function Dashboard() {
           </div>
         </button>
 
-        {/* DATA AVAILABILITY */}
         <button
           type="button"
           onClick={() => navigate("/analytics")}
@@ -728,59 +647,14 @@ export default function Dashboard() {
       </div>
 
       {/* =================================================
-          ROW 2 - POLLUTANTS + WEATHER (ENHANCED NUMBERS)
+          ROW 2 - MAJOR POLLUTANTS + WEATHER CAPSULE
       ================================================= */}
-
       <div className="grid grid-cols-1 lg:grid-cols-[1.65fr_0.8fr] gap-3 mb-4">
-        {/* POLLUTANTS */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-              <Activity size={15} className="text-blue-600" />
-            </div>
-            <h2 className="text-sm font-black text-slate-800">
-              Current Pollutant Concentrations
-              <span className="text-xs font-semibold text-slate-400 ml-1.5">
-                (µg/m³)
-              </span>
-            </h2>
-          </div>
+        {/* Left: Refined Major Pollutant Ribbon Cards */}
+        <MajorPollutantGrid pollutants={pollutants} />
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {pollutants.map((pollutant) => {
-              const status = getPollutantStatus(pollutant);
-              return (
-                <button
-                  type="button"
-                  onClick={() => navigate("/analytics")}
-                  key={pollutant.key || pollutant.name}
-                  className={`group cursor-pointer text-left w-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm rounded-xl border p-3 ${
-                    status.label === "High"
-                      ? "bg-red-50/70 border-red-200"
-                      : "bg-emerald-50/60 border-emerald-200"
-                  }`}
-                >
-                  <div className="text-[11.5px] font-black text-slate-700">
-                    {formatPollutantLabel(pollutant.name)}
-                  </div>
-
-                  <div className="text-[22px] font-black font-mono text-slate-900 leading-tight mt-1">
-                    {pollutant.value === null
-                      ? "—"
-                      : numberValue(pollutant.value).toFixed(1)}
-                  </div>
-
-                  <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold mt-2 ${status.className}`}>
-                    {status.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* WEATHER */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col justify-between">
+        {/* Right: Ambient Weather Module */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col justify-between mb-4 lg:mb-0">
           <div>
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
@@ -860,7 +734,6 @@ export default function Dashboard() {
       {/* =================================================
           ROW 3 - MONITORING STATION MAP
       ================================================= */}
-
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -888,10 +761,20 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* =================================================
-          ROW 4 - AQI TREND + POLLUTANT LEVELS
-      ================================================= */}
+      {/* HISTORICAL AIR QUALITY CALENDAR */}
+      <AirQualityCalendar />
 
+      {/* RANKED WARD POLLUTION LEADERBOARD */}
+      <WardPollutionLeaderboard stations={stations} />
+
+      {/* AQI TREND & POLLUTANT LEVELS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+        {/* ... */}
+      </div>
+
+      {/* =================================================
+          ROW 5 - AQI TREND + POLLUTANT LEVELS
+      ================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
         {/* AQI TREND */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
@@ -941,8 +824,6 @@ export default function Dashboard() {
                   <CartesianGrid stroke="#eef2f7" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="time" fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} tickMargin={8} />
                   <YAxis fontSize={10} stroke="#94a3b8" tickLine={false} axisLine={false} width={32} />
-                  {/* Marks the Satisfactory / Moderate boundary so the shape of the line
-                      can be read against a real threshold, not just relative peaks. */}
                   <ReferenceLine
                     y={100}
                     stroke="#cbd5e1"
@@ -1020,9 +901,8 @@ export default function Dashboard() {
       </div>
 
       {/* =================================================
-          ROW 5 - WARD + STATION AQI
+          ROW 6 - WARD + STATION AQI
       ================================================= */}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
         {/* WARD-WISE AQI */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
@@ -1106,111 +986,8 @@ export default function Dashboard() {
       </div>
 
       {/* =================================================
-          ROW 6 - ACTIVE ALERTS (IMPROVED CONTRAST & TYPOGRAPHY)
-      ================================================= */}
-
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
-              <Bell size={15} className="text-red-500" />
-            </div>
-            <h2 className="text-sm font-black text-slate-800">
-              Active Municipal Alerts
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500">
-              {activeAlerts.length} active
-            </span>
-            <button
-              onClick={() => navigate("/alerts")}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 transition"
-            >
-              View All →
-            </button>
-          </div>
-        </div>
-
-        {activeAlerts.length === 0 ? (
-          <div className="py-12 flex items-center justify-center">
-            <div className="text-center">
-              <CheckCircle2 size={34} className="mx-auto text-emerald-500" />
-              <p className="text-sm font-bold text-slate-700 mt-2">
-                No active municipal alerts
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                All station sensors are within normal regulatory limits
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-200 text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">
-                  <th className="px-3.5 pb-3">Time</th>
-                  <th className="px-3.5 pb-3">Station</th>
-                  <th className="px-3.5 pb-3">Ward</th>
-                  <th className="px-3.5 pb-3">Parameter</th>
-                  <th className="px-3.5 pb-3">Value</th>
-                  <th className="px-3.5 pb-3">Rule</th>
-                  <th className="px-3.5 pb-3">Severity</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {activeAlerts.slice(0, 10).map((alert, index) => {
-                  const station = stations.find(
-                    (item) =>
-                      String(item.stationId ?? item.station_id) === String(alert.station_id)
-                  );
-                  const alertStyle = getAlertClass(alert.severity);
-
-                  return (
-                    <tr
-                      key={alert.alert_id || index}
-                      className={`transition-colors ${alertStyle.row}`}
-                    >
-                      <td className="px-3.5 py-3 font-mono text-slate-500 font-semibold whitespace-nowrap">
-                        {formatTime(alert.started_time)}
-                      </td>
-                      <td className="px-3.5 py-3 font-bold text-slate-900">
-                        {station?.name || `Station ${alert.station_id}`}
-                      </td>
-                      <td className="px-3.5 py-3 text-slate-600 font-medium">
-                        {station?.ward || "—"}
-                      </td>
-                      <td className="px-3.5 py-3 font-bold text-slate-800">
-                        {alert.parameter || "—"}
-                      </td>
-                      <td className="px-3.5 py-3 font-black font-mono text-slate-900">
-                        {alert.actual_value != null
-                          ? numberValue(alert.actual_value)
-                          : "—"}
-                      </td>
-                      <td className="px-3.5 py-3 text-slate-500 font-mono text-[11px]">
-                        {alert.threshold_rule || "—"}
-                      </td>
-                      <td className="px-3.5 py-3">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold ${alertStyle.badge}`}>
-                          {alert.severity || "Info"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* =================================================
           FOOTER STATUS
       ================================================= */}
-
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1 text-[10px] font-semibold text-slate-400">
         <div className="flex items-center gap-5">
           <span className="flex items-center gap-1.5">
@@ -1236,10 +1013,6 @@ export default function Dashboard() {
   );
 }
 
-// =====================================================
-// WEATHER ROW COMPONENT
-// =====================================================
-
 function WeatherRow({ icon, label, value }) {
   return (
     <div className="flex items-center justify-between py-0.5">
@@ -1252,10 +1025,6 @@ function WeatherRow({ icon, label, value }) {
   );
 }
 
-// =====================================================
-// MAP LEGEND COMPONENT
-// =====================================================
-
 function MapLegend({ color, label }) {
   return (
     <span className="flex items-center gap-1.5">
@@ -1264,10 +1033,6 @@ function MapLegend({ color, label }) {
     </span>
   );
 }
-
-// =====================================================
-// EMPTY CHART COMPONENT
-// =====================================================
 
 function EmptyChart() {
   return (
