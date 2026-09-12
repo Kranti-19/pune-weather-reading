@@ -67,6 +67,27 @@ const airQualityRoutes = require("./routes/airQualityRoutes");
 app.use("/api/air-quality", airQualityRoutes);
 
 
+
+const openaqRoutes =
+  require("./routes/openaqRoutes");
+
+
+app.use(
+  "/api/air-quality/openaq",
+  openaqRoutes
+);
+
+
+// const settingsRoutes = require("./routes/settingsRoutes");
+
+// app.use("/api/settings", settingsRoutes);
+
+
+
+const openaqLocationRoutes = require("./routes/openaqLocationRoutes");
+app.use("/api/air-quality/openaq",openaqLocationRoutes);
+
+
 // Root Route
 app.get("/", (req, res) => {
     res.json({

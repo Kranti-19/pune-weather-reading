@@ -17,7 +17,31 @@ const {
     startDeviceSimulator,
 } = require("./src/services/deviceSimulator");
 
-app.listen(PORT, () => {
+
+
+const {
+  syncAllWaqiStations,
+} = require("./src/controllers/airQualityController");
+
+// Run once when backend starts
+syncAllWaqiStations();
+
+// Run every 10 minutes
+setInterval(() => {
+  syncAllWaqiStations();
+}, 10 * 60 * 1000);
+
+
+
+
+const {
+  startOpenAQScheduler,
+} = require("./src/services/openaqScheduler");
+
+
+
+app.listen(PORT,"0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
      startDeviceSimulator();
+     startOpenAQScheduler();
 });
