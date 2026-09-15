@@ -404,7 +404,7 @@ export default function PuneAreas() {
       /*
        * This calls:
        *
-       * GET http://localhost:5000/api/stations
+       * GET https://pune-weather-reading.onrender.com/api/stations
        *
        * through your API client.
        */

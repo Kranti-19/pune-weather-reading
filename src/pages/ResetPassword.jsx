@@ -83,7 +83,7 @@ function ResetPassword() {
       // Call backend Reset Password API
 
       const response = await axios.post(
-        "http://localhost:5000/api/auth/reset-password",
+        "https://pune-weather-reading.onrender.com/api/auth/reset-password",
         {
           accessToken: accessToken,
           newPassword: password,

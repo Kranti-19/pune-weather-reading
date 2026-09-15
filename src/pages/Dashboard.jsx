@@ -40,7 +40,7 @@ import {
 
 import PuneMap from "../components/PuneMap";
 
-const API_URL = "http://localhost:5000/api/dashboard";
+const API_URL = "https://pune-weather-reading.onrender.com/api/dashboard";
 
 // =====================================================
 // HELPERS
@@ -300,7 +300,7 @@ export default function Dashboard() {
       setWeatherLoading(true);
       setWeatherError("");
 
-      const response = await fetch("http://localhost:5000/api/weather/pune");
+      const response = await fetch("https://pune-weather-reading.onrender.com/api/weather/pune");
       const result = await response.json();
 
       if (!response.ok || result.status !== "success") {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const API_BASE_URL = "http://localhost:5000/api/alerts";
+const API_BASE_URL = "https://pune-weather-reading.onrender.com/api/alerts";
 
 const AdminAlertConfiguration = () => {
   const [configurations, setConfigurations] = useState([]);

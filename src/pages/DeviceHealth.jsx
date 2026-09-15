@@ -19,7 +19,7 @@ import {
   Activity,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "https://pune-weather-reading.onrender.com/api";
 const DEVICES_STATUS_API = `${API_BASE}/devices/status`;
 const DEVICES_API = `${API_BASE}/devices`;
 

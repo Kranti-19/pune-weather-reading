@@ -442,7 +442,7 @@ function AddMonitoringSite() {
       // ALL Station + Device + Sensors are stored,
       // OR NONE of them are stored.
       const response = await axios.post(
-        "http://localhost:5000/api/stations/setup",
+        "https://pune-weather-reading.onrender.com/api/stations/setup",
         {
           station: {
             name: stationData.name.trim(),

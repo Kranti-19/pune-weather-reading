@@ -19,7 +19,7 @@ import {
 // API
 // =========================================================
 
-const API_URL = "http://localhost:5000/api/alerts";
+const API_URL = "https://pune-weather-reading.onrender.com/api/alerts";
 
 
 // =========================================================

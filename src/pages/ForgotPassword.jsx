@@ -29,7 +29,7 @@ function ForgotPassword() {
 
       // Call backend Forgot Password API
       const response = await axios.post(
-        "http://localhost:5000/api/auth/forgot-password",
+        "https://pune-weather-reading.onrender.com/api/auth/forgot-password",
         {
           email: email.trim().toLowerCase(),
         }

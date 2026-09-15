@@ -73,7 +73,7 @@ function DashboardHeader() {
     try {
       const token = localStorage.getItem("token");
 
-      await fetch("http://localhost:5000/api/auth/logout", {
+      await fetch("https://pune-weather-reading.onrender.com/api/auth/logout", {
         method: "POST",
         headers: {
           Authorization: token ? `Bearer ${token}` : "",

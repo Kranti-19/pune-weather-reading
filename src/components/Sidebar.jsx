@@ -92,7 +92,7 @@ export default function Sidebar() {
       if (token) {
         try {
           await fetch(
-            "http://localhost:5000/api/auth/logout",
+            "https://pune-weather-reading.onrender.com/api/auth/logout",
             {
               method: "POST",
               headers: {

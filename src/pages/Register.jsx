@@ -83,7 +83,7 @@ function Register() {
 
       // Send registration request to backend
       const response = await axios.post(
-        "http://localhost:5000/api/auth/register",
+        "https://pune-weather-reading.onrender.com/api/auth/register",
         {
           fullName: formData.fullName,
           pmcUserId: formData.userId,

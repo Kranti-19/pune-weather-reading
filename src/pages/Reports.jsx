@@ -28,7 +28,7 @@ import autoTable from "jspdf-autotable";
 // ============================================================
 
 const API_BASE_URL =
-  "http://localhost:5000/api";
+  "https://pune-weather-reading.onrender.com/api";
 
 
 // ============================================================
