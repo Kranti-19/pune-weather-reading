@@ -4,12 +4,35 @@ const cors = require("cors");
 const app = express();
 
 // CORS configuration
+// Dynamic CORS configuration
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://pune-weather-reading.vercel.app",
+];
+
 app.use(
-    cors({
-        origin: "http://localhost:5173",
-        credentials: true
-    })
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".vercel.app") // Handles Vercel preview/branch builds
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS policy violation"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
 );
+
+// Explicitly handle preflight OPTIONS requests for all endpoints
+app.options("*", cors());
 
 app.use(express.json());
 
