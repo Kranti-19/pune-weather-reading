@@ -4,8 +4,8 @@ const router = express.Router();
 
 const {
   syncOpenAQ,
+  matchStations,
 } = require("../controllers/openaqController");
-
 
 // Sync OpenAQ → Supabase
 router.post(
@@ -13,5 +13,9 @@ router.post(
   syncOpenAQ
 );
 
+router.get(
+  "/match-stations",
+  matchStations
+);
 
 module.exports = router;

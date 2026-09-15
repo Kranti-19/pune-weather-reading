@@ -335,12 +335,8 @@ function AddMonitoringSite() {
       return false;
     }
 
-    if (!stationId) {
-      setError(
-        "Station ID is missing. Please go back and create the station again."
-      );
-      return false;
-    }
+    // The station is created together with the device and sensors
+    // in the final setup request, so stationId is not available yet.
 
     return true;
   };
@@ -491,7 +487,7 @@ function AddMonitoringSite() {
       );
 
       setTimeout(() => {
-        navigate("/monitoring-stations");
+        navigate(-1);
       }, 1500);
     } catch (error) {
       console.error("Complete monitoring site setup error:", error);
@@ -1528,12 +1524,8 @@ function AddMonitoringSite() {
                     </p>
 
                     <p className="text-xs text-green-700 mt-1">
-                      This device will be
-                      linked to Station ID{" "}
-                      <strong>
-                        {stationId}
-                      </strong>
-                      .
+                      This device will be linked to the monitoring station
+                      when the complete setup is submitted.
                     </p>
 
                   </div>
@@ -1680,11 +1672,8 @@ function AddMonitoringSite() {
                             </h3>
 
                             <p className="text-xs text-gray-400">
-                              Connected to
-                              Device{" "}
-                              {
-                                deviceId
-                              }
+                              This sensor will be connected to the gateway
+                              when the complete setup is submitted.
                             </p>
 
                           </div>
@@ -2015,15 +2004,9 @@ function AddMonitoringSite() {
                     </p>
 
                     <p className="text-xs text-blue-700 mt-1 leading-5">
-                      You can add multiple
-                      sensors to the same
-                      gateway. Each sensor
-                      will automatically be
-                      connected to Device{" "}
-                      <strong>
-                        {deviceId}
-                      </strong>
-                      .
+                      You can add multiple sensors to the same gateway.
+                      Each sensor will automatically be connected to the
+                      gateway when the complete setup is submitted.
                     </p>
 
                   </div>

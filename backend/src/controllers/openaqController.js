@@ -8,8 +8,8 @@ const OPENAQ_BASE_URL = "https://api.openaq.org/v3";
 // Configuration
 // ======================================================
 
-// Maximum age of an OpenAQ measurement that we consider
-// current/live for the dashboard.
+// Data newer than this is considered Current.
+// Older data is still stored as Historical.
 const MAX_DATA_AGE_MINUTES = 60;
 
 // ======================================================
@@ -20,16 +20,13 @@ async function openaqRequest(endpoint) {
   const apiKey = process.env.OPENAQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error(
-      "OPENAQ_API_KEY is missing in .env"
-    );
+    throw new Error("OPENAQ_API_KEY is missing in .env");
   }
 
   const response = await fetch(
     `${OPENAQ_BASE_URL}${endpoint}`,
     {
       method: "GET",
-
       headers: {
         "X-API-Key": apiKey,
         Accept: "application/json",
@@ -38,8 +35,7 @@ async function openaqRequest(endpoint) {
   );
 
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const errorText = await response.text();
 
     throw new Error(
       `OpenAQ API ${response.status}: ${errorText}`
@@ -52,19 +48,11 @@ async function openaqRequest(endpoint) {
 // ======================================================
 // Get OpenAQ Location Sensors
 // ======================================================
-//
-// We do NOT use hardcoded sensor IDs.
-//
-// Every OpenAQ location can have different sensors.
-// Therefore we fetch the sensors dynamically.
-//
-// ======================================================
 
 async function getOpenAQSensors(locationId) {
-  const data =
-    await openaqRequest(
-      `/locations/${locationId}/sensors`
-    );
+  const data = await openaqRequest(
+    `/locations/${locationId}/sensors`
+  );
 
   return data.results || [];
 }
@@ -114,22 +102,6 @@ function normalizeParameterName(name) {
 // ======================================================
 // Build Dynamic Sensor Map
 // ======================================================
-//
-// Example:
-//
-// {
-//   pm25: [12236463],
-//   pm10: [12236462],
-//   no2: [12236460],
-//   o3: [12236461],
-//   so2: [12236465],
-//   co: [12236458]
-// }
-//
-// Different OpenAQ locations automatically get
-// different sensor IDs.
-//
-// ======================================================
 
 function buildSensorMap(sensors) {
   const sensorMap = {
@@ -158,17 +130,13 @@ function buildSensorMap(sensors) {
       null;
 
     const parameter =
-      normalizeParameterName(
-        parameterName
-      );
+      normalizeParameterName(parameterName);
 
     if (!parameter) {
       continue;
     }
 
-    sensorMap[parameter].push(
-      Number(sensorId)
-    );
+    sensorMap[parameter].push(Number(sensorId));
   }
 
   return sensorMap;
@@ -179,10 +147,9 @@ function buildSensorMap(sensors) {
 // ======================================================
 
 async function getOpenAQLatest(locationId) {
-  const data =
-    await openaqRequest(
-      `/locations/${locationId}/latest?limit=100`
-    );
+  const data = await openaqRequest(
+    `/locations/${locationId}/latest?limit=100`
+  );
 
   return data.results || [];
 }
@@ -190,68 +157,46 @@ async function getOpenAQLatest(locationId) {
 // ======================================================
 // Find Latest Result For Sensor IDs
 // ======================================================
-//
-// Some locations can have more than one sensor for the
-// same pollutant.
-//
-// Example Hadapsar:
-//
-// PM2.5:
-//   389762
-//   12236449
-//
-// We select the newest available result.
-//
-// ======================================================
 
 function findLatestResultForSensors(
   results,
   sensorIds
 ) {
-  if (
-    !sensorIds ||
-    sensorIds.length === 0
-  ) {
+  if (!sensorIds || sensorIds.length === 0) {
     return null;
   }
 
-  const matchingResults =
-    results.filter((item) => {
-      const itemSensorId =
-        item.sensorsId ??
-        item.sensorId ??
-        item.sensor_id;
+  const matchingResults = results.filter((item) => {
+    const itemSensorId =
+      item.sensorsId ??
+      item.sensorId ??
+      item.sensor_id;
 
-      return sensorIds.some(
-        (id) =>
-          Number(id) ===
-          Number(itemSensorId)
-      );
-    });
+    return sensorIds.some(
+      (id) =>
+        Number(id) === Number(itemSensorId)
+    );
+  });
 
-  if (
-    matchingResults.length === 0
-  ) {
+  if (matchingResults.length === 0) {
     return null;
   }
 
-  matchingResults.sort(
-    (a, b) => {
-      const dateA = new Date(
-        a.datetime?.utc ||
-          a.datetime?.local ||
-          0
-      ).getTime();
+  matchingResults.sort((a, b) => {
+    const dateA = new Date(
+      a.datetime?.utc ||
+        a.datetime?.local ||
+        0
+    ).getTime();
 
-      const dateB = new Date(
-        b.datetime?.utc ||
-          b.datetime?.local ||
-          0
-      ).getTime();
+    const dateB = new Date(
+      b.datetime?.utc ||
+        b.datetime?.local ||
+        0
+    ).getTime();
 
-      return dateB - dateA;
-    }
-  );
+    return dateB - dateA;
+  });
 
   return matchingResults[0];
 }
@@ -260,17 +205,10 @@ function findLatestResultForSensors(
 // Extract Pollutants Dynamically
 // ======================================================
 
-function extractPollutants(
-  results,
-  sensorMap
-) {
+function extractPollutants(results, sensorMap) {
   const pollutants = {};
 
-  for (
-    const parameter of Object.keys(
-      sensorMap
-    )
-  ) {
+  for (const parameter of Object.keys(sensorMap)) {
     const result =
       findLatestResultForSensors(
         results,
@@ -278,9 +216,7 @@ function extractPollutants(
       );
 
     if (!result) {
-      pollutants[parameter] =
-        null;
-
+      pollutants[parameter] = null;
       continue;
     }
 
@@ -291,8 +227,7 @@ function extractPollutants(
       null;
 
     pollutants[parameter] = {
-      sensorId: sensorId,
-
+      sensorId,
       value:
         result.value !== null &&
         result.value !== undefined
@@ -315,19 +250,14 @@ function extractPollutants(
 }
 
 // ======================================================
-// PPB → µg/m³ Conversion
+// PPB -> micrograms/m3 Conversion
 // ======================================================
 
-function ppbToUgM3(
-  parameter,
-  value
-) {
+function ppbToUgM3(parameter, value) {
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(
-      Number(value)
-    )
+    Number.isNaN(Number(value))
   ) {
     return null;
   }
@@ -363,60 +293,38 @@ function ppbToUgM3(
 // Normalize Pollutant Values
 // ======================================================
 
-function normalizePollutants(
-  raw
-) {
+function normalizePollutants(raw) {
   const normalized = {};
 
-  for (
-    const [
-      parameter,
-      data,
-    ] of Object.entries(raw)
-  ) {
+  for (const [parameter, data] of Object.entries(raw)) {
     if (!data) {
-      normalized[parameter] =
-        null;
-
+      normalized[parameter] = null;
       continue;
     }
 
-    let value =
-      Number(data.value);
+    let value = Number(data.value);
 
-    if (
-      Number.isNaN(value)
-    ) {
-      normalized[parameter] =
-        null;
-
+    if (Number.isNaN(value)) {
+      normalized[parameter] = null;
       continue;
     }
 
-    const unit =
-      String(
-        data.unit || ""
-      )
-        .toLowerCase()
-        .trim();
+    const unit = String(
+      data.unit || ""
+    )
+      .toLowerCase()
+      .trim();
 
-    /*
-     * Convert gas measurements
-     * reported by OpenAQ in ppb.
-     */
-
+    // Convert gases reported in ppb.
     if (unit === "ppb") {
-      value =
-        ppbToUgM3(
-          parameter,
-          value
-        );
+      value = ppbToUgM3(
+        parameter,
+        value
+      );
     }
 
     normalized[parameter] =
-      Number(
-        value.toFixed(3)
-      );
+      Number(value.toFixed(3));
   }
 
   return normalized;
@@ -484,55 +392,34 @@ function calculateSubIndex(
   if (
     concentration === null ||
     concentration === undefined ||
-    Number.isNaN(
-      Number(concentration)
-    )
+    Number.isNaN(Number(concentration))
   ) {
     return null;
   }
 
-  const value =
-    Number(concentration);
+  const value = Number(concentration);
 
-  for (
-    const [
-      cLow,
-      cHigh,
-      iLow,
-      iHigh,
-    ] of breakpoints
-  ) {
+  for (const [
+    cLow,
+    cHigh,
+    iLow,
+    iHigh,
+  ] of breakpoints) {
     if (
       value >= cLow &&
       value <= cHigh
     ) {
-      /*
-       * AQI formula:
-       *
-       * I =
-       * [(IHigh - ILow) /
-       * (CHigh - CLow)]
-       * × (C - CLow)
-       * + ILow
-       */
-
       const index =
         ((iHigh - iLow) /
           (cHigh - cLow)) *
           (value - cLow) +
         iLow;
 
-      return Math.round(
-        index
-      );
+      return Math.round(index);
     }
   }
 
-  /*
-   * Concentration above highest
-   * breakpoint.
-   */
-
+  // Above highest breakpoint.
   if (
     value >
     breakpoints[
@@ -549,16 +436,12 @@ function calculateSubIndex(
 // Calculate Overall AQI
 // ======================================================
 
-function calculateAQI(
-  pollutants
-) {
+function calculateAQI(pollutants) {
   const subIndexes = {};
 
-  for (
-    const parameter of Object.keys(
-      BREAKPOINTS
-    )
-  ) {
+  for (const parameter of Object.keys(
+    BREAKPOINTS
+  )) {
     subIndexes[parameter] =
       calculateSubIndex(
         pollutants[parameter],
@@ -566,44 +449,28 @@ function calculateAQI(
       );
   }
 
-  const validIndexes =
-    Object.entries(
-      subIndexes
-    ).filter(
-      ([, value]) =>
-        value !== null
-    );
+  const validIndexes = Object.entries(
+    subIndexes
+  ).filter(
+    ([, value]) => value !== null
+  );
 
-  if (
-    validIndexes.length === 0
-  ) {
+  if (validIndexes.length === 0) {
     return {
       aqi: null,
-
-      dominantPollutant:
-        null,
-
+      dominantPollutant: null,
       subIndexes,
     };
   }
 
-  /*
-   * Highest pollutant sub-index
-   * becomes overall AQI.
-   */
-
   validIndexes.sort(
-    (a, b) =>
-      b[1] - a[1]
+    (a, b) => b[1] - a[1]
   );
 
   return {
-    aqi:
-      validIndexes[0][1],
-
+    aqi: validIndexes[0][1],
     dominantPollutant:
       validIndexes[0][0],
-
     subIndexes,
   };
 }
@@ -612,9 +479,7 @@ function calculateAQI(
 // AQI Category
 // ======================================================
 
-function getAQICategory(
-  aqi
-) {
+function getAQICategory(aqi) {
   if (
     aqi === null ||
     aqi === undefined
@@ -649,40 +514,32 @@ function getAQICategory(
 // Find Latest Timestamp
 // ======================================================
 
-function getLatestTimestamp(
-  raw
-) {
-  const dates =
-    Object.values(raw)
-      .filter(
-        (item) =>
-          item &&
-          item.datetime
-      )
-      .map(
-        (item) =>
-          new Date(
-            item.datetime
-          )
-      )
-      .filter(
-        (date) =>
-          !Number.isNaN(
-            date.getTime()
-          )
-      );
+function getLatestTimestamp(raw) {
+  const dates = Object.values(raw)
+    .filter(
+      (item) =>
+        item &&
+        item.datetime
+    )
+    .map(
+      (item) =>
+        new Date(item.datetime)
+    )
+    .filter(
+      (date) =>
+        !Number.isNaN(
+          date.getTime()
+        )
+    );
 
-  if (
-    dates.length === 0
-  ) {
+  if (dates.length === 0) {
     return new Date();
   }
 
   return new Date(
     Math.max(
-      ...dates.map(
-        (date) =>
-          date.getTime()
+      ...dates.map((date) =>
+        date.getTime()
       )
     )
   );
@@ -692,63 +549,41 @@ function getLatestTimestamp(
 // Check Data Freshness
 // ======================================================
 
-function checkDataFreshness(
-  timestamp
-) {
+function checkDataFreshness(timestamp) {
   if (!timestamp) {
     return {
       fresh: false,
-
       ageMinutes: null,
-
       message:
         "Measurement timestamp is missing",
     };
   }
 
   const timestampMs =
-    new Date(
-      timestamp
-    ).getTime();
+    new Date(timestamp).getTime();
 
-  if (
-    Number.isNaN(
-      timestampMs
-    )
-  ) {
+  if (Number.isNaN(timestampMs)) {
     return {
       fresh: false,
-
       ageMinutes: null,
-
       message:
         "Invalid measurement timestamp",
     };
   }
 
-  const now =
-    Date.now();
+  const now = Date.now();
 
   const ageMinutes =
     (now - timestampMs) /
     (1000 * 60);
 
-  /*
-   * Future timestamp should not
-   * be treated as current.
-   */
-
   if (ageMinutes < 0) {
     return {
       fresh: false,
-
       ageMinutes:
         Number(
-          ageMinutes.toFixed(
-            2
-          )
+          ageMinutes.toFixed(2)
         ),
-
       message:
         "Measurement timestamp is in the future",
     };
@@ -760,14 +595,10 @@ function checkDataFreshness(
   ) {
     return {
       fresh: false,
-
       ageMinutes:
         Number(
-          ageMinutes.toFixed(
-            2
-          )
+          ageMinutes.toFixed(2)
         ),
-
       message:
         `Measurement is ${ageMinutes.toFixed(
           1
@@ -777,14 +608,10 @@ function checkDataFreshness(
 
   return {
     fresh: true,
-
     ageMinutes:
       Number(
-        ageMinutes.toFixed(
-          2
-        )
+        ageMinutes.toFixed(2)
       ),
-
     message:
       "Measurement is current",
   };
@@ -797,18 +624,15 @@ function checkDataFreshness(
 async function saveReadings(
   stationId,
   pollutants,
-  timestamp
+  timestamp,
+  dataStatus = "Current"
 ) {
   const rows = [];
 
-  for (
-    const [
-      parameter,
-      value,
-    ] of Object.entries(
-      pollutants
-    )
-  ) {
+  for (const [
+    parameter,
+    value,
+  ] of Object.entries(pollutants)) {
     if (
       value === null ||
       value === undefined
@@ -817,37 +641,27 @@ async function saveReadings(
     }
 
     rows.push({
-      station_id:
-        stationId,
+      station_id: stationId,
 
-      /*
-       * OpenAQ is an external source.
-       * Therefore sensor_id is NULL.
-       */
-
-      sensor_id:
-        null,
+      // OpenAQ sensor IDs are external.
+      sensor_id: null,
 
       timestamp:
         timestamp.toISOString(),
 
-      parameter:
-        parameter,
+      parameter,
 
-      value:
-        value,
+      value,
 
-      unit:
-        "µg/m³",
+      unit: "µg/m³",
 
-      quality_flag:
-        "OpenAQ",
+      quality_flag: "OpenAQ",
+
+      data_status: dataStatus,
     });
   }
 
-  if (
-    rows.length === 0
-  ) {
+  if (rows.length === 0) {
     return [];
   }
 
@@ -870,10 +684,7 @@ async function saveReadings(
 // MAIN OpenAQ SYNC
 // ======================================================
 
-async function syncOpenAQ(
-  req,
-  res
-) {
+async function syncOpenAQ(req, res) {
   try {
     console.log(
       "======================================"
@@ -888,21 +699,18 @@ async function syncOpenAQ(
     // --------------------------------------------------
 
     const stationId =
-      Number(
-        req.params.stationId
-      );
+      Number(req.params.stationId);
 
     if (!stationId) {
       return res.status(400).json({
         success: false,
-
         message:
           "Invalid station ID",
       });
     }
 
     // --------------------------------------------------
-    // Get station
+    // Get Station
     // --------------------------------------------------
 
     const {
@@ -923,7 +731,6 @@ async function syncOpenAQ(
     ) {
       return res.status(404).json({
         success: false,
-
         message:
           "Station not found",
       });
@@ -941,20 +748,18 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Verify OpenAQ mapping
+    // Verify OpenAQ Mapping
     // --------------------------------------------------
 
     if (
       String(
-        station.external_source ||
-          ""
+        station.external_source || ""
       ).toUpperCase() !==
         "OPENAQ" ||
       !station.external_station_id
     ) {
       return res.status(400).json({
         success: false,
-
         message:
           "Station is not mapped to OpenAQ",
       });
@@ -969,7 +774,7 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Get sensors dynamically
+    // Get Sensors Dynamically
     // --------------------------------------------------
 
     console.log(
@@ -987,7 +792,6 @@ async function syncOpenAQ(
     ) {
       return res.status(404).json({
         success: false,
-
         message:
           "No OpenAQ sensors found for this location",
       });
@@ -998,13 +802,11 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Build dynamic sensor map
+    // Build Sensor Map
     // --------------------------------------------------
 
     const sensorMap =
-      buildSensorMap(
-        sensors
-      );
+      buildSensorMap(sensors);
 
     console.log(
       "Dynamic OpenAQ sensor map:"
@@ -1019,7 +821,7 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Fetch OpenAQ latest data
+    // Fetch Latest Data
     // --------------------------------------------------
 
     const results =
@@ -1033,7 +835,6 @@ async function syncOpenAQ(
     ) {
       return res.status(404).json({
         success: false,
-
         message:
           "No OpenAQ measurements found",
       });
@@ -1044,7 +845,7 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Extract pollutants
+    // Extract Pollutants
     // --------------------------------------------------
 
     const raw =
@@ -1059,13 +860,11 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Normalize values
+    // Normalize Values
     // --------------------------------------------------
 
     const pollutants =
-      normalizePollutants(
-        raw
-      );
+      normalizePollutants(raw);
 
     console.log(
       "Normalized pollutants:",
@@ -1106,9 +905,7 @@ async function syncOpenAQ(
     // --------------------------------------------------
 
     const timestamp =
-      getLatestTimestamp(
-        raw
-      );
+      getLatestTimestamp(raw);
 
     console.log(
       "OpenAQ timestamp:",
@@ -1116,7 +913,7 @@ async function syncOpenAQ(
     );
 
     // --------------------------------------------------
-    // Check data freshness
+    // Freshness
     // --------------------------------------------------
 
     const freshness =
@@ -1132,56 +929,32 @@ async function syncOpenAQ(
     /*
      * IMPORTANT:
      *
-     * Do not save stale measurements as
-     * current/live data.
+     * We DO NOT discard stale data.
      *
-     * Historical data already in the
-     * database is not deleted.
+     * Fresh data:
+     *     data_status = Current
+     *
+     * Stale data:
+     *     data_status = Historical
+     *
+     * This allows historical observations to remain
+     * available in Supabase without pretending that
+     * they are live.
      */
+
+    const dataStatus =
+      freshness.fresh
+        ? "Current"
+        : "Historical";
 
     if (!freshness.fresh) {
       console.log(
         `OpenAQ data is stale for station ${stationId}`
       );
 
-      return res.status(200).json({
-        success: false,
-
-        stale: true,
-
-        stationId,
-
-        stationName:
-          station.name,
-
-        openaqLocationId:
-          locationId,
-
-        aqi: null,
-
-        category:
-          "Unavailable",
-
-        dominantPollutant:
-          null,
-
-        pollutants,
-
-        subIndexes:
-          aqiResult.subIndexes,
-
-        timestamp,
-
-        ageMinutes:
-          freshness.ageMinutes,
-
-        sensorMap,
-
-        freshness,
-
-        message:
-          `OpenAQ data is stale or unavailable. ${freshness.message}.`,
-      });
+      console.log(
+        `Saving as Historical data. Age: ${freshness.ageMinutes} minutes`
+      );
     }
 
     // ==================================================
@@ -1220,9 +993,9 @@ async function syncOpenAQ(
         "AQI record already exists."
       );
 
-      // ----------------------------------------------
-      // Check existing pollutant readings
-      // ----------------------------------------------
+      // ------------------------------------------------
+      // Check existing readings
+      // ------------------------------------------------
 
       const {
         data: existingReadings,
@@ -1246,9 +1019,7 @@ async function syncOpenAQ(
           "OpenAQ"
         );
 
-      if (
-        readingCheckError
-      ) {
+      if (readingCheckError) {
         throw readingCheckError;
       }
 
@@ -1257,29 +1028,25 @@ async function syncOpenAQ(
           (
             existingReadings ||
             []
-          ).map(
-            (row) =>
-              String(
-                row.parameter
-              ).toLowerCase()
+          ).map((row) =>
+            String(
+              row.parameter
+            ).toLowerCase()
           )
         );
 
-      // ----------------------------------------------
-      // Find missing pollutant readings
-      // ----------------------------------------------
+      // ------------------------------------------------
+      // Find missing readings
+      // ------------------------------------------------
 
-      const missingReadings =
-        [];
+      const missingReadings = [];
 
-      for (
-        const [
-          parameter,
-          value,
-        ] of Object.entries(
-          pollutants
-        )
-      ) {
+      for (const [
+        parameter,
+        value,
+      ] of Object.entries(
+        pollutants
+      )) {
         if (
           value === null ||
           value === undefined
@@ -1296,39 +1063,35 @@ async function syncOpenAQ(
         }
 
         missingReadings.push({
-          station_id:
-            stationId,
+          station_id: stationId,
 
-          sensor_id:
-            null,
+          sensor_id: null,
 
           timestamp:
             timestamp.toISOString(),
 
-          parameter:
-            parameter,
+          parameter,
 
-          value:
-            value,
+          value,
 
-          unit:
-            "µg/m³",
+          unit: "µg/m³",
 
           quality_flag:
             "OpenAQ",
+
+          data_status:
+            dataStatus,
         });
       }
 
-      // ----------------------------------------------
+      // ------------------------------------------------
       // Insert missing readings
-      // ----------------------------------------------
+      // ------------------------------------------------
 
-      let insertedReadings =
-        [];
+      let insertedReadings = [];
 
       if (
-        missingReadings.length >
-        0
+        missingReadings.length > 0
       ) {
         console.log(
           `Adding ${missingReadings.length} missing OpenAQ readings...`
@@ -1399,11 +1162,12 @@ async function syncOpenAQ(
 
         freshness,
 
+        dataStatus,
+
         insertedReadings,
 
         message:
-          insertedReadings.length >
-          0
+          insertedReadings.length > 0
             ? "AQI already existed; missing OpenAQ pollutant readings were added"
             : "OpenAQ observation already exists",
       });
@@ -1432,11 +1196,13 @@ async function syncOpenAQ(
         aqi:
           aqiResult.aqi,
 
-        category:
-          category,
+        category,
 
         dominant_pollutant:
           aqiResult.dominantPollutant,
+
+        data_status:
+          dataStatus,
 
         pollutant_subindices:
           aqiResult.subIndexes,
@@ -1461,7 +1227,8 @@ async function syncOpenAQ(
       await saveReadings(
         stationId,
         pollutants,
-        timestamp
+        timestamp,
+        dataStatus
       );
 
     console.log(
@@ -1512,11 +1279,12 @@ async function syncOpenAQ(
 
       freshness,
 
+      dataStatus,
+
       aqiReading,
 
       readings,
     });
-
   } catch (error) {
     console.error(
       "======================================"
@@ -1534,7 +1302,303 @@ async function syncOpenAQ(
 
     return res.status(500).json({
       success: false,
+      message: error.message,
+    });
+  }
+}
 
+// ======================================================
+// Match Existing PMC Stations -> OpenAQ Locations
+// ======================================================
+
+async function matchStations(req, res) {
+  try {
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      "Starting OpenAQ station matching..."
+    );
+
+    const {
+      data: stations,
+      error: stationError,
+    } = await supabase
+      .from("station")
+      .select(`
+        station_id,
+        name,
+        latitude,
+        longitude,
+        status,
+        external_source,
+        external_station_id
+      `)
+      .order(
+        "station_id",
+        {
+          ascending: true,
+        }
+      );
+
+    if (stationError) {
+      throw stationError;
+    }
+
+    if (
+      !stations ||
+      stations.length === 0
+    ) {
+      return res.json({
+        success: true,
+        message:
+          "No stations found",
+        matched: 0,
+        results: [],
+      });
+    }
+
+    const results = [];
+
+    for (const station of stations) {
+      try {
+        console.log(
+          `Matching station ${station.station_id}: ${station.name}`
+        );
+
+        const latitude =
+          Number(
+            station.latitude
+          );
+
+        const longitude =
+          Number(
+            station.longitude
+          );
+
+        const endpoint =
+          `/locations?coordinates=${latitude},${longitude}` +
+          `&radius=25000&limit=100`;
+
+        const data =
+          await openaqRequest(
+            endpoint
+          );
+
+        const locations =
+          data.results || [];
+
+        if (
+          locations.length === 0
+        ) {
+          results.push({
+            station_id:
+              station.station_id,
+
+            station_name:
+              station.name,
+
+            matched: false,
+
+            message:
+              "No OpenAQ locations found",
+          });
+
+          continue;
+        }
+
+        // ------------------------------------------------
+        // Prefer monitoring stations
+        // ------------------------------------------------
+
+        const monitoringStations =
+          locations.filter(
+            (location) =>
+              location.isMonitor ===
+                true ||
+              location.is_monitor ===
+                true
+          );
+
+        const candidates =
+          monitoringStations.length >
+          0
+            ? monitoringStations
+            : locations;
+
+        // ------------------------------------------------
+        // Find nearest location
+        // ------------------------------------------------
+
+        let nearest =
+          candidates[0];
+
+        for (const location of candidates) {
+          if (
+            location.distance !==
+              undefined &&
+            nearest.distance !==
+              undefined &&
+            Number(
+              location.distance
+            ) <
+              Number(
+                nearest.distance
+              )
+          ) {
+            nearest = location;
+          }
+        }
+
+        const externalStationId =
+          nearest.id;
+
+        if (!externalStationId) {
+          results.push({
+            station_id:
+              station.station_id,
+
+            station_name:
+              station.name,
+
+            matched: false,
+
+            message:
+              "OpenAQ location ID not found",
+          });
+
+          continue;
+        }
+
+        // ------------------------------------------------
+        // Update PMC station
+        // ------------------------------------------------
+
+        const {
+          data: updatedStation,
+          error: updateError,
+        } = await supabase
+          .from("station")
+          .update({
+            external_source:
+              "OPENAQ",
+
+            external_station_id:
+              String(
+                externalStationId
+              ),
+          })
+          .eq(
+            "station_id",
+            station.station_id
+          )
+          .select()
+          .single();
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        results.push({
+          station_id:
+            station.station_id,
+
+          station_name:
+            station.name,
+
+          matched: true,
+
+          external_source:
+            "OPENAQ",
+
+          external_station_id:
+            String(
+              externalStationId
+            ),
+
+          openaq_name:
+            nearest.name,
+
+          openaq_location_id:
+            nearest.id,
+
+          /*
+           * OpenAQ returns distance in meters.
+           * Convert to kilometers.
+           */
+          distance_km:
+            nearest.distance !==
+            undefined
+              ? Number(
+                  (
+                    Number(
+                      nearest.distance
+                    ) / 1000
+                  ).toFixed(2)
+                )
+              : null,
+        });
+
+        console.log(
+          `Matched ${station.name} → ${nearest.name} (${nearest.id})`
+        );
+      } catch (error) {
+        console.error(
+          `Failed to match station ${station.station_id}:`,
+          error.message
+        );
+
+        results.push({
+          station_id:
+            station.station_id,
+
+          station_name:
+            station.name,
+
+          matched: false,
+
+          error:
+            error.message,
+        });
+      }
+    }
+
+    const matchedCount =
+      results.filter(
+        (item) => item.matched
+      ).length;
+
+    console.log(
+      `OpenAQ matching completed: ${matchedCount}/${stations.length}`
+    );
+
+    console.log(
+      "======================================"
+    );
+
+    return res.json({
+      success: true,
+
+      message:
+        "OpenAQ station matching completed",
+
+      totalStations:
+        stations.length,
+
+      matched:
+        matchedCount,
+
+      results,
+    });
+  } catch (error) {
+    console.error(
+      "OpenAQ station matching error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
       message:
         error.message,
     });
@@ -1547,4 +1611,5 @@ async function syncOpenAQ(
 
 module.exports = {
   syncOpenAQ,
+  matchStations,
 };

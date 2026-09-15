@@ -1,6 +1,371 @@
 const supabase = require("../config/supabase");
 
 // ============================================================
+// OPENAQ CONFIGURATION
+// ============================================================
+
+const OPENAQ_BASE_URL = "https://api.openaq.org/v3";
+const OPENAQ_MAX_RADIUS_METERS = 25000;
+
+// ============================================================
+// CALCULATE DISTANCE BETWEEN TWO COORDINATES
+// Haversine formula
+// ============================================================
+
+const calculateDistanceKm = (
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) => {
+  const earthRadiusKm = 6371;
+
+  const dLat =
+    ((lat2 - lat1) * Math.PI) / 180;
+
+  const dLon =
+    ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) *
+      Math.sin(dLat / 2) +
+    Math.cos(
+      (lat1 * Math.PI) / 180
+    ) *
+      Math.cos(
+        (lat2 * Math.PI) / 180
+      ) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    );
+
+  return earthRadiusKm * c;
+};
+
+// ============================================================
+// CHECK WHETHER OPENAQ LOCATION HAS PM2.5 / PM10
+// ============================================================
+
+const getOpenAQLocationSensors = async (
+  locationId,
+  apiKey
+) => {
+  try {
+    const response = await fetch(
+      `${OPENAQ_BASE_URL}/locations/${locationId}/sensors`,
+      {
+        method: "GET",
+        headers: {
+          "X-API-Key": apiKey,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `OpenAQ sensor request failed for location ${locationId}: ${response.status}`
+      );
+
+      return [];
+    }
+
+    const data = await response.json();
+
+    return data.results || [];
+  } catch (error) {
+    console.warn(
+      `Could not fetch OpenAQ sensors for ${locationId}:`,
+      error.message
+    );
+
+    return [];
+  }
+};
+
+// ============================================================
+// CHECK SUITABILITY OF OPENAQ LOCATION
+// ============================================================
+
+const isSuitableOpenAQLocation = (
+  location,
+  sensors
+) => {
+  // Prefer monitor/reference-grade stations
+  const isMonitor =
+    location.is_monitor === true ||
+    location.isMonitor === true;
+
+  // Get sensor parameters
+  const parameters = sensors.map((sensor) =>
+    String(
+      sensor.parameter?.name ||
+        sensor.parameter ||
+        ""
+    ).toLowerCase()
+  );
+
+  const hasPM25 = parameters.some(
+    (parameter) =>
+      parameter === "pm25" ||
+      parameter === "pm2.5" ||
+      parameter === "pm2_5"
+  );
+
+  const hasPM10 = parameters.some(
+    (parameter) =>
+      parameter === "pm10"
+  );
+
+  /*
+   * A suitable monitoring station should preferably:
+   * - be a monitor
+   * - have PM2.5
+   * - have PM10
+   *
+   * We accept monitor stations even if one pollutant
+   * is temporarily unavailable.
+   */
+
+  return {
+    isMonitor,
+    hasPM25,
+    hasPM10,
+    suitable:
+      isMonitor &&
+      (hasPM25 || hasPM10),
+  };
+};
+
+// ============================================================
+// FIND BEST OPENAQ LOCATION FOR PMC STATION
+// ============================================================
+
+const findBestOpenAQLocation = async (
+  latitude,
+  longitude
+) => {
+  const apiKey =
+    process.env.OPENAQ_API_KEY;
+
+  if (!apiKey) {
+    console.warn(
+      "OPENAQ_API_KEY is not configured."
+    );
+
+    return null;
+  }
+
+  try {
+    const url =
+      `${OPENAQ_BASE_URL}/locations` +
+      `?coordinates=${latitude},${longitude}` +
+      `&radius=${OPENAQ_MAX_RADIUS_METERS}` +
+      `&limit=100`;
+
+    console.log(
+      `Searching OpenAQ near ${latitude}, ${longitude}...`
+    );
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-API-Key": apiKey,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `OpenAQ returned HTTP ${response.status}`
+      );
+    }
+
+    const data =
+      await response.json();
+
+    const locations =
+      data.results || [];
+
+    if (locations.length === 0) {
+      console.log(
+        "No OpenAQ locations found."
+      );
+
+      return null;
+    }
+
+    const candidates = [];
+
+    // ----------------------------------------------------------
+    // Check every OpenAQ location
+    // ----------------------------------------------------------
+
+    for (const location of locations) {
+      const locationLat = Number(
+        location.coordinates?.latitude
+      );
+
+      const locationLng = Number(
+        location.coordinates?.longitude
+      );
+
+      if (
+        Number.isNaN(locationLat) ||
+        Number.isNaN(locationLng)
+      ) {
+        continue;
+      }
+
+      const distanceKm =
+        calculateDistanceKm(
+          latitude,
+          longitude,
+          locationLat,
+          locationLng
+        );
+
+      // Maximum radius = 25 km
+      if (distanceKm > 25) {
+        continue;
+      }
+
+      // Get sensors for this location
+      const sensors =
+        await getOpenAQLocationSensors(
+          location.id,
+          apiKey
+        );
+
+      const suitability =
+        isSuitableOpenAQLocation(
+          location,
+          sensors
+        );
+
+      candidates.push({
+        location,
+        sensors,
+        distanceKm,
+        suitability,
+      });
+    }
+
+    if (candidates.length === 0) {
+      console.log(
+        "No suitable OpenAQ monitoring station found."
+      );
+
+      return null;
+    }
+
+    // ----------------------------------------------------------
+    // Sort candidates
+    //
+    // Priority:
+    // 1. Monitor
+    // 2. PM2.5 + PM10
+    // 3. Nearest distance
+    // ----------------------------------------------------------
+
+    candidates.sort((a, b) => {
+      const aMonitor =
+        a.suitability.isMonitor
+          ? 1
+          : 0;
+
+      const bMonitor =
+        b.suitability.isMonitor
+          ? 1
+          : 0;
+
+      if (bMonitor !== aMonitor) {
+        return bMonitor - aMonitor;
+      }
+
+      const aBoth =
+        a.suitability.hasPM25 &&
+        a.suitability.hasPM10
+          ? 1
+          : 0;
+
+      const bBoth =
+        b.suitability.hasPM25 &&
+        b.suitability.hasPM10
+          ? 1
+          : 0;
+
+      if (bBoth !== aBoth) {
+        return bBoth - aBoth;
+      }
+
+      return (
+        a.distanceKm -
+        b.distanceKm
+      );
+    });
+
+    const best = candidates[0];
+
+    console.log(
+      "Best OpenAQ match:",
+      {
+        id: best.location.id,
+        name: best.location.name,
+        distanceKm:
+          Number(
+            best.distanceKm.toFixed(3)
+          ),
+        isMonitor:
+          best.suitability.isMonitor,
+        hasPM25:
+          best.suitability.hasPM25,
+        hasPM10:
+          best.suitability.hasPM10,
+      }
+    );
+
+    return {
+      id: best.location.id,
+      name: best.location.name,
+      latitude:
+        Number(
+          best.location.coordinates
+            ?.latitude
+        ),
+      longitude:
+        Number(
+          best.location.coordinates
+            ?.longitude
+        ),
+      distanceKm:
+        Number(
+          best.distanceKm.toFixed(3)
+        ),
+      isMonitor:
+        best.suitability.isMonitor,
+      hasPM25:
+        best.suitability.hasPM25,
+      hasPM10:
+        best.suitability.hasPM10,
+    };
+  } catch (error) {
+    console.error(
+      "OpenAQ location search failed:",
+      error.message
+    );
+
+    return null;
+  }
+};
+
+// ============================================================
 // GET ALL MONITORING STATIONS
 // GET /api/stations
 // ============================================================
@@ -84,10 +449,15 @@ const getStations = async (req, res) => {
     const latestAqiByStation = {};
 
     for (const row of aqiRows || []) {
-      const stationId = String(row.station_id);
+      const stationId =
+        String(row.station_id);
 
-      if (!latestAqiByStation[stationId]) {
-        latestAqiByStation[stationId] = row;
+      if (
+        !latestAqiByStation[stationId]
+      ) {
+        latestAqiByStation[
+          stationId
+        ] = row;
       }
     }
 
@@ -98,7 +468,8 @@ const getStations = async (req, res) => {
     const latestReadingByStation = {};
 
     for (const row of readings || []) {
-      const stationId = String(row.station_id);
+      const stationId =
+        String(row.station_id);
 
       const parameter = String(
         row.parameter || ""
@@ -106,10 +477,14 @@ const getStations = async (req, res) => {
         .trim()
         .toUpperCase();
 
-      const key = `${stationId}_${parameter}`;
+      const key =
+        `${stationId}_${parameter}`;
 
-      if (!latestReadingByStation[key]) {
-        latestReadingByStation[key] = row;
+      if (
+        !latestReadingByStation[key]
+      ) {
+        latestReadingByStation[key] =
+          row;
       }
     }
 
@@ -120,28 +495,35 @@ const getStations = async (req, res) => {
     const devicesByStation = {};
 
     for (const device of devices || []) {
-      const stationId = String(device.station_id);
+      const stationId =
+        String(device.station_id);
 
-      if (!devicesByStation[stationId]) {
-        devicesByStation[stationId] = [];
+      if (
+        !devicesByStation[stationId]
+      ) {
+        devicesByStation[stationId] =
+          [];
       }
 
-      devicesByStation[stationId].push(device);
+      devicesByStation[stationId].push(
+        device
+      );
     }
 
     // ----------------------------------------------------------
     // 8. BUILD RESPONSE
     // ----------------------------------------------------------
 
-    const result = (stations || []).map((station) => {
-      const stationId = String(station.station_id);
+    const result = (
+      stations || []
+    ).map((station) => {
+      const stationId =
+        String(station.station_id);
 
       const aqiRow =
-        latestAqiByStation[stationId];
-
-      // ------------------------------------------------------
-      // FIND PM2.5
-      // ------------------------------------------------------
+        latestAqiByStation[
+          stationId
+        ];
 
       const pm25Row =
         latestReadingByStation[
@@ -154,26 +536,14 @@ const getStations = async (req, res) => {
           `${stationId}_PM2_5`
         ];
 
-      // ------------------------------------------------------
-      // FIND PM10
-      // ------------------------------------------------------
-
       const pm10Row =
         latestReadingByStation[
           `${stationId}_PM10`
         ];
 
-      // ------------------------------------------------------
-      // FIND DOMINANT POLLUTANT
-      // ------------------------------------------------------
-
       const dominant =
         aqiRow?.dominant_pollutant ||
         "N/A";
-
-      // ------------------------------------------------------
-      // LAST READING TIME
-      // ------------------------------------------------------
 
       const timestamps = [];
 
@@ -199,67 +569,76 @@ const getStations = async (req, res) => {
         timestamps.length > 0
           ? new Date(
               Math.max(
-                ...timestamps.map((date) =>
-                  date.getTime()
+                ...timestamps.map(
+                  (date) =>
+                    date.getTime()
                 )
               )
             )
           : null;
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // DEVICE STATUS
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       const stationDevices =
-        devicesByStation[stationId] || [];
+        devicesByStation[
+          stationId
+        ] || [];
 
       let deviceOnline = false;
 
-      if (stationDevices.length > 0) {
-        deviceOnline = stationDevices.some(
-          (device) => {
-            const status = String(
-              device.status || ""
-            )
-              .trim()
-              .toLowerCase();
+      if (
+        stationDevices.length > 0
+      ) {
+        deviceOnline =
+          stationDevices.some(
+            (device) => {
+              const status =
+                String(
+                  device.status || ""
+                )
+                  .trim()
+                  .toLowerCase();
 
-            return (
-              status === "online" ||
-              status === "active" ||
-              status === "connected"
-            );
-          }
-        );
+              return (
+                status === "online" ||
+                status === "active" ||
+                status === "connected"
+              );
+            }
+          );
       }
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // STATION STATUS
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
-      const databaseStatus = String(
-        station.status || ""
-      )
-        .trim()
-        .toLowerCase();
+      const databaseStatus =
+        String(
+          station.status || ""
+        )
+          .trim()
+          .toLowerCase();
 
-      let status = "Offline";
+      let stationStatus =
+        "Offline";
 
       if (
         databaseStatus === "online" ||
         databaseStatus === "active" ||
         databaseStatus === "connected"
       ) {
-        status = "Online";
+        stationStatus = "Online";
       }
 
       if (deviceOnline) {
-        status = "Online";
+        stationStatus = "Online";
       }
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // AQI
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       const aqi =
         aqiRow?.aqi !== null &&
@@ -267,16 +646,17 @@ const getStations = async (req, res) => {
           ? Number(aqiRow.aqi)
           : null;
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // CATEGORY
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       const category =
-        aqiRow?.category || "N/A";
+        aqiRow?.category ||
+        "N/A";
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // PM2.5
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       const pm25 =
         pm25Row?.value !== null &&
@@ -284,9 +664,9 @@ const getStations = async (req, res) => {
           ? Number(pm25Row.value)
           : null;
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // PM10
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       const pm10 =
         pm10Row?.value !== null &&
@@ -294,9 +674,9 @@ const getStations = async (req, res) => {
           ? Number(pm10Row.value)
           : null;
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // UPDATED TEXT
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       let updated = "No data";
 
@@ -311,9 +691,9 @@ const getStations = async (req, res) => {
           );
       }
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // RETURN FRONTEND OBJECT
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       return {
         id: `PMC-${String(
@@ -353,7 +733,16 @@ const getStations = async (req, res) => {
         database_status:
           station.status,
 
-        status,
+        external_source:
+          station.external_source ||
+          null,
+
+        external_station_id:
+          station.external_station_id ||
+          null,
+
+        status:
+          stationStatus,
 
         aqi,
 
@@ -401,32 +790,38 @@ const getStations = async (req, res) => {
         "Failed to fetch monitoring stations.",
 
       error:
-        process.env.NODE_ENV === "development"
+        process.env.NODE_ENV ===
+        "development"
           ? error.message
           : undefined,
     });
   }
 };
 
-
 // ============================================================
 // GET ONE STATION
 // GET /api/stations/:id
 // ============================================================
 
-const getStationById = async (req, res) => {
+const getStationById = async (
+  req,
+  res
+) => {
   try {
     const stationId = Number(
       req.params.id
     );
 
     if (
-      !Number.isInteger(stationId) ||
+      !Number.isInteger(
+        stationId
+      ) ||
       stationId <= 0
     ) {
       return res.status(400).json({
         status: "error",
-        message: "Invalid station ID.",
+        message:
+          "Invalid station ID.",
       });
     }
 
@@ -440,7 +835,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("station")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .maybeSingle();
 
     if (stationError) {
@@ -465,7 +863,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("device")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .order("device_id", {
         ascending: true,
       });
@@ -474,11 +875,13 @@ const getStationById = async (req, res) => {
       throw deviceError;
     }
 
-    const deviceList = devices || [];
+    const deviceList =
+      devices || [];
 
     const deviceIds =
       deviceList.map(
-        (device) => device.device_id
+        (device) =>
+          device.device_id
       );
 
     // =========================================================
@@ -494,7 +897,10 @@ const getStationById = async (req, res) => {
       } = await supabase
         .from("sensor")
         .select("*")
-        .in("device_id", deviceIds)
+        .in(
+          "device_id",
+          deviceIds
+        )
         .order("sensor_id", {
           ascending: true,
         });
@@ -503,7 +909,8 @@ const getStationById = async (req, res) => {
         throw sensorError;
       }
 
-      sensors = sensorData || [];
+      sensors =
+        sensorData || [];
     }
 
     // =========================================================
@@ -516,7 +923,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("reading")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .order("timestamp", {
         ascending: false,
       })
@@ -526,7 +936,8 @@ const getStationById = async (req, res) => {
       throw readingError;
     }
 
-    const readingList = readings || [];
+    const readingList =
+      readings || [];
 
     // =========================================================
     // 5. GET AQI READINGS
@@ -538,7 +949,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("aqi_reading")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .order("timestamp", {
         ascending: false,
       })
@@ -548,7 +962,8 @@ const getStationById = async (req, res) => {
       throw aqiError;
     }
 
-    const aqiList = aqiRows || [];
+    const aqiList =
+      aqiRows || [];
 
     // =========================================================
     // 6. GET ALERTS
@@ -560,7 +975,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("alert")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .order("started_time", {
         ascending: false,
       })
@@ -580,7 +998,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("maintenance")
       .select("*")
-      .eq("station_id", stationId)
+      .eq(
+        "station_id",
+        stationId
+      )
       .order("service_date", {
         ascending: false,
       })
@@ -598,20 +1019,29 @@ const getStationById = async (req, res) => {
 
     const sensorIds =
       sensors.map(
-        (sensor) => sensor.sensor_id
+        (sensor) =>
+          sensor.sensor_id
       );
 
-    if (sensorIds.length > 0) {
+    if (
+      sensorIds.length > 0
+    ) {
       const {
         data: calibrationData,
         error: calibrationError,
       } = await supabase
         .from("calibration")
         .select("*")
-        .in("sensor_id", sensorIds)
-        .order("calibration_date", {
-          ascending: false,
-        });
+        .in(
+          "sensor_id",
+          sensorIds
+        )
+        .order(
+          "calibration_date",
+          {
+            ascending: false,
+          }
+        );
 
       if (calibrationError) {
         throw calibrationError;
@@ -633,7 +1063,9 @@ const getStationById = async (req, res) => {
     const aqi =
       latestAqi?.aqi !== null &&
       latestAqi?.aqi !== undefined
-        ? Number(latestAqi.aqi)
+        ? Number(
+            latestAqi.aqi
+          )
         : null;
 
     const category =
@@ -652,17 +1084,22 @@ const getStationById = async (req, res) => {
 
     readingList.forEach(
       (reading) => {
-        const parameter = String(
-          reading.parameter || ""
-        )
-          .trim()
-          .toUpperCase();
+        const parameter =
+          String(
+            reading.parameter ||
+              ""
+          )
+            .trim()
+            .toUpperCase();
 
         if (
-          !latestReadings[parameter]
+          !latestReadings[
+            parameter
+          ]
         ) {
-          latestReadings[parameter] =
-            reading;
+          latestReadings[
+            parameter
+          ] = reading;
         }
       }
     );
@@ -750,74 +1187,79 @@ const getStationById = async (req, res) => {
 
     Object.values(
       latestReadings
-    ).forEach((reading) => {
-      const originalParameter =
-        String(
-          reading.parameter || ""
-        ).trim();
+    ).forEach(
+      (reading) => {
+        const originalParameter =
+          String(
+            reading.parameter ||
+              ""
+          ).trim();
 
-      const name =
-        pollutantMap[
-          originalParameter
-        ] ||
-        pollutantMap[
-          originalParameter.toUpperCase()
-        ];
+        const name =
+          pollutantMap[
+            originalParameter
+          ] ||
+          pollutantMap[
+            originalParameter.toUpperCase()
+          ];
 
-      if (!name) {
-        return;
-      }
+        if (!name) {
+          return;
+        }
 
-      const standardInfo =
-        pollutantStandards[name] ||
-        {};
+        const standardInfo =
+          pollutantStandards[
+            name
+          ] || {};
 
-      let subIndex = null;
+        let subIndex = null;
 
-      if (
-        latestAqi?.pollutant_subindices
-      ) {
-        subIndex =
-          latestAqi
-            .pollutant_subindices[
+        if (
+          latestAqi?.pollutant_subindices
+        ) {
+          subIndex =
+            latestAqi
+              .pollutant_subindices[
               originalParameter
             ] ??
-          latestAqi
-            .pollutant_subindices[
-              name
-            ];
-      }
+            latestAqi
+              .pollutant_subindices[
+                name
+              ];
+        }
 
-      pollutants.push({
-        name,
+        pollutants.push({
+          name,
 
-        value: Number(
-          reading.value
-        ),
-
-        unit:
-          reading.unit ||
-          standardInfo.unit ||
-          "N/A",
-
-        standard:
-          Number(
-            standardInfo.standard || 0
+          value: Number(
+            reading.value
           ),
 
-        subIndex:
-          subIndex !== null
-            ? Number(subIndex)
-            : 0,
+          unit:
+            reading.unit ||
+            standardInfo.unit ||
+            "N/A",
 
-        flag:
-          reading.quality_flag ||
-          "Valid",
+          standard:
+            Number(
+              standardInfo.standard ||
+                0
+            ),
 
-        timestamp:
-          reading.timestamp,
-      });
-    });
+          subIndex:
+            subIndex !== null
+              ? Number(subIndex)
+              : 0,
+
+          flag:
+            reading.quality_flag ||
+            "Valid",
+
+          timestamp:
+            reading.timestamp,
+        });
+      }
+    );
 
     // =========================================================
     // 14. AQI HISTORY
@@ -848,7 +1290,8 @@ const getStationById = async (req, res) => {
 
     const lastReadingAt =
       latestAqi?.timestamp ||
-      readingList[0]?.timestamp ||
+      readingList[0]
+        ?.timestamp ||
       null;
 
     // =========================================================
@@ -856,17 +1299,12 @@ const getStationById = async (req, res) => {
     // =========================================================
 
     const gatewayId =
-      deviceList[0]?.gateway_id ||
+      deviceList[0]
+        ?.gateway_id ||
       null;
 
     // =========================================================
     // 17. WEATHER
-    //
-    // weather_readings.site_id
-    //        ↓
-    // sites.id
-    //
-    // We DO NOT assume station_id = site_id.
     // =========================================================
 
     let site = null;
@@ -878,7 +1316,10 @@ const getStationById = async (req, res) => {
     } = await supabase
       .from("sites")
       .select("*")
-      .eq("site_name", station.name)
+      .eq(
+        "site_name",
+        station.name
+      )
       .limit(1);
 
     if (siteError) {
@@ -886,7 +1327,8 @@ const getStationById = async (req, res) => {
     }
 
     site =
-      siteRows?.[0] || null;
+      siteRows?.[0] ||
+      null;
 
     if (site) {
       const {
@@ -895,7 +1337,10 @@ const getStationById = async (req, res) => {
       } = await supabase
         .from("weather_readings")
         .select("*")
-        .eq("site_id", site.id)
+        .eq(
+          "site_id",
+          site.id
+        )
         .order("recorded_at", {
           ascending: false,
         })
@@ -937,10 +1382,13 @@ const getStationById = async (req, res) => {
         }
       );
 
-    const status =
-      stationStatus === "online" ||
-      stationStatus === "active" ||
-      stationStatus === "connected" ||
+    const finalStatus =
+      stationStatus ===
+        "online" ||
+      stationStatus ===
+        "active" ||
+      stationStatus ===
+        "connected" ||
       onlineDevice
         ? "Online"
         : "Offline";
@@ -974,7 +1422,8 @@ const getStationById = async (req, res) => {
             station.longitude
           ),
 
-        status,
+        status:
+          finalStatus,
 
         aqi,
 
@@ -1033,13 +1482,20 @@ const getStationById = async (req, res) => {
   }
 };
 
-
 // ============================================================
 // CREATE MONITORING STATION
 // POST /api/stations
+//
+// IMPORTANT:
+// external_source and external_station_id are NOT entered
+// by the admin. They are automatically determined from
+// OpenAQ using the station coordinates.
 // ============================================================
 
-const createStation = async (req, res) => {
+const createStation = async (
+  req,
+  res
+) => {
   try {
     const {
       name,
@@ -1066,7 +1522,6 @@ const createStation = async (req, res) => {
     ) {
       return res.status(400).json({
         status: "error",
-
         message:
           "name, latitude, longitude, station_type, installation_date and status are required",
       });
@@ -1094,7 +1549,9 @@ const createStation = async (req, res) => {
         : null;
 
     const cleanStationType =
-      String(station_type).trim();
+      String(
+        station_type
+      ).trim();
 
     const cleanStatus =
       String(status).trim();
@@ -1165,7 +1622,6 @@ const createStation = async (req, res) => {
     ) {
       return res.status(400).json({
         status: "error",
-
         message:
           `Invalid status. Allowed values: ${allowedStatuses.join(", ")}`,
       });
@@ -1214,25 +1670,43 @@ const createStation = async (req, res) => {
     }
 
     // ----------------------------------------------------------
-    // 7. INSERT STATION
+    // 7. FIND OPENAQ STATION FIRST
+    //
+    // We do this BEFORE inserting so the station can be
+    // created with external_source and external_station_id.
+    // ----------------------------------------------------------
+
+    const openAQMapping =
+      await findBestOpenAQLocation(
+        lat,
+        lng
+      );
+
+    // ----------------------------------------------------------
+    // 8. INSERT STATION
     // ----------------------------------------------------------
 
     const {
-      data,
-      error,
+      data: station,
+      error: stationError,
     } = await supabase
       .from("station")
       .insert([
         {
-          name: cleanName,
+          name:
+            cleanName,
 
-          ward: cleanWard,
+          ward:
+            cleanWard,
 
-          zone: cleanZone,
+          zone:
+            cleanZone,
 
-          latitude: lat,
+          latitude:
+            lat,
 
-          longitude: lng,
+          longitude:
+            lng,
 
           station_type:
             cleanStationType,
@@ -1241,32 +1715,48 @@ const createStation = async (req, res) => {
 
           status:
             cleanStatus,
+
+          // -----------------------------------------------
+          // AUTOMATIC OPENAQ MAPPING
+          // -----------------------------------------------
+
+          external_source:
+            openAQMapping
+              ? "OPENAQ"
+              : null,
+
+          external_station_id:
+            openAQMapping
+              ? String(
+                  openAQMapping.id
+                )
+              : null,
         },
       ])
       .select()
       .single();
 
     // ----------------------------------------------------------
-    // 8. DATABASE ERROR
+    // 9. DATABASE ERROR
     // ----------------------------------------------------------
 
-    if (error) {
+    if (stationError) {
       console.error(
         "Create station error:",
-        error
+        stationError
       );
 
       return res.status(500).json({
         status: "error",
 
         message:
-          error.message ||
+          stationError.message ||
           "Failed to create monitoring station.",
       });
     }
 
     // ----------------------------------------------------------
-    // 9. SUCCESS
+    // 10. SUCCESS
     // ----------------------------------------------------------
 
     return res.status(201).json({
@@ -1275,7 +1765,32 @@ const createStation = async (req, res) => {
       message:
         "Monitoring station added successfully.",
 
-      station: data,
+      station,
+
+      openaq_mapping:
+        openAQMapping
+          ? {
+              source: "OPENAQ",
+
+              station_id:
+                openAQMapping.id,
+
+              station_name:
+                openAQMapping.name,
+
+              distance_km:
+                openAQMapping.distanceKm,
+
+              is_monitor:
+                openAQMapping.isMonitor,
+
+              has_pm25:
+                openAQMapping.hasPM25,
+
+              has_pm10:
+                openAQMapping.hasPM10,
+            }
+          : null,
     });
   } catch (error) {
     console.error(
@@ -1293,68 +1808,89 @@ const createStation = async (req, res) => {
   }
 };
 
+// ============================================================
+// CREATE MONITORING SITE SETUP
+// ============================================================
 
+const createMonitoringSiteSetup =
+  async (req, res) => {
+    try {
+      const {
+        station,
+        device,
+        sensors,
+      } = req.body;
 
-const createMonitoringSiteSetup = async (req, res) => {
-  try {
-    const { station, device, sensors } = req.body;
-
-    if (
-      !station ||
-      !device ||
-      !Array.isArray(sensors) ||
-      sensors.length === 0
-    ) {
-      return res.status(400).json({
-        status: "error",
-        message:
-          "Station, device and at least one sensor are required.",
-      });
-    }
-
-    const { data, error } = await supabase.rpc(
-      "create_monitoring_site_setup",
-      {
-        p_station: station,
-        p_device: device,
-        p_sensors: sensors,
+      if (
+        !station ||
+        !device ||
+        !Array.isArray(
+          sensors
+        ) ||
+        sensors.length === 0
+      ) {
+        return res.status(400).json({
+          status: "error",
+          message:
+            "Station, device and at least one sensor are required.",
+        });
       }
-    );
 
-    if (error) {
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        "create_monitoring_site_setup",
+        {
+          p_station:
+            station,
+
+          p_device:
+            device,
+
+          p_sensors:
+            sensors,
+        }
+      );
+
+      if (error) {
+        console.error(
+          "Monitoring site setup error:",
+          error
+        );
+
+        return res.status(400).json({
+          status: "error",
+
+          message:
+            error.message ||
+            "Monitoring site setup failed. No data was stored.",
+        });
+      }
+
+      return res.status(201).json({
+        status: "success",
+
+        message:
+          "Monitoring site, device and sensors created successfully.",
+
+        setup: data,
+      });
+    } catch (error) {
       console.error(
-        "Monitoring site setup error:",
+        "Monitoring site setup exception:",
         error
       );
 
-      return res.status(400).json({
+      return res.status(500).json({
         status: "error",
+
         message:
           error.message ||
-          "Monitoring site setup failed. No data was stored.",
+          "Setup failed. No data was stored.",
       });
     }
-
-    return res.status(201).json({
-      status: "success",
-      message:
-        "Monitoring site, device and sensors created successfully.",
-      setup: data,
-    });
-  } catch (error) {
-    console.error(
-      "Monitoring site setup exception:",
-      error
-    );
-
-    return res.status(500).json({
-      status: "error",
-      message:
-        error.message ||
-        "Setup failed. No data was stored.",
-    });
-  }
-};
+  };
 
 // ============================================================
 // EXPORT CONTROLLERS
@@ -1364,5 +1900,5 @@ module.exports = {
   getStations,
   getStationById,
   createStation,
-  createMonitoringSiteSetup 
+  createMonitoringSiteSetup,
 };
