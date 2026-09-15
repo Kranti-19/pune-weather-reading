@@ -1,8 +1,12 @@
-// src/api/apiClient.js
 import axios from 'axios';
 
+// Pull the production base URL from Vite environment variables with Render fallback
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://pune-weather-reading.onrender.com';
+
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api', // Or her backend port (e.g., 5000 or 8000)
+  baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

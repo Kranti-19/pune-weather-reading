@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import API from '../api/apiClient';
 
 import {
   CloudSun,
@@ -14,12 +15,15 @@ import {
   ShieldCheck,
   ArrowRight,
   Activity,
-  Database,
   MapPin,
   Building2,
   Leaf,
-  BarChart3,
 } from "lucide-react";
+
+// Use Vite environment variable with Render fallback
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://pune-weather-reading.onrender.com";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -31,10 +35,15 @@ export default function Login() {
   const [error, setError] = useState("");
 
   // ==========================================
-  // LOGIN
+  // LOGIN HANDLER
   // ==========================================
-
   const handleLogin = async (e) => {
+
+    const response = await API.post('/auth/login', {
+      userId: userId.trim(),
+      password,
+    }); 
+
     e.preventDefault();
     setError("");
 
@@ -47,7 +56,7 @@ export default function Login() {
       setLoading(true);
 
       const response = await axios.post(
-        "http://localhost:5000/api/auth/login",
+        `${API_BASE_URL}/api/auth/login`,
         {
           userId: userId.trim(),
           password,
@@ -84,22 +93,19 @@ export default function Login() {
         style={{ backgroundImage: "url('/pune-bg.jpg')" }}
       />
 
-      {/* Gradient overlays for legibility */}
+      {/* Gradient overlays */}
       <div className="absolute inset-0 bg-slate-950/20" />
       <div className="absolute inset-0 bg-gradient-to-b from-[#062B50]/45 via-[#0B63B6]/15 to-[#061827]/50" />
 
-      {/* ==========================================
-          TOP BRANDING
-      ========================================== */}
+      {/* Header */}
       <header className="relative z-20 flex items-start justify-between px-6 sm:px-10 lg:px-14 pt-6 sm:pt-8">
         <div className="flex items-center gap-3 text-white">
           <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full border border-white/50 bg-white/10 backdrop-blur-md flex items-center justify-center">
             <Building2 size={24} className="text-white" />
           </div>
           <div>
-            
             <p className="text-[7px] sm:text-[9px] uppercase tracking-[0.22em] text-white/65 mt-1">
-              Cleaner Air ·  Greener Tomorrow
+              Cleaner Air · Greener Tomorrow
             </p>
           </div>
         </div>
@@ -108,20 +114,15 @@ export default function Login() {
           <Leaf size={25} className="text-emerald-200 mt-1" />
           <div>
             <p className="text-sm font-medium">Breathe Better</p>
-            
             <div className="w-8 h-px bg-white/50 mt-2" />
           </div>
         </div>
       </header>
 
-      {/* ==========================================
-          MAIN CONTENT
-      ========================================== */}
+      {/* Main Container */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6">
         <div className="w-full max-w-[680px] h-auto md:h-[460px] grid grid-cols-1 md:grid-cols-[42%_58%] overflow-hidden rounded-[24px] border border-white/25 shadow-[0_25px_60px_rgba(0,0,0,0.35)]">
-          {/* ==========================================
-              LEFT MONITORING PANEL
-          ========================================== */}
+          {/* Left Monitoring Panel */}
           <section className="relative bg-gradient-to-br from-[#063E73]/95 via-[#075BA5]/95 to-[#08396B]/95 text-white p-6 sm:p-8 overflow-hidden">
             <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/5" />
             <div className="absolute bottom-0 -left-16 w-52 h-52 rounded-full bg-sky-400/10" />
@@ -136,7 +137,6 @@ export default function Login() {
               </div>
 
               <div className="mt-6">
-                
                 <div className="flex gap-3 mt-2 items-start">
                   <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
                     <CloudSun size={21} />
@@ -147,10 +147,9 @@ export default function Login() {
                     Monitoring System
                   </h1>
                 </div>
-                
               </div>
 
-              {/* AQI CARD */}
+              {/* Live Preview Metric Tile */}
               <div className="mt-5 bg-white/[0.10] backdrop-blur-md border border-white/15 rounded-2xl p-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -196,18 +195,11 @@ export default function Login() {
                   </div>
                 </div>
               </div>
-
-              {/* BOTTOM KPIs */}
-              
-
-              
             </div>
           </section>
 
-          {/* ==========================================
-              RIGHT LOGIN PANEL
-          ========================================== */}
-          <section className="bg-white/95 backdrop-blur-xl p-7 sm:p-9 flex flex-col">
+          {/* Right Login Panel */}
+          <section className="bg-white/95 backdrop-blur-xl p-7 sm:p-9 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 text-[#075BA5]">
                 <ShieldCheck size={15} />
@@ -230,14 +222,17 @@ export default function Login() {
               >
                 <AlertCircle size={15} />
                 <span className="flex-1">{error}</span>
-                <button type="button" onClick={() => setError("")} className="font-bold">
+                <button
+                  type="button"
+                  onClick={() => setError("")}
+                  className="font-bold"
+                >
                   ×
                 </button>
               </div>
             )}
 
             <form onSubmit={handleLogin} className="mt-6 space-y-4">
-              {/* USER ID */}
               <div>
                 <label
                   htmlFor="userId"
@@ -267,7 +262,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* PASSWORD */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label
@@ -314,7 +308,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* REMEMBER ME */}
               <div className="flex items-center gap-2 text-[10px] text-slate-600">
                 <input
                   type="checkbox"
@@ -324,7 +317,6 @@ export default function Login() {
                 <label htmlFor="remember">Remember me</label>
               </div>
 
-              {/* LOGIN BUTTON */}
               <button
                 type="submit"
                 disabled={loading}
@@ -342,19 +334,12 @@ export default function Login() {
                   </>
                 )}
               </button>
-
-              
             </form>
-
-            {/* FOOTER */}
-            
           </section>
         </div>
       </main>
 
-      {/* ==========================================
-          BOTTOM SLOGAN
-      ========================================== */}
+      {/* Bottom Slogan */}
       <div className="relative z-20 hidden sm:flex justify-end px-10 lg:px-14 pb-4 text-white/70">
         <div className="flex items-center gap-3 text-[8px] uppercase tracking-[0.2em]">
           <span>Our City</span>

@@ -1,10 +1,9 @@
-// <<<<<<< HEAD
-// =======
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AirQualityCalendar from "../components/AirQualityCalendar";
 import MajorPollutantGrid from "../components/MajorPollutantGrid";
 import WardPollutionLeaderboard from "../components/WardPollutionLeaderboard";
+import API from '../api/apiClient';
 
 import {
   Wind,
@@ -318,6 +317,9 @@ export default function Dashboard() {
   };
 
   const fetchDashboard = async (showRefresh = false) => {
+
+    const response = await API.get(`/dashboard?range=${range}`);
+    
     try {
       if (showRefresh) setRefreshing(true);
 
