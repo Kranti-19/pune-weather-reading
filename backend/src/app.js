@@ -3,7 +3,6 @@ const cors = require("cors");
 
 const app = express();
 
-// CORS configuration
 // Dynamic CORS configuration
 const allowedOrigins = [
   "http://localhost:5173",
@@ -31,9 +30,6 @@ app.use(
   })
 );
 
-// Explicitly handle preflight OPTIONS requests for all endpoints
-app.options("*", cors());
-
 app.use(express.json());
 
 // Health Routes
@@ -53,70 +49,48 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 app.use("/api/dashboard", dashboardRoutes);
 
 // Alert Routes
-
-const alertRoutes =require("./routes/alertRoutes");
-app.use("/api/alerts",alertRoutes);
-
+const alertRoutes = require("./routes/alertRoutes");
+app.use("/api/alerts", alertRoutes);
 
 // Report Routes
 const reportRoutes = require("./routes/reportRoutes");
 app.use("/api/reports", reportRoutes);
 
-
 // Station Routes
 const stationRoutes = require("./routes/stationRoutes");
 app.use("/api/stations", stationRoutes);
 
-//Analytics Routes
+// Analytics Routes
 const analyticsRoutes = require("./routes/analyticsRoutes");
 app.use("/api/analytics", analyticsRoutes);
 
-//Device Routes
+// Device Routes
 const deviceRoutes = require("./routes/deviceRoutes");
-app.use("/api/devices",deviceRoutes);
+app.use("/api/devices", deviceRoutes);
 
-//Sensor Routes
+// Sensor Routes
 const sensorRoutes = require("./routes/sensorRoutes");
-app.use( "/api/sensors",sensorRoutes);
+app.use("/api/sensors", sensorRoutes);
 
-
-
-//whether API
+// Weather API
 const weatherRoutes = require("./routes/weatherRoutes");
 app.use("/api/weather", weatherRoutes);
 
-
-//AQI API
+// AQI API
 const airQualityRoutes = require("./routes/airQualityRoutes");
 app.use("/api/air-quality", airQualityRoutes);
 
-
-
-const openaqRoutes =
-  require("./routes/openaqRoutes");
-
-
-app.use(
-  "/api/air-quality/openaq",
-  openaqRoutes
-);
-
-
-// const settingsRoutes = require("./routes/settingsRoutes");
-
-// app.use("/api/settings", settingsRoutes);
-
-
+const openaqRoutes = require("./routes/openaqRoutes");
+app.use("/api/air-quality/openaq", openaqRoutes);
 
 const openaqLocationRoutes = require("./routes/openaqLocationRoutes");
-app.use("/api/air-quality/openaq",openaqLocationRoutes);
-
+app.use("/api/air-quality/openaq", openaqLocationRoutes);
 
 // Root Route
 app.get("/", (req, res) => {
-    res.json({
-        message: "Weather Reading System Backend is running"
-    });
+  res.json({
+    message: "Weather Reading System Backend is running",
+  });
 });
 
 module.exports = app;
