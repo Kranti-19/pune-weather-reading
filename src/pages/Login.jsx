@@ -37,14 +37,12 @@ export default function Login() {
   // ==========================================
   // LOGIN HANDLER
   // ==========================================
+  // ==========================================
+  // LOGIN HANDLER
+  // ==========================================
   const handleLogin = async (e) => {
-
-    const response = await API.post('/auth/login', {
-      userId: userId.trim(),
-      password,
-    }); 
-
-    e.preventDefault();
+    // 1. MUST BE FIRST: prevent native form reload
+    if (e) e.preventDefault();
     setError("");
 
     if (!userId.trim() || !password) {
@@ -55,22 +53,33 @@ export default function Login() {
     try {
       setLoading(true);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/login`,
-        {
-          userId: userId.trim(),
-          password,
-        }
-      );
+      // 2. Call backend via apiClient
+      const response = await API.post("/auth/login", {
+        userId: userId.trim(),
+        password,
+      });
 
-      if (response.data?.status === "success") {
-        if (response.data?.session?.access_token) {
-          localStorage.setItem("token", response.data.session.access_token);
+      console.log("Auth success response:", response.data);
+
+      if (
+        response.data?.status === "success" ||
+        response.data?.token ||
+        response.data?.session
+      ) {
+        const token =
+          response.data?.session?.access_token ||
+          response.data?.token ||
+          response.data?.data?.token;
+
+        if (token) {
+          localStorage.setItem("token", token);
         }
         if (response.data?.user) {
           localStorage.setItem("user", JSON.stringify(response.data.user));
         }
-        navigate("/dashboard");
+
+        // 3. Navigate into the dashboard
+        navigate("/dashboard", { replace: true });
       } else {
         setError(
           response.data?.message ||
@@ -79,7 +88,11 @@ export default function Login() {
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError(err.response?.data?.message || "Invalid User ID or password.");
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Invalid User ID or password."
+      );
     } finally {
       setLoading(false);
     }
