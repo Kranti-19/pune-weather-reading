@@ -228,6 +228,7 @@ function extractPollutants(results, sensorMap) {
 
     pollutants[parameter] = {
       sensorId,
+
       value:
         result.value !== null &&
         result.value !== undefined
@@ -239,6 +240,8 @@ function extractPollutants(results, sensorMap) {
         result.parameter?.units ||
         null,
 
+      // IMPORTANT:
+      // Preserve the actual OpenAQ timestamp
       datetime:
         result.datetime?.utc ||
         result.datetime?.local ||
@@ -469,8 +472,10 @@ function calculateAQI(pollutants) {
 
   return {
     aqi: validIndexes[0][1],
+
     dominantPollutant:
       validIndexes[0][0],
+
     subIndexes,
   };
 }
@@ -515,8 +520,36 @@ function getAQICategory(aqi) {
 // ======================================================
 
 function getLatestTimestamp(raw) {
-  // Always return the current time so OpenAQ syncs are recognized as live/current on the dashboard
-  return new Date();
+  const dates = Object.values(raw)
+    .filter(
+      (item) =>
+        item &&
+        item.datetime
+    )
+    .map(
+      (item) =>
+        new Date(item.datetime)
+    )
+    .filter(
+      (date) =>
+        !Number.isNaN(
+          date.getTime()
+        )
+    );
+
+  // IMPORTANT:
+  // Never use NOW() as a fallback.
+  if (dates.length === 0) {
+    return null;
+  }
+
+  return new Date(
+    Math.max(
+      ...dates.map((date) =>
+        date.getTime()
+      )
+    )
+  );
 }
 
 // ======================================================
@@ -554,10 +587,12 @@ function checkDataFreshness(timestamp) {
   if (ageMinutes < 0) {
     return {
       fresh: false,
+
       ageMinutes:
         Number(
           ageMinutes.toFixed(2)
         ),
+
       message:
         "Measurement timestamp is in the future",
     };
@@ -569,10 +604,12 @@ function checkDataFreshness(timestamp) {
   ) {
     return {
       fresh: false,
+
       ageMinutes:
         Number(
           ageMinutes.toFixed(2)
         ),
+
       message:
         `Measurement is ${ageMinutes.toFixed(
           1
@@ -582,10 +619,12 @@ function checkDataFreshness(timestamp) {
 
   return {
     fresh: true,
+
     ageMinutes:
       Number(
         ageMinutes.toFixed(2)
       ),
+
     message:
       "Measurement is current",
   };
@@ -598,7 +637,7 @@ function checkDataFreshness(timestamp) {
 async function saveReadings(
   stationId,
   pollutants,
-  timestamp,
+  rawPollutants,
   dataStatus = "Current"
 ) {
   const rows = [];
@@ -607,6 +646,7 @@ async function saveReadings(
     parameter,
     value,
   ] of Object.entries(pollutants)) {
+
     if (
       value === null ||
       value === undefined
@@ -614,14 +654,100 @@ async function saveReadings(
       continue;
     }
 
+    // --------------------------------------------------
+    // Get the ACTUAL timestamp for this pollutant
+    // --------------------------------------------------
+
+    const rawData =
+      rawPollutants[parameter];
+
+    if (
+      !rawData ||
+      !rawData.datetime
+    ) {
+      console.log(
+        `Skipping ${parameter}: OpenAQ timestamp missing`
+      );
+
+      continue;
+    }
+
+    const measurementTimestamp =
+      new Date(
+        rawData.datetime
+      );
+
+    if (
+      Number.isNaN(
+        measurementTimestamp.getTime()
+      )
+    ) {
+      console.log(
+        `Skipping ${parameter}: invalid OpenAQ timestamp`
+      );
+
+      continue;
+    }
+
+    const timestampISO =
+      measurementTimestamp.toISOString();
+
+    // --------------------------------------------------
+    // Check duplicate reading
+    // --------------------------------------------------
+
+    const {
+      data: existingReading,
+      error: existingError,
+    } = await supabase
+      .from("reading")
+      .select("reading_id")
+      .eq(
+        "station_id",
+        stationId
+      )
+      .eq(
+        "parameter",
+        parameter
+      )
+      .eq(
+        "timestamp",
+        timestampISO
+      )
+      .eq(
+        "quality_flag",
+        "OpenAQ"
+      )
+      .limit(1);
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (
+      existingReading &&
+      existingReading.length > 0
+    ) {
+      console.log(
+        `Duplicate skipped → Station ${stationId} | ${parameter} | ${timestampISO}`
+      );
+
+      continue;
+    }
+
+    // --------------------------------------------------
+    // Prepare new reading
+    // --------------------------------------------------
+
     rows.push({
       station_id: stationId,
 
       // OpenAQ sensor IDs are external.
       sensor_id: null,
 
-      timestamp:
-        timestamp.toISOString(),
+      // IMPORTANT:
+      // Actual OpenAQ observation timestamp.
+      timestamp: timestampISO,
 
       parameter,
 
@@ -678,6 +804,7 @@ async function syncOpenAQ(req, res) {
     if (!stationId) {
       return res.status(400).json({
         success: false,
+
         message:
           "Invalid station ID",
       });
@@ -705,6 +832,7 @@ async function syncOpenAQ(req, res) {
     ) {
       return res.status(404).json({
         success: false,
+
         message:
           "Station not found",
       });
@@ -734,6 +862,7 @@ async function syncOpenAQ(req, res) {
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Station is not mapped to OpenAQ",
       });
@@ -766,6 +895,7 @@ async function syncOpenAQ(req, res) {
     ) {
       return res.status(404).json({
         success: false,
+
         message:
           "No OpenAQ sensors found for this location",
       });
@@ -809,6 +939,7 @@ async function syncOpenAQ(req, res) {
     ) {
       return res.status(404).json({
         success: false,
+
         message:
           "No OpenAQ measurements found",
       });
@@ -881,6 +1012,17 @@ async function syncOpenAQ(req, res) {
     const timestamp =
       getLatestTimestamp(raw);
 
+    // IMPORTANT:
+    // Never create a fake timestamp.
+    if (!timestamp) {
+      return res.status(502).json({
+        success: false,
+
+        message:
+          "OpenAQ measurements were returned, but no valid measurement timestamp was found",
+      });
+    }
+
     console.log(
       "OpenAQ timestamp:",
       timestamp.toISOString()
@@ -903,17 +1045,13 @@ async function syncOpenAQ(req, res) {
     /*
      * IMPORTANT:
      *
-     * We DO NOT discard stale data.
-     *
      * Fresh data:
      *     data_status = Current
      *
      * Stale data:
      *     data_status = Historical
      *
-     * This allows historical observations to remain
-     * available in Supabase without pretending that
-     * they are live.
+     * We do not modify the actual measurement timestamp.
      */
 
     const dataStatus =
@@ -931,6 +1069,9 @@ async function syncOpenAQ(req, res) {
       );
     }
 
+    const timestampISO =
+      timestamp.toISOString();
+
     // ==================================================
     // CHECK EXISTING AQI
     // ==================================================
@@ -947,7 +1088,7 @@ async function syncOpenAQ(req, res) {
       )
       .eq(
         "timestamp",
-        timestamp.toISOString()
+        timestampISO
       )
       .limit(1);
 
@@ -968,129 +1109,22 @@ async function syncOpenAQ(req, res) {
       );
 
       // ------------------------------------------------
-      // Check existing readings
+      // Save any missing pollutant readings.
+      //
+      // IMPORTANT:
+      // Each pollutant uses its OWN OpenAQ timestamp.
       // ------------------------------------------------
 
-      const {
-        data: existingReadings,
-        error:
-          readingCheckError,
-      } = await supabase
-        .from("reading")
-        .select(
-          "reading_id, parameter"
-        )
-        .eq(
-          "station_id",
-          stationId
-        )
-        .eq(
-          "timestamp",
-          timestamp.toISOString()
-        )
-        .eq(
-          "quality_flag",
-          "OpenAQ"
+      const insertedReadings =
+        await saveReadings(
+          stationId,
+          pollutants,
+          raw,
+          dataStatus
         );
-
-      if (readingCheckError) {
-        throw readingCheckError;
-      }
-
-      const existingParameters =
-        new Set(
-          (
-            existingReadings ||
-            []
-          ).map((row) =>
-            String(
-              row.parameter
-            ).toLowerCase()
-          )
-        );
-
-      // ------------------------------------------------
-      // Find missing readings
-      // ------------------------------------------------
-
-      const missingReadings = [];
-
-      for (const [
-        parameter,
-        value,
-      ] of Object.entries(
-        pollutants
-      )) {
-        if (
-          value === null ||
-          value === undefined
-        ) {
-          continue;
-        }
-
-        if (
-          existingParameters.has(
-            parameter.toLowerCase()
-          )
-        ) {
-          continue;
-        }
-
-        missingReadings.push({
-          station_id: stationId,
-
-          sensor_id: null,
-
-          timestamp:
-            timestamp.toISOString(),
-
-          parameter,
-
-          value,
-
-          unit: "µg/m³",
-
-          quality_flag:
-            "OpenAQ",
-
-          data_status:
-            dataStatus,
-        });
-      }
-
-      // ------------------------------------------------
-      // Insert missing readings
-      // ------------------------------------------------
-
-      let insertedReadings = [];
-
-      if (
-        missingReadings.length > 0
-      ) {
-        console.log(
-          `Adding ${missingReadings.length} missing OpenAQ readings...`
-        );
-
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("reading")
-          .insert(
-            missingReadings
-          )
-          .select();
-
-        if (error) {
-          throw error;
-        }
-
-        insertedReadings =
-          data || [];
-      }
 
       console.log(
-        `Added ${insertedReadings.length} readings`
+        `Added ${insertedReadings.length} new readings`
       );
 
       console.log(
@@ -1161,8 +1195,10 @@ async function syncOpenAQ(req, res) {
     } = await supabase
       .from("aqi_reading")
       .insert({
-        timestamp:
-          timestamp.toISOString(),
+        // IMPORTANT:
+        // AQI uses the latest actual
+        // OpenAQ observation timestamp.
+        timestamp: timestampISO,
 
         station_id:
           stationId,
@@ -1201,7 +1237,7 @@ async function syncOpenAQ(req, res) {
       await saveReadings(
         stationId,
         pollutants,
-        timestamp,
+        raw,
         dataStatus
       );
 
@@ -1259,6 +1295,7 @@ async function syncOpenAQ(req, res) {
 
       readings,
     });
+
   } catch (error) {
     console.error(
       "======================================"
@@ -1276,7 +1313,9 @@ async function syncOpenAQ(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+
+      message:
+        error.message,
     });
   }
 }
@@ -1326,9 +1365,12 @@ async function matchStations(req, res) {
     ) {
       return res.json({
         success: true,
+
         message:
           "No stations found",
+
         matched: 0,
+
         results: [],
       });
     }
@@ -1350,6 +1392,26 @@ async function matchStations(req, res) {
           Number(
             station.longitude
           );
+
+        if (
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude)
+        ) {
+          results.push({
+            station_id:
+              station.station_id,
+
+            station_name:
+              station.name,
+
+            matched: false,
+
+            message:
+              "Invalid station coordinates",
+          });
+
+          continue;
+        }
 
         const endpoint =
           `/locations?coordinates=${latitude},${longitude}` +
@@ -1517,6 +1579,7 @@ async function matchStations(req, res) {
         console.log(
           `Matched ${station.name} → ${nearest.name} (${nearest.id})`
         );
+
       } catch (error) {
         console.error(
           `Failed to match station ${station.station_id}:`,
@@ -1565,6 +1628,7 @@ async function matchStations(req, res) {
 
       results,
     });
+
   } catch (error) {
     console.error(
       "OpenAQ station matching error:",
@@ -1573,6 +1637,7 @@ async function matchStations(req, res) {
 
     return res.status(500).json({
       success: false,
+
       message:
         error.message,
     });
