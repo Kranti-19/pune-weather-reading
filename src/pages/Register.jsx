@@ -1,20 +1,24 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { Link } from "react-router-dom"
-import axios from "axios"
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import axios from "axios";
 
 import {
-  CloudRain,
+  Building2,
   User,
   Mail,
   Lock,
   Eye,
   EyeOff,
-} from "lucide-react"
+  ShieldCheck,
+  Leaf,
+  Activity,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 
 function Register() {
-
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -22,66 +26,64 @@ function Register() {
     email: "",
     password: "",
     confirmPassword: "",
-  })
+  });
 
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
 
-
-  // ================= HANDLE INPUT CHANGE =================
+  // =========================================================
+  // HANDLE INPUT CHANGE
+  // =========================================================
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
-    })
+    });
 
-    setError("")
-  }
+    setError("");
+  };
 
-
-  // ================= HANDLE REGISTER =================
+  // =========================================================
+  // HANDLE REGISTER
+  // =========================================================
 
   const handleRegister = async (e) => {
+    e.preventDefault();
 
-    e.preventDefault()
+    setError("");
 
     // Check all fields
     if (
-      !formData.fullName ||
-      !formData.userId ||
-      !formData.email ||
+      !formData.fullName.trim() ||
+      !formData.userId.trim() ||
+      !formData.email.trim() ||
       !formData.password ||
       !formData.confirmPassword
     ) {
-      setError("Please fill in all fields.")
-      return
+      setError("Please fill in all fields.");
+      return;
     }
-
 
     // Check password match
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.")
-      return
+      setError("Passwords do not match.");
+      return;
     }
-
 
     // Check password length
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters.")
-      return
+      setError("Password must be at least 6 characters.");
+      return;
     }
 
-
     try {
+      setLoading(true);
 
-      setLoading(true)
-      setError("")
-
-      // Send registration request to backend
       const response = await axios.post(
         "https://pune-weather-reading.onrender.com/api/auth/register",
         {
@@ -90,398 +92,575 @@ function Register() {
           email: formData.email,
           password: formData.password,
         }
-      )
+      );
 
+      console.log(
+        "Registration response:",
+        response.data
+      );
 
-      console.log("Registration response:", response.data)
+      alert("Account created successfully!");
 
-
-      // Registration successful
-      alert("Account created successfully!")
-
-      // Go to login page
-      navigate("/login")
-
-
+      navigate("/login");
     } catch (error) {
+      console.error(
+        "Registration error:",
+        error
+      );
 
-      console.error("Registration error:", error)
-
-
-      // Get error message from backend
       const message =
         error.response?.data?.message ||
-        "Registration failed. Please try again."
+        "Registration failed. Please try again.";
 
-      setError(message)
-
+      setError(message);
     } finally {
-
-      setLoading(false)
-
+      setLoading(false);
     }
-  }
-
+  };
 
   return (
+    <div className="relative min-h-screen overflow-hidden bg-[#dcecf0] font-sans">
 
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      {/* =====================================================
+          BACKGROUND IMAGE
+      ===================================================== */}
 
-      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+      <div
+        className="fixed inset-0 bg-cover bg-center brightness-[1.12] saturate-[1.08]"
+        style={{
+          backgroundImage: "url('/pune-bg.jpg')",
+        }}
+      />
+
+      {/* Light environmental tint */}
+
+      <div className="fixed inset-0 bg-[#0b6175]/10" />
+
+      {/* Soft blue atmosphere */}
+
+      <div className="fixed inset-0 bg-gradient-to-br from-[#087b91]/10 via-transparent to-[#0b3150]/10" />
+
+      {/* Very subtle vignette */}
+
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,20,30,0.10)_100%)]" />
+
+        
 
 
-        {/* ================= LEFT SIDE ================= */}
+      {/* =====================================================
+          MAIN
+      ===================================================== */}
 
-        <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-10 lg:p-12 flex flex-col justify-between min-h-[650px]">
+      <main className="relative z-10 flex min-h-[calc(100vh-75px)] items-center justify-center px-4 py-6 sm:px-6 sm:py-8">
+
+        <div className="w-full max-w-[850px]">
 
 
-          {/* Logo */}
+          {/* =================================================
+              REGISTER CARD
+          ================================================= */}
 
-          <div className="flex items-center gap-3">
+          <div className="overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_25px_75px_rgba(0,0,0,0.28)]">
 
-            <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
 
-              <CloudRain size={27} />
+            {/* =================================================
+                CARD HEADER
+            ================================================= */}
 
-            </div>
+            <div className="border-b border-slate-100 bg-gradient-to-br from-white via-white to-blue-50/60 px-6 pb-5 pt-6 sm:px-8">
 
-            <div>
+              <div className="flex items-center justify-between">
 
-              <h2 className="text-xl font-bold">
-                Pune Weather
-              </h2>
+                {/* Brand */}
 
-              <p className="text-sm text-blue-100">
-                Weather Monitoring System
+                <div className="flex items-center gap-3">
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#075BA5] text-white shadow-lg shadow-blue-200">
+
+                    <Activity
+                      size={19}
+                      strokeWidth={1.8}
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <p className="text-[14px] font-black tracking-tight text-slate-900">
+                      PMC AirPulse
+                    </p>
+
+                    <p className="mt-0.5 text-[7.5px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Air Quality Monitoring
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                {/* Login link */}
+
+                <Link
+                  to="/login"
+                  className="hidden items-center gap-1.5 text-[9px] font-bold text-[#075BA5] transition hover:text-[#064d8c] sm:flex"
+                >
+                  Already have an account?
+                  <span className="underline underline-offset-2">
+                    Sign in
+                  </span>
+                </Link>
+
+              </div>
+          
+
+              {/* Heading */}
+
+              <h1 className="mt-3 text-[27px] font-black leading-none tracking-[-0.035em] text-slate-950 sm:text-[31px]">
+                Create your account
+              </h1>
+
+              <p className="mt-2 max-w-[520px] text-[10px] leading-5 text-slate-500 sm:text-[11px]">
+                Register to access the Pune Municipal Corporation
+                Air Quality Monitoring System.
               </p>
 
             </div>
 
-          </div>
 
+            {/* =================================================
+                FORM AREA
+            ================================================= */}
 
-          {/* Main Content */}
+            <div className="px-6 py-6 sm:px-8 sm:py-7">
 
-          <div>
 
-            <p className="text-sm font-semibold tracking-wide mb-5">
-              PMC WEATHER PORTAL
-            </p>
-
-            <h1 className="text-4xl lg:text-5xl font-bold leading-tight">
-
-              Create your
-              <br />
-              PMC account
-
-            </h1>
-
-            <p className="mt-6 text-blue-100 leading-7 max-w-md">
-
-              Register to access the Pune weather monitoring
-              system and monitor weather conditions, rainfall,
-              forecasts and alerts across Pune.
-
-            </p>
-
-          </div>
-
-
-          {/* Footer */}
-
-          <p className="text-sm text-blue-100">
-            Municipal Weather Monitoring Portal
-          </p>
-
-        </div>
-
-
-        {/* ================= RIGHT SIDE ================= */}
-
-        <div className="p-8 lg:p-12">
-
-          <div className="max-w-md mx-auto">
-
-
-            {/* Heading */}
-
-            <div className="mb-7">
-
-              <p className="text-sm font-medium text-blue-600 mb-2">
-                PMC PORTAL
-              </p>
-
-              <h2 className="text-3xl font-bold text-gray-900">
-                Create account
-              </h2>
-
-              <p className="text-gray-500 mt-2">
-                Register to access the weather monitoring dashboard.
-              </p>
-
-            </div>
-
-
-            {/* ================= FORM ================= */}
-
-            <form
-              onSubmit={handleRegister}
-              className="space-y-4"
-            >
-
-
-              {/* Full Name */}
-
-              <div>
-
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name
-                </label>
-
-                <div className="relative">
-
-                  <User
-                    size={19}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
-                    placeholder="Enter your full name"
-                    className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* PMC User ID */}
-
-              <div>
-
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  PMC User ID
-                </label>
-
-                <div className="relative">
-
-                  <User
-                    size={19}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    type="text"
-                    name="userId"
-                    value={formData.userId}
-                    onChange={handleChange}
-                    placeholder="Enter your PMC user ID"
-                    className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* Official Email */}
-
-              <div>
-
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Official Email
-                </label>
-
-                <div className="relative">
-
-                  <Mail
-                    size={19}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Enter your official email"
-                    className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* Password */}
-
-              <div>
-
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
-
-                <div className="relative">
-
-                  <Lock
-                    size={19}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Create a password"
-                    className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-12 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-
-                    {showPassword ? (
-                      <EyeOff size={19} />
-                    ) : (
-                      <Eye size={19} />
-                    )}
-
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* Confirm Password */}
-
-              <div>
-
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password
-                </label>
-
-                <div className="relative">
-
-                  <Lock
-                    size={19}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-
-                  <input
-                    type={
-                      showConfirmPassword
-                        ? "text"
-                        : "password"
-                    }
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="Confirm your password"
-                    className="w-full border border-gray-200 rounded-xl py-3.5 pl-10 pr-12 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowConfirmPassword(
-                        !showConfirmPassword
-                      )
-                    }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-
-                    {showConfirmPassword ? (
-                      <EyeOff size={19} />
-                    ) : (
-                      <Eye size={19} />
-                    )}
-
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* ================= ERROR MESSAGE ================= */}
+              {/* ERROR MESSAGE */}
 
               {error && (
 
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-3">
+                <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[10px] font-semibold text-red-700">
 
-                  {error}
+                  <AlertCircle
+                    size={15}
+                    className="mt-0.5 shrink-0"
+                  />
+
+                  <span className="flex-1">
+                    {error}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setError("")}
+                    className="text-red-500 transition hover:text-red-700"
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
 
                 </div>
 
               )}
 
 
-              {/* ================= CREATE ACCOUNT ================= */}
+              {/* =================================================
+                  FORM
+              ================================================= */}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full text-white font-semibold py-3.5 rounded-xl transition mt-2 ${
-                  loading
-                    ? "bg-blue-400 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
+              <form
+                onSubmit={handleRegister}
+                className="space-y-4"
               >
 
-                {loading
-                  ? "Creating Account..."
-                  : "Create Account"}
 
-              </button>
+                {/* =================================================
+                    ROW 1
+                ================================================= */}
 
-
-            </form>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
 
-            {/* Login Link */}
+                  {/* FULL NAME */}
 
-            <div className="text-center mt-6">
+                  <div>
 
-              <p className="text-sm text-gray-500">
+                    <label
+                      htmlFor="fullName"
+                      className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.12em] text-slate-700"
+                    >
+                      Full Name
+                    </label>
 
-                Already have an account?{" "}
+                    <div className="relative">
 
-                <Link
-                  to="/login"
-                  className="text-blue-600 font-semibold hover:text-blue-700"
+                      <User
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="fullName"
+                        type="text"
+                        name="fullName"
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        placeholder="Enter your full name"
+                        autoComplete="name"
+                        disabled={loading}
+                        required
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-9 text-[11px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#075BA5] focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+
+                    </div>
+
+                  </div>
+
+
+                  {/* PMC USER ID */}
+
+                  <div>
+
+                    <label
+                      htmlFor="userId"
+                      className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.12em] text-slate-700"
+                    >
+                      PMC User ID
+                    </label>
+
+                    <div className="relative">
+
+                      <Building2
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="userId"
+                        type="text"
+                        name="userId"
+                        value={formData.userId}
+                        onChange={handleChange}
+                        placeholder="Enter your PMC User ID"
+                        autoComplete="username"
+                        disabled={loading}
+                        required
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-9 text-[11px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#075BA5] focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    OFFICIAL EMAIL
+                ================================================= */}
+
+                <div>
+
+                  <label
+                    htmlFor="email"
+                    className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.12em] text-slate-700"
+                  >
+                    Official Email
+                  </label>
+
+                  <div className="relative">
+
+                    <Mail
+                      size={15}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+
+                    <input
+                      id="email"
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="Enter your official email address"
+                      autoComplete="email"
+                      disabled={loading}
+                      required
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-9 text-[11px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#075BA5] focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    PASSWORD ROW
+                ================================================= */}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+
+                  {/* PASSWORD */}
+
+                  <div>
+
+                    <label
+                      htmlFor="password"
+                      className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.12em] text-slate-700"
+                    >
+                      Password
+                    </label>
+
+                    <div className="relative">
+
+                      <Lock
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="password"
+                        type={
+                          showPassword
+                            ? "text"
+                            : "password"
+                        }
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        placeholder="Create a password"
+                        autoComplete="new-password"
+                        disabled={loading}
+                        required
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-10 text-[11px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#075BA5] focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowPassword(!showPassword)
+                        }
+                        disabled={loading}
+                        className="absolute right-0 top-0 flex h-11 w-10 items-center justify-center text-slate-400 transition hover:text-slate-700"
+                        aria-label={
+                          showPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
+                      >
+
+                        {showPassword ? (
+                          <EyeOff size={15} />
+                        ) : (
+                          <Eye size={15} />
+                        )}
+
+                      </button>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* CONFIRM PASSWORD */}
+
+                  <div>
+
+                    <label
+                      htmlFor="confirmPassword"
+                      className="mb-1.5 block text-[9px] font-black uppercase tracking-[0.12em] text-slate-700"
+                    >
+                      Confirm Password
+                    </label>
+
+                    <div className="relative">
+
+                      <Lock
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        id="confirmPassword"
+                        type={
+                          showConfirmPassword
+                            ? "text"
+                            : "password"
+                        }
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        placeholder="Confirm your password"
+                        autoComplete="new-password"
+                        disabled={loading}
+                        required
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-10 text-[11px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#075BA5] focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowConfirmPassword(
+                            !showConfirmPassword
+                          )
+                        }
+                        disabled={loading}
+                        className="absolute right-0 top-0 flex h-11 w-10 items-center justify-center text-slate-400 transition hover:text-slate-700"
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
+                      >
+
+                        {showConfirmPassword ? (
+                          <EyeOff size={15} />
+                        ) : (
+                          <Eye size={15} />
+                        )}
+
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+                {/* PASSWORD REQUIREMENT */}
+
+                <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+
+                  <ShieldCheck
+                    size={13}
+                    className="text-slate-400"
+                  />
+
+                  <p className="text-[8px] font-medium text-slate-500">
+
+                    Password must contain at least 6 characters.
+
+                  </p>
+
+                </div>
+
+
+                {/* =================================================
+                    CREATE ACCOUNT BUTTON
+                ================================================= */}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#075BA5] text-[10px] font-black uppercase tracking-[0.04em] text-white shadow-[0_10px_25px_rgba(7,91,165,0.22)] transition-all duration-200 hover:bg-[#064d8c] hover:shadow-[0_14px_30px_rgba(7,91,165,0.28)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Sign in
-                </Link>
 
-              </p>
+                  {loading ? (
 
+                    <>
+
+                      <Loader2
+                        size={16}
+                        className="animate-spin"
+                      />
+
+                      Creating Account...
+
+                    </>
+
+                  ) : (
+
+                    <>
+
+                      Create PMC AirPulse Account
+
+                      <ArrowRight
+                        size={15}
+                        className="transition-transform duration-200 group-hover:translate-x-1"
+                      />
+
+                    </>
+
+                  )}
+
+                </button>
+
+              </form>
+
+
+              {/* =================================================
+                  MOBILE LOGIN LINK
+              ================================================= */}
+
+              <div className="mt-5 text-center sm:hidden">
+
+                <p className="text-[10px] text-slate-500">
+
+                  Already have an account?{" "}
+
+                  <Link
+                    to="/login"
+                    className="font-bold text-[#075BA5]"
+                  >
+                    Sign in
+                  </Link>
+
+                </p>
+
+              </div>
+
+
+              {/* =================================================
+                  SECURITY
+              ================================================= */}
+
+              
             </div>
 
 
-            {/* Footer */}
+            {/* =================================================
+                CARD FOOTER
+            ================================================= */}
 
-            <p className="text-center text-xs text-gray-400 mt-7">
-              Authorized PMC personnel only
-            </p>
+            <div className="border-t border-slate-100 bg-slate-50/70 px-6 py-3 sm:px-8">
+
+              
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              BOTTOM SLOGAN
+          ================================================= */}
+
+          <div className="mt-3 flex items-center justify-center gap-2 text-[7px] font-bold uppercase tracking-[0.18em] text-white drop-shadow-sm">
+
+            <span>
+              Our City
+            </span>
+
+            <span className="h-1 w-1 rounded-full bg-white/70" />
+
+            <span>
+              Our Air
+            </span>
+
+            <span className="h-1 w-1 rounded-full bg-white/70" />
+
+            <span>
+              Our Responsibility
+            </span>
 
           </div>
 
         </div>
 
-      </div>
+      </main>
 
     </div>
-  )
+  );
 }
 
-export default Register
+export default Register;
