@@ -43,8 +43,8 @@ import PuneMap from "../components/PuneMap";
 // API
 // =====================================================
 
-const API_URL = "http://localhost:5000/api/dashboard";
-
+// const API_URL = "http://localhost:5000/api/dashboard";
+const API_URL = "https://pune-weather-reading.onrender.com/api/dashboard";
 // =====================================================
 // HELPERS
 // =====================================================
