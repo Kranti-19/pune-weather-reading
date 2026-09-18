@@ -43,7 +43,7 @@ import API from "../api/apiClient";// ==========================================
 // =====================================================
 
 // const API_URL = "http://localhost:5000/api/dashboard";
-const API_URL = "https://pune-weather-reading.onrender.com/api/dashboard";
+// const API_URL = "https://pune-weather-reading.onrender.com/api/dashboard";
 // =====================================================
 // HELPERS
 // =====================================================
