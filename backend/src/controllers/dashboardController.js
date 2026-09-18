@@ -163,12 +163,6 @@ const POLLUTANTS = [
 
 // =====================================================
 // GET DASHBOARD
-//
-// GET /api/dashboard
-// GET /api/dashboard?range=24h
-// GET /api/dashboard?range=7d
-// GET /api/dashboard?range=30d
-// GET /api/dashboard?area=Hadapsar
 // =====================================================
 
 const getDashboard = async (req, res) => {
@@ -198,7 +192,6 @@ const getDashboard = async (req, res) => {
 
         let stations = allStations || [];
 
-        // Optional area filter
         if (area) {
             const search = lower(area);
 
@@ -206,10 +199,8 @@ const getDashboard = async (req, res) => {
                 (station) => {
                     const name =
                         lower(station.name);
-
                     const ward =
                         lower(station.ward);
-
                     const zone =
                         lower(station.zone);
 
@@ -358,7 +349,6 @@ const getDashboard = async (req, res) => {
 
         // =================================================
         // 7. LATEST POLLUTANT READING
-        // PER STATION + PARAMETER
         // =================================================
 
         const latestReadingMap = {};
@@ -447,10 +437,6 @@ const getDashboard = async (req, res) => {
             throw weatherError;
         }
 
-        // =================================================
-        // 10. LATEST WEATHER PER SITE
-        // =================================================
-
         const latestWeatherMap = {};
 
         for (
@@ -472,7 +458,6 @@ const getDashboard = async (req, res) => {
                 latestWeatherMap
             );
 
-        // Match weather with selected area/stations
         if (area) {
             const search =
                 lower(area);
@@ -522,10 +507,6 @@ const getDashboard = async (req, res) => {
                     }
                 );
         }
-
-        // =================================================
-        // 11. WEATHER SUMMARY
-        // =================================================
 
         const average = (
             values
@@ -1301,7 +1282,6 @@ const getDashboard = async (req, res) => {
 
         const trendMap = {};
 
-        // AQI trend
         aqiRows
             .filter(
                 (row) =>
@@ -1387,7 +1367,6 @@ const getDashboard = async (req, res) => {
                 }
             );
 
-        // Pollutant trend
         readingRows
             .filter(
                 (row) =>
