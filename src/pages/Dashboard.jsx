@@ -16,8 +16,6 @@ import {
   Gauge,
   Navigation,
   RefreshCw,
-  CheckCircle2,
-  Maximize2,
   Activity,
   BarChart3,
   MapPin,
@@ -39,8 +37,6 @@ import {
 } from "recharts";
 
 import PuneMap from "../components/PuneMap";
-
-const API_URL = "https://pune-weather-reading.onrender.com/api/dashboard";
 
 // =====================================================
 // HELPERS
@@ -82,40 +78,6 @@ const AQI_SCALE = [
 const getChartColor = (value) => {
   const aqi = numberValue(value);
   return (AQI_SCALE.find((band) => aqi <= band.max) || AQI_SCALE[AQI_SCALE.length - 1]).color;
-};
-
-const getAlertClass = (severity) => {
-  const value = String(severity || "").toLowerCase();
-
-  if (value === "critical") {
-    return {
-      row: "bg-red-50/60 hover:bg-red-50 border-red-100",
-      badge: "bg-red-500 text-white",
-    };
-  }
-
-  if (value === "warning") {
-    return {
-      row: "bg-amber-50/60 hover:bg-amber-50 border-amber-100",
-      badge: "bg-amber-400 text-white",
-    };
-  }
-
-  return {
-    row: "bg-blue-50/60 hover:bg-blue-50 border-blue-100",
-    badge: "bg-blue-500 text-white",
-  };
-};
-
-const formatTime = (timestamp) => {
-  if (!timestamp) return "—";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
 };
 
 const wrapText = (text, maxCharacters = 12) => {
@@ -317,18 +279,11 @@ export default function Dashboard() {
   };
 
   const fetchDashboard = async (showRefresh = false) => {
-
-    const response = await API.get(`/dashboard?range=${range}`);
-    
     try {
       if (showRefresh) setRefreshing(true);
 
-      const response = await fetch(`${API_URL}?range=${range}`);
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Dashboard request failed.");
-      }
+      const response = await API.get(`/dashboard`, { params: { range } });
+      const result = response.data;
 
       if (result.status !== "success") {
         throw new Error(result.message || "Unable to load dashboard.");
@@ -338,7 +293,7 @@ export default function Dashboard() {
       setError("");
     } catch (err) {
       console.error("Dashboard error:", err);
-      setError(err.message || "Unable to connect to backend.");
+      setError(err?.response?.data?.message || err.message || "Unable to connect to backend.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -454,9 +409,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#eef3f7] text-slate-800 p-3.5 sm:p-6 font-sans">
       
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 px-1">
         <div>
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
@@ -477,7 +430,6 @@ export default function Dashboard() {
               >
                 Air Quality Command Portal
               </h1>
-              
             </div>
           </div>
         </div>
@@ -508,9 +460,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* =================================================
-          ROW 1 - KPI CARDS
-      ================================================= */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <button
           type="button"
@@ -555,7 +505,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-[10px] text-slate-400 mt-2 font-medium">
-            5 registered stations
+            {totalStations} registered stations
           </div>
         </button>
 
@@ -648,14 +598,10 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* =================================================
-          ROW 2 - MAJOR POLLUTANTS + WEATHER CAPSULE
-      ================================================= */}
+      {/* MAJOR POLLUTANTS + WEATHER */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.65fr_0.8fr] gap-3 mb-4">
-        {/* Left: Refined Major Pollutant Ribbon Cards */}
         <MajorPollutantGrid pollutants={pollutants} />
 
-        {/* Right: Ambient Weather Module */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col justify-between mb-4 lg:mb-0">
           <div>
             <div className="flex items-center justify-between gap-2 mb-3">
@@ -733,9 +679,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* =================================================
-          ROW 3 - MONITORING STATION MAP
-      ================================================= */}
+      {/* SPATIAL MAP */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -746,7 +690,6 @@ export default function Dashboard() {
               Pune Municipal GIS Spatial Monitoring
             </h2>
           </div>
-          
         </div>
 
         <div className="w-full h-[360px] sm:h-[400px] rounded-xl overflow-hidden border border-slate-200/80 shadow-inner">
@@ -763,22 +706,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* HISTORICAL AIR QUALITY CALENDAR */}
+      {/* CALENDAR & LEADERBOARD */}
       <AirQualityCalendar />
-
-      {/* RANKED WARD POLLUTION LEADERBOARD */}
       <WardPollutionLeaderboard stations={stations} />
 
       {/* AQI TREND & POLLUTANT LEVELS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-        {/* ... */}
-      </div>
-
-      {/* =================================================
-          ROW 5 - AQI TREND + POLLUTANT LEVELS
-      ================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-        {/* AQI TREND */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -855,7 +788,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* POLLUTANT LEVELS */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -902,19 +834,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* =================================================
-          ROW 6 - WARD + STATION AQI
-      ================================================= */}
+      {/* WARD & STATION-WISE AQI */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-        {/* WARD-WISE AQI */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
               <BarChart3 size={15} className="text-blue-600" />
             </div>
-            <h2 className="text-sm font-black text-slate-800">
-              Ward-wise AQI
-            </h2>
+            <h2 className="text-sm font-black text-slate-800">Ward-wise AQI</h2>
           </div>
 
           <div className="h-[240px]">
@@ -946,15 +873,12 @@ export default function Dashboard() {
           <AqiScaleLegend className="mt-2 pt-2.5 border-t border-slate-100" />
         </div>
 
-        {/* STATION-WISE AQI */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
               <BarChart3 size={15} className="text-blue-600" />
             </div>
-            <h2 className="text-sm font-black text-slate-800">
-              Station-wise AQI
-            </h2>
+            <h2 className="text-sm font-black text-slate-800">Station-wise AQI</h2>
           </div>
 
           <div className="h-[240px]">
@@ -987,9 +911,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* =================================================
-          FOOTER STATUS
-      ================================================= */}
+      {/* FOOTER STATUS */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1 text-[10px] font-semibold text-slate-400">
         <div className="flex items-center gap-5">
           <span className="flex items-center gap-1.5">
@@ -1010,7 +932,6 @@ export default function Dashboard() {
 
         <span>Live auto refresh: 10s</span>
       </div>
-
     </div>
   );
 }
@@ -1048,4 +969,3 @@ function EmptyChart() {
     </div>
   );
 }
-// >>>>>>> e2293ead0dfad6c46c7287defa42c377c06c8376
