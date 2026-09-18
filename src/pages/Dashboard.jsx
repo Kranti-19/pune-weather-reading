@@ -38,8 +38,7 @@ import {
 } from "recharts";
 
 import PuneMap from "../components/PuneMap";
-
-// =====================================================
+import API from "../api/apiClient";// =====================================================
 // API
 // =====================================================
 
@@ -665,99 +664,83 @@ export default function Dashboard() {
   // DASHBOARD API
   // ===================================================
 
-  const fetchDashboard = async (
-    showRefresh = false
-  ) => {
-    try {
-      if (showRefresh) {
-        setRefreshing(true);
-      }
-
-      const response = await fetch(
-        `${API_URL}?range=${range}`,
-        {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            Accept:
-              "application/json",
-          },
-        }
-      );
-
-      const result =
-        await response.json();
-
-      console.log(
-        "========== DASHBOARD API =========="
-      );
-
-      console.log(
-        "Full response:",
-        result
-      );
-
-      console.log(
-        "AQI:",
-        result?.data?.aqi
-      );
-
-      console.log(
-        "Stations:",
-        result?.data?.stations
-      );
-
-      console.log(
-        "Pollutants:",
-        result?.data?.pollutants
-      );
-
-      console.log(
-        "Wards:",
-        result?.data?.wards
-      );
-
-      console.log(
-        "==================================="
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            `Dashboard request failed: ${response.status}`
-        );
-      }
-
-      if (
-        result.status !== "success"
-      ) {
-        throw new Error(
-          result.message ||
-            "Unable to load dashboard."
-        );
-      }
-
-      setDashboard(
-        result.data || {}
-      );
-
-      setError("");
-    } catch (err) {
-      console.error(
-        "Dashboard error:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "Unable to connect to backend."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  const fetchDashboard = async (showRefresh = false) => {
+  try {
+    if (showRefresh) {
+      setRefreshing(true);
     }
-  };
 
+    const response = await API.get("/dashboard", {
+      params: {
+        range,
+      },
+    });
+
+    const result = response.data;
+
+    console.log(
+      "========== DASHBOARD API =========="
+    );
+
+    console.log(
+      "Full response:",
+      result
+    );
+
+    console.log(
+      "AQI:",
+      result?.data?.aqi
+    );
+
+    console.log(
+      "Stations:",
+      result?.data?.stations
+    );
+
+    console.log(
+      "Pollutants:",
+      result?.data?.pollutants
+    );
+
+    console.log(
+      "Wards:",
+      result?.data?.wards
+    );
+
+    console.log(
+      "==================================="
+    );
+
+    if (result.status !== "success") {
+      throw new Error(
+        result.message ||
+          "Unable to load dashboard."
+      );
+    }
+
+    setDashboard(
+      result.data || {}
+    );
+
+    setError("");
+
+  } catch (err) {
+    console.error(
+      "Dashboard error:",
+      err
+    );
+
+    setError(
+      err?.response?.data?.message ||
+      err.message ||
+      "Unable to connect to backend."
+    );
+
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
   // ===================================================
   // AUTO REFRESH DASHBOARD
   // ===================================================
