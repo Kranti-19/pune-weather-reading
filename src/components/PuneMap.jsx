@@ -224,22 +224,7 @@ export default function PuneMap({
           HEADER
       =================================================== */}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-
-        <div>
-
-          <h2 className="text-base font-bold text-slate-900">
-            Pune Municipal GIS Spatial Monitoring
-          </h2>
-
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-
-          
-        </div>
-
-      </div>
+      
 
 
       <div className="h-[420px] rounded-xl overflow-hidden border border-slate-200 relative z-0">

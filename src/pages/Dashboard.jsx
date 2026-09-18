@@ -746,7 +746,7 @@ export default function Dashboard() {
               Pune Municipal GIS Spatial Monitoring
             </h2>
           </div>
-          <Maximize2 size={15} className="text-slate-400 hover:text-slate-600 cursor-pointer" />
+          
         </div>
 
         <div className="w-full h-[360px] sm:h-[400px] rounded-xl overflow-hidden border border-slate-200/80 shadow-inner">
