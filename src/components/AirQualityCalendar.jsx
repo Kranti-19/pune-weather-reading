@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import API from "../api/apiClient";
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,6 +8,7 @@ import {
   Wind,
   TrendingUp,
   MapPin,
+  Loader2,
 } from "lucide-react";
 
 // =====================================================
@@ -149,73 +151,14 @@ const getHeatmapStyle = (aqi) => {
 };
 
 // =====================================================
-// DYNAMIC DATASET (Updated through September 2026)
-// =====================================================
-
-const HISTORICAL_DATA_PUNE = {
-  "2026-8": {
-    1: { aqi: 62, dominant: "PM2.5" },
-    2: { aqi: 58, dominant: "PM10" },
-    3: { aqi: 54, dominant: "PM10" },
-    4: { aqi: 66, dominant: "PM2.5" },
-    5: { aqi: 60, dominant: "PM2.5" },
-    6: { aqi: 64, dominant: "NO₂" },
-    7: { aqi: 61, dominant: "PM2.5" },
-    8: { aqi: 59, dominant: "PM10" },
-    9: { aqi: 57, dominant: "PM10" },
-    10: { aqi: 65, dominant: "PM2.5" },
-    11: { aqi: 61, dominant: "PM2.5" },
-    12: { aqi: 56, dominant: "PM10" },
-    13: { aqi: 56, dominant: "PM10" },
-    14: { aqi: 56, dominant: "PM2.5" },
-    15: { aqi: 58, dominant: "PM2.5" },
-    16: { aqi: 54, dominant: "PM10" },
-    17: { aqi: 58, dominant: "PM10" },
-    18: { aqi: 66, dominant: "PM2.5" },
-    19: { aqi: 64, dominant: "PM2.5" },
-    20: { aqi: 62, dominant: "NO₂" },
-    21: { aqi: 60, dominant: "PM2.5" },
-    22: { aqi: 60, dominant: "PM10" },
-    23: { aqi: 65, dominant: "PM2.5" },
-    24: { aqi: 71, dominant: "PM2.5" },
-    25: { aqi: 71, dominant: "PM2.5" },
-    26: { aqi: 61, dominant: "PM10" },
-    27: { aqi: 57, dominant: "PM10" },
-    28: { aqi: 59, dominant: "PM2.5" },
-    29: { aqi: 55, dominant: "PM2.5" },
-    30: { aqi: 57, dominant: "PM10" },
-    31: { aqi: 52, dominant: "PM2.5" },
-  },
-
-  "2026-9": {
-    1: { aqi: 53, dominant: "PM2.5" },
-    2: { aqi: 54, dominant: "PM10" },
-    3: { aqi: 57, dominant: "PM10" },
-    4: { aqi: 65, dominant: "PM2.5" },
-    5: { aqi: 65, dominant: "PM2.5" },
-    6: { aqi: 63, dominant: "PM10" },
-    7: { aqi: 67, dominant: "PM2.5" },
-    8: { aqi: 68, dominant: "NO₂" },
-    9: { aqi: 73, dominant: "PM2.5" },
-    10: { aqi: 70, dominant: "PM2.5" },
-    11: { aqi: 66, dominant: "PM10" },
-    12: { aqi: 68, dominant: "PM2.5" },
-    13: { aqi: 64, dominant: "PM2.5" },
-    14: { aqi: 69, dominant: "PM10" },
-    15: { aqi: 72, dominant: "PM2.5" },
-    16: { aqi: 68, dominant: "PM2.5" },
-    17: { aqi: 65, dominant: "PM10" },
-  },
-};
-
-// =====================================================
 // COMPONENT
 // =====================================================
 
 export default function AirQualityCalendar() {
-  // Use live current date instead of a hardcoded mock date
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
+  const [monthlyData, setMonthlyData] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -224,8 +167,26 @@ export default function AirQualityCalendar() {
     month: "long",
   });
 
-  const monthKey = `${year}-${month + 1}`;
   const todayDate = new Date();
+
+  // Fetch monthly AQI logs dynamically from the backend API
+  useEffect(() => {
+    const fetchMonthlyData = async () => {
+      try {
+        setLoading(true);
+        const response = await API.get(`/history/monthly?year=${year}&month=${month + 1}`);
+        if (response.data?.status === "success") {
+          setMonthlyData(response.data.data || {});
+        }
+      } catch (err) {
+        console.error("Failed to load monthly calendar history:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMonthlyData();
+  }, [year, month]);
 
   // =====================================================
   // CALENDAR DATA
@@ -239,7 +200,6 @@ export default function AirQualityCalendar() {
   } = useMemo(() => {
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-    const monthDataset = HISTORICAL_DATA_PUNE[monthKey] || {};
 
     const cells = [];
     let sum = 0;
@@ -255,31 +215,31 @@ export default function AirQualityCalendar() {
     }
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
-      const entry = monthDataset[day];
+      const entry = monthlyData[day];
 
-      // Dynamically calculate if this cell represents today's live date
       const isToday =
         day === todayDate.getDate() &&
         month === todayDate.getMonth() &&
         year === todayDate.getFullYear();
 
-      if (entry) {
-        sum += entry.aqi;
+      if (entry && Number.isFinite(Number(entry.aqi))) {
+        const aqiValue = Number(entry.aqi);
+        sum += aqiValue;
         count++;
 
-        if (!minEntry || entry.aqi < minEntry.aqi) {
-          minEntry = { day, ...entry };
+        if (!minEntry || aqiValue < minEntry.aqi) {
+          minEntry = { day, aqi: aqiValue, dominant: entry.dominant || "PM2.5" };
         }
 
-        if (!maxEntry || entry.aqi > maxEntry.aqi) {
-          maxEntry = { day, ...entry };
+        if (!maxEntry || aqiValue > maxEntry.aqi) {
+          maxEntry = { day, aqi: aqiValue, dominant: entry.dominant || "PM2.5" };
         }
       }
 
       cells.push({
         empty: false,
         day,
-        aqi: entry?.aqi ?? null,
+        aqi: entry?.aqi !== undefined && entry?.aqi !== null ? Number(entry.aqi) : null,
         dominant: entry?.dominant ?? "—",
         isToday,
       });
@@ -294,20 +254,7 @@ export default function AirQualityCalendar() {
       bestDay: minEntry,
       worstDay: maxEntry,
     };
-  }, [year, month, monthKey, todayDate]);
-
-  // =====================================================
-  // SELECT DEFAULT DAY
-  // =====================================================
-
-  const activeDay =
-    selectedDay ||
-    calendarCells.find((day) => day.isToday) ||
-    calendarCells.find((day) => day.aqi !== null);
-
-  const activeMeta = activeDay
-    ? getAqiMeta(activeDay.aqi)
-    : getAqiMeta(null);
+  }, [year, month, monthlyData, todayDate]);
 
   // =====================================================
   // NAVIGATION
@@ -400,7 +347,13 @@ export default function AirQualityCalendar() {
       </div>
 
       {/* CALENDAR */}
-      <div className="px-4 py-4 sm:px-6 sm:py-5">
+      <div className="relative px-4 py-4 sm:px-6 sm:py-5">
+        {loading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          </div>
+        )}
+
         <div className="mb-3 grid grid-cols-7">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
