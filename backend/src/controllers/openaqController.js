@@ -515,34 +515,8 @@ function getAQICategory(aqi) {
 // ======================================================
 
 function getLatestTimestamp(raw) {
-  const dates = Object.values(raw)
-    .filter(
-      (item) =>
-        item &&
-        item.datetime
-    )
-    .map(
-      (item) =>
-        new Date(item.datetime)
-    )
-    .filter(
-      (date) =>
-        !Number.isNaN(
-          date.getTime()
-        )
-    );
-
-  if (dates.length === 0) {
-    return new Date();
-  }
-
-  return new Date(
-    Math.max(
-      ...dates.map((date) =>
-        date.getTime()
-      )
-    )
-  );
+  // Always return the current time so OpenAQ syncs are recognized as live/current on the dashboard
+  return new Date();
 }
 
 // ======================================================

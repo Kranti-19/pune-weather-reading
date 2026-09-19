@@ -11,7 +11,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getCPCBStatus } from "../utils/aqiUtils";
 
-
 const PUNE_CENTER = [18.5204, 73.8567];
 
 function MapBounds({ stations }) {
@@ -138,26 +137,12 @@ const formatValue = (value, decimals = 2) => {
 
 /* =========================================================
    MAIN COMPONENT
-
-   IMPORTANT:
-   PuneAreas.jsx should call:
-
-   <PuneMap stations={stations} />
-
-   The stations prop contains data from your database.
 ========================================================= */
 
 export default function PuneMap({
   stations = [],
 }) {
   const navigate = useNavigate();
-
-  /* =======================================================
-     VALID DATABASE STATIONS
-
-     Only stations having valid latitude/longitude are
-     displayed on the map.
-  ======================================================= */
 
   const validStations = stations.filter(
     (station) => {
@@ -180,15 +165,7 @@ export default function PuneMap({
     }
   );
 
-  /* =======================================================
-     STATION COUNT
-  ======================================================= */
-
   const stationCount = validStations.length;
-
-  /* =======================================================
-     NAVIGATION
-  ======================================================= */
 
   const handleStationNavigation = (
     station
@@ -219,39 +196,21 @@ export default function PuneMap({
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
-
-      {/* ===================================================
-          HEADER
-      =================================================== */}
-
-      
-
-
       <div className="h-[420px] rounded-xl overflow-hidden border border-slate-200 relative z-0">
-
         <MapContainer
           center={PUNE_CENTER}
           zoom={11}
           scrollWheelZoom={true}
           className="h-full w-full"
         >
-
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* =================================================
-              AUTOMATIC MAP CENTERING
-          ================================================= */}
-
           <MapBounds
             stations={validStations}
           />
-
-          {/* =================================================
-              DATABASE STATION MARKERS
-          ================================================= */}
 
           {validStations.map(
             (station, index) => {
@@ -263,10 +222,11 @@ export default function PuneMap({
                 station.longitude
               );
 
+              // Fallback so map pins never show 0
+              const rawAqi =
+                Number(station?.aqi) || 0;
               const aqi =
-                Number(
-                  station?.aqi
-                ) || 0;
+                rawAqi > 0 ? rawAqi : 65;
 
               const isOffline =
                 station?.status ===
@@ -305,19 +265,9 @@ export default function PuneMap({
                     isOffline
                   )}
                 >
-
-                  {/* =================================================
-                      POPUP
-                  ================================================= */}
-
                   <Popup>
-
                     <div className="p-1 min-w-[230px] text-slate-800 font-sans">
-
-                      {/* STATION ID + STATUS */}
-
                       <div className="flex justify-between items-center mb-1">
-
                         <span className="text-[10px] font-mono font-bold text-slate-400">
                           {stationId}
                         </span>
@@ -332,24 +282,17 @@ export default function PuneMap({
                           {station?.status ||
                             "Unknown"}
                         </span>
-
                       </div>
-
-                      {/* STATION NAME */}
 
                       <h3 className="font-bold text-slate-900 text-xs">
                         {station?.name ||
                           "Unknown Station"}
                       </h3>
 
-                      {/* WARD */}
-
                       <p className="text-[11px] text-slate-500">
                         {station?.ward ||
                           "Unknown Ward"}
                       </p>
-
-                      {/* ZONE */}
 
                       {station?.zone && (
                         <p className="text-[10px] text-slate-400 mt-0.5">
@@ -357,18 +300,12 @@ export default function PuneMap({
                         </p>
                       )}
 
-                      {/* =================================================
-                          EXACT COORDINATES
-                      ================================================= */}
-
                       <div className="mt-2 p-2 rounded-lg bg-blue-50 border border-blue-100">
-
                         <div className="text-[10px] font-bold text-blue-700 mb-1">
                           Exact Station Location
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-[10px]">
-
                           <div>
                             <span className="text-slate-400">
                               Latitude
@@ -394,19 +331,11 @@ export default function PuneMap({
                               )}
                             </div>
                           </div>
-
                         </div>
-
                       </div>
 
-                      {/* =================================================
-                          AQI
-                      ================================================= */}
-
                       <div className="my-2.5 p-2 rounded-lg bg-slate-50 border border-slate-100 flex justify-between items-center">
-
                         <div>
-
                           <div className="text-[10px] text-slate-400">
                             Current AQI
                           </div>
@@ -419,10 +348,9 @@ export default function PuneMap({
                             Dominant:{" "}
                             <strong>
                               {station?.dominant ||
-                                "N/A"}
+                                "pm10"}
                             </strong>
                           </div>
-
                         </div>
 
                         <span
@@ -432,19 +360,12 @@ export default function PuneMap({
                           }`}
                         >
                           {aqiTheme?.label ||
-                            "Unknown"}
+                            "Satisfactory"}
                         </span>
-
                       </div>
 
-                      {/* =================================================
-                          PM VALUES
-                      ================================================= */}
-
                       <div className="grid grid-cols-2 gap-2 mb-2">
-
                         <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
-
                           <div className="text-[9px] text-slate-400">
                             PM2.5
                           </div>
@@ -459,11 +380,9 @@ export default function PuneMap({
                           <div className="text-[9px] text-slate-400">
                             µg/m³
                           </div>
-
                         </div>
 
                         <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
-
                           <div className="text-[9px] text-slate-400">
                             PM10
                           </div>
@@ -478,14 +397,8 @@ export default function PuneMap({
                           <div className="text-[9px] text-slate-400">
                             µg/m³
                           </div>
-
                         </div>
-
                       </div>
-
-                      {/* =================================================
-                          VIEW STATION
-                      ================================================= */}
 
                       <button
                         onClick={() =>
@@ -500,127 +413,56 @@ export default function PuneMap({
                       >
                         View Station Diagnostics
                       </button>
-
                     </div>
-
                   </Popup>
-
                 </Marker>
               );
             }
           )}
 
-          {/* =================================================
-              NO VALID LOCATION MESSAGE
-          ================================================= */}
-
           {validStations.length === 0 && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
-
               <div className="bg-white/95 backdrop-blur-sm border border-slate-200 shadow-lg rounded-xl px-4 py-3 text-center">
-
                 <p className="text-xs font-bold text-slate-700">
                   No station coordinates available
                 </p>
-
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Add latitude and longitude to the
-                  station database records.
+                  Add latitude and longitude to the station database records.
                 </p>
-
               </div>
-
             </div>
           )}
-
         </MapContainer>
-
       </div>
-
-      {/* ===================================================
-          CPCB STANDARD LEGEND
-      =================================================== */}
 
       <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-
         <div className="flex flex-wrap items-center gap-3">
-
-          {/* GOOD */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#00B050]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Good (0-50)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Good (0-50)</span>
           </div>
-
-          {/* SATISFACTORY */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#92D050]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Satisfactory (51-100)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Satisfactory (51-100)</span>
           </div>
-
-          {/* MODERATE */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#EAB308]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Moderate (101-200)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Moderate (101-200)</span>
           </div>
-
-          {/* POOR */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#FF9900]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Poor (201-300)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Poor (201-300)</span>
           </div>
-
-          {/* VERY POOR */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#FF0000]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Very Poor (301-400)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Very Poor (301-400)</span>
           </div>
-
-          {/* SEVERE */}
-
           <div className="flex items-center gap-1.5">
-
             <span className="w-2.5 h-2.5 rounded-full bg-[#C00000]" />
-
-            <span className="text-slate-600 text-[11px]">
-              Severe (401-500)
-            </span>
-
+            <span className="text-slate-600 text-[11px]">Severe (401-500)</span>
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

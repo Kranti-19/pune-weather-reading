@@ -707,8 +707,7 @@ export default function Dashboard() {
       </div>
 
       {/* CALENDAR & LEADERBOARD */}
-      <AirQualityCalendar />
-      <WardPollutionLeaderboard stations={stations} />
+      <AirQualityCalendar trends={dashboard?.trends} />
 
       
 

@@ -13,76 +13,6 @@ import {
 // AQI CATEGORY SYSTEM
 // =====================================================
 
-const getAqiMeta = (aqi) => {
-  if (aqi === null || aqi === undefined) {
-    return {
-      label: "No data",
-      color: "#cbd5e1",
-      soft: "#f8fafc",
-      border: "#e2e8f0",
-      text: "#94a3b8",
-    };
-  }
-
-  if (aqi <= 50) {
-    return {
-      label: "Good",
-      color: "#22c55e",
-      soft: "#f0fdf4",
-      border: "#bbf7d0",
-      text: "#166534",
-    };
-  }
-
-  if (aqi <= 100) {
-    return {
-      label: "Satisfactory",
-      color: "#84cc16",
-      soft: "#f7fee7",
-      border: "#d9f99d",
-      text: "#3f6212",
-    };
-  }
-
-  if (aqi <= 200) {
-    return {
-      label: "Moderate",
-      color: "#f59e0b",
-      soft: "#fffbeb",
-      border: "#fde68a",
-      text: "#92400e",
-    };
-  }
-
-  if (aqi <= 300) {
-    return {
-      label: "Poor",
-      color: "#f97316",
-      soft: "#fff7ed",
-      border: "#fed7aa",
-      text: "#9a3412",
-    };
-  }
-
-  if (aqi <= 400) {
-    return {
-      label: "Very Poor",
-      color: "#f43f5e",
-      soft: "#fff1f2",
-      border: "#fecdd3",
-      text: "#9f1239",
-    };
-  }
-
-  return {
-    label: "Severe",
-    color: "#991b1b",
-    soft: "#fef2f2",
-    border: "#fecaca",
-    text: "#7f1d1d",
-  };
-};
-
 const getHeatmapStyle = (aqi) => {
   if (aqi === null || aqi === undefined) {
     return {
@@ -149,7 +79,7 @@ const getHeatmapStyle = (aqi) => {
 };
 
 // =====================================================
-// HISTORICAL DATASET WITH DYNAMIC TODAY INJECTION
+// HISTORICAL DATASET FALLBACK
 // =====================================================
 
 const HISTORICAL_DATA_PUNE = {
@@ -205,7 +135,6 @@ const HISTORICAL_DATA_PUNE = {
     15: { aqi: 72, dominant: "PM2.5" },
     16: { aqi: 68, dominant: "PM2.5" },
     17: { aqi: 65, dominant: "PM10" },
-    18: { aqi: 64, dominant: "PM2.5" }, // Automatically updated for today
   },
 };
 
@@ -213,7 +142,7 @@ const HISTORICAL_DATA_PUNE = {
 // COMPONENT
 // =====================================================
 
-export default function AirQualityCalendar({ currentAqi, dominantPollutant }) {
+export default function AirQualityCalendar({ trends = [] }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -228,7 +157,7 @@ export default function AirQualityCalendar({ currentAqi, dominantPollutant }) {
   const todayDate = new Date();
 
   // =====================================================
-  // CALENDAR DATA
+  // CALENDAR DATA (MERGED REAL-TIME + HISTORICAL)
   // =====================================================
 
   const {
@@ -239,19 +168,22 @@ export default function AirQualityCalendar({ currentAqi, dominantPollutant }) {
   } = useMemo(() => {
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Start with historical fallback data for the month
     const monthDataset = { ...(HISTORICAL_DATA_PUNE[monthKey] || {}) };
 
-    // Dynamically inject today's live dashboard AQI if viewing the current month
-    const isCurrentMonthView =
-      month === todayDate.getMonth() && year === todayDate.getFullYear();
-    
-    if (isCurrentMonthView && currentAqi) {
-      const todayNum = todayDate.getDate();
-      monthDataset[todayNum] = {
-        aqi: Number(currentAqi),
-        dominant: dominantPollutant || "PM2.5",
-      };
-    }
+    // Overlay real-time database trends data onto the dataset
+    (trends || []).forEach((item) => {
+      if (!item.timestamp) return;
+      const d = new Date(item.timestamp);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const dayNum = d.getDate();
+        monthDataset[dayNum] = {
+          aqi: item.aqi ? Math.round(item.aqi) : monthDataset[dayNum]?.aqi || null,
+          dominant: "PM2.5",
+        };
+      }
+    });
 
     const cells = [];
     let sum = 0;
@@ -274,7 +206,7 @@ export default function AirQualityCalendar({ currentAqi, dominantPollutant }) {
         month === todayDate.getMonth() &&
         year === todayDate.getFullYear();
 
-      if (entry) {
+      if (entry && entry.aqi !== null) {
         sum += entry.aqi;
         count++;
 
@@ -305,7 +237,7 @@ export default function AirQualityCalendar({ currentAqi, dominantPollutant }) {
       bestDay: minEntry,
       worstDay: maxEntry,
     };
-  }, [year, month, monthKey, todayDate, currentAqi, dominantPollutant]);
+  }, [year, month, monthKey, trends, todayDate]);
 
   // =====================================================
   // NAVIGATION

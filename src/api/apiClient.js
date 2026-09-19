@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Pull the production base URL from Vite environment variables with Render fallback
+// Pull from environment or default directly to local backend for testing
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  'https://pune-weather-reading.onrender.com';
+  'http://localhost:5000';
 
 const API = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -13,7 +13,6 @@ const API = axios.create({
   },
 });
 
-// Automatically attach JWT auth token if available in localStorage
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {

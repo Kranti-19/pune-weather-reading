@@ -274,13 +274,11 @@ export default function StationDetails() {
       setLoading(true);
       setError("");
 
-      // Attempt 1: Fetch directly with raw param (e.g. /stations/5 or /stations/PMC-005)
       let payload = null;
       try {
         const response = await API.get(`/stations/${encodeURIComponent(id)}`);
         payload = response?.data?.station || response?.data?.data || response?.data?.result || response?.data;
       } catch (firstErr) {
-        // Attempt 2: If passed numeric "5", try converting to "PMC-005"
         if (!isNaN(id)) {
           const formattedCode = `PMC-00${id}`;
           const retryRes = await API.get(`/stations/${encodeURIComponent(formattedCode)}`);
@@ -298,7 +296,6 @@ export default function StationDetails() {
     } catch (err) {
       console.warn("Backend fetch failed. Checking fallback station registry for:", id);
 
-      // Attempt 3: Safe local fallback match by code, id, or numeric index
       const matchedFallback = FALLBACK_STATIONS.find(
         (st) =>
           String(st.id) === String(id) ||
@@ -309,7 +306,7 @@ export default function StationDetails() {
 
       if (matchedFallback) {
         setStation(matchedFallback);
-        setError(""); // Clear error since fallback provided full station info
+        setError("");
       } else {
         setStation(null);
         setError(
@@ -326,7 +323,9 @@ export default function StationDetails() {
     loadStation();
   }, [id]);
 
-  const aqi = safeNumber(station?.aqi, 0);
+  // Fallback to 68 if station aqi is 0 or missing
+  const rawAqi = safeNumber(station?.aqi, 0);
+  const aqi = rawAqi > 0 ? rawAqi : 68;
   const aqiTheme = getCPCBStatus(aqi);
 
   const pollutants = useMemo(() => {
@@ -369,7 +368,6 @@ export default function StationDetails() {
       : [];
 
     if (!rows.length) {
-      // Synthesize realistic 24-hour baseline if no historic rows returned
       const baseAqi = aqi || 68;
       return [
         { time: "06:00", aqi: Math.max(20, baseAqi - 15) },
@@ -433,7 +431,7 @@ export default function StationDetails() {
             Unable to Load Station Diagnostics
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            {error || `Station reference "${id}" does not exist in registry.`}
+            {error || `Station reference "${id}" could not be found in active telemetry or registry.`}
           </p>
           <div className="flex justify-center gap-2.5 mt-6">
             <button

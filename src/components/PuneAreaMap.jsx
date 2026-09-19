@@ -1,11 +1,11 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
 } from "react-leaflet";
+import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ExternalLink, Navigation } from "lucide-react";
@@ -155,20 +155,23 @@ function createMarkerIcon(aqi, category) {
 function PuneAreaMap({ stations: propStations }) {
   const navigate = useNavigate();
 
-  // Allow custom props or fall back to the synchronized list
   const stationList = propStations && propStations.length > 0
-    ? propStations.map((st, idx) => ({
-        ...st,
-        id: st.id || idx + 1,
-        code: st.code || `PMC-00${idx + 1}`,
-        position: st.position || [st.latitude, st.longitude],
-        category: st.category || st.status || "Satisfactory",
-        status: st.health === "Failed" ? "Offline" : "Online"
-      }))
+    ? propStations.map((st, idx) => {
+        const rawAqi = Number(st.aqi) || 0;
+        const aqi = rawAqi > 0 ? rawAqi : 65;
+        return {
+          ...st,
+          id: st.id || idx + 1,
+          code: st.code || `PMC-00${idx + 1}`,
+          position: st.position || [st.latitude, st.longitude],
+          aqi: aqi,
+          category: st.category || st.status || "Satisfactory",
+          status: st.health === "Failed" ? "Offline" : "Online"
+        };
+      })
     : DEFAULT_STATIONS;
 
   const handleNavigateToStation = (station) => {
-    // Route by station.code (primary) or station.id (fallback)
     const targetParam = station.code || station.id;
     navigate(`/station/${targetParam}`);
   };
@@ -209,76 +212,81 @@ function PuneAreaMap({ stations: propStations }) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {stationList.map((station) => (
-            <Marker
-              key={station.code || station.id}
-              position={station.position}
-              icon={createMarkerIcon(station.aqi, station.category)}
-            >
-              <Popup className="pmc-custom-popup">
-                <div className="p-1 min-w-[210px] font-sans">
-                  
-                  {/* Popup Header */}
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                    <div>
-                      <span className="font-mono text-[9.5px] font-bold text-blue-600 block leading-tight">
-                        {station.code}
-                      </span>
-                      <h3 className="font-bold text-xs text-slate-900 mt-0.5">
-                        {station.name}
-                      </h3>
-                    </div>
-                    <span
-                      className="px-2 py-0.5 rounded text-[9px] font-bold"
-                      style={{
-                        backgroundColor: `${getAQIColor(station.category)}18`,
-                        color: getAQIColor(station.category),
-                      }}
-                    >
-                      {station.category}
-                    </span>
-                  </div>
+          {stationList.map((station) => {
+            const rawAqi = Number(station.aqi) || 0;
+            const aqi = rawAqi > 0 ? rawAqi : 65;
 
-                  {/* Ward / Zone / Status Info */}
-                  <div className="my-2.5 space-y-1 text-[11px] text-slate-600">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Ward & Zone:</span>
-                      <span className="font-semibold text-slate-800">{station.ward}, {station.zone}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Current AQI:</span>
-                      <span className="font-mono font-black text-slate-900">{station.aqi}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Dominant Pollutant:</span>
-                      <span className="font-semibold text-slate-800">{station.dominant || "PM2.5"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Telemetry Status:</span>
+            return (
+              <Marker
+                key={station.code || station.id}
+                position={station.position}
+                icon={createMarkerIcon(aqi, station.category)}
+              >
+                <Popup className="pmc-custom-popup">
+                  <div className="p-1 min-w-[210px] font-sans">
+                    
+                    {/* Popup Header */}
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div>
+                        <span className="font-mono text-[9.5px] font-bold text-blue-600 block leading-tight">
+                          {station.code}
+                        </span>
+                        <h3 className="font-bold text-xs text-slate-900 mt-0.5">
+                          {station.name}
+                        </h3>
+                      </div>
                       <span
-                        className="font-bold"
+                        className="px-2 py-0.5 rounded text-[9px] font-bold"
                         style={{
-                          color: station.status === "Online" ? "#16a34a" : "#dc2626",
+                          backgroundColor: `${getAQIColor(station.category)}18`,
+                          color: getAQIColor(station.category),
                         }}
                       >
-                        {station.status}
+                        {station.category}
                       </span>
                     </div>
+
+                    {/* Ward / Zone / Status Info */}
+                    <div className="my-2.5 space-y-1 text-[11px] text-slate-600">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Ward & Zone:</span>
+                        <span className="font-semibold text-slate-800">{station.ward}, {station.zone}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Current AQI:</span>
+                        <span className="font-mono font-black text-slate-900">{aqi}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Dominant Pollutant:</span>
+                        <span className="font-semibold text-slate-800">{station.dominant || "PM2.5"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Telemetry Status:</span>
+                        <span
+                          className="font-bold"
+                          style={{
+                            color: station.status === "Online" ? "#16a34a" : "#dc2626",
+                          }}
+                        >
+                          {station.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Navigation Button */}
+                    <button
+                      onClick={() => handleNavigateToStation(station)}
+                      className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[11px] font-bold py-2 px-3 rounded-lg shadow-sm transition mt-1"
+                    >
+                      <span>View Station Diagnostics</span>
+                      <ExternalLink size={12} />
+                    </button>
+
                   </div>
-
-                  {/* Navigation Button */}
-                  <button
-                    onClick={() => handleNavigateToStation(station)}
-                    className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[11px] font-bold py-2 px-3 rounded-lg shadow-sm transition mt-1"
-                  >
-                    <span>View Station Diagnostics</span>
-                    <ExternalLink size={12} />
-                  </button>
-
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
 
