@@ -1010,10 +1010,8 @@ const getDashboard = async (req, res) => {
                     const stationId =
                         station.station_id;
 
-                    const aqiRow =
-                        latestAqiByStation[
-                            stationId
-                        ];
+                    const aqiRow = latestAqiByStation[stationId];
+console.log(`Station ${stationId} (${station.name}) mapped AQI row:`, aqiRow);
 
                     const stationReadings =
                         readingRows.filter(
