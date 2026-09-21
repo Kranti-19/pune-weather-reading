@@ -474,22 +474,30 @@ const generatePollutantReadings = async () => {
 
                 readings.push({
 
-                    station_id:
-                        stationId,
+    station_id:
+        stationId,
 
-                    sensor_id:
-                        sensor.sensor_id,
+    sensor_id:
+        sensor.sensor_id,
 
-                    timestamp,
+    timestamp,
 
-                    parameter:
-                        pollutant.parameter,
+    parameter:
+        pollutant.parameter,
 
-                    value,
+    value,
 
-                    unit:
-                        pollutant.unit,
-                });
+    unit:
+        pollutant.unit,
+
+    // Required by the reading table
+    quality_flag:
+        "Simulated",
+
+    // Current simulated measurement
+    data_status:
+        "Current",
+});
             }
         }
 
