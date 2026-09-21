@@ -90,6 +90,8 @@ app.use("/api/air-quality/openaq", openaqRoutes);
 const openaqLocationRoutes = require("./routes/openaqLocationRoutes");
 app.use("/api/air-quality/openaq", openaqLocationRoutes);
 
+
+
 // Root Route
 app.get("/", (req, res) => {
   res.json({

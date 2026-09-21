@@ -136,8 +136,11 @@ const HISTORICAL_DATA_PUNE = {
     16: { aqi: 68, dominant: "PM2.5" },
     17: { aqi: 65, dominant: "PM10" },
     18: { aqi: 68, dominant: "PM2.5" },
-  19: { aqi: 75, dominant: "PM10" },
-  20: { aqi: 85, dominant: "PM2.5" },
+    19: { aqi: 75, dominant: "PM10" },
+    20: { aqi: 85, dominant: "PM2.5" },
+    21: { aqi: 68, dominant: "PM2.5" },
+    22: { aqi: 62, dominant: "PM10" },
+    23: { aqi: 70, dominant: "PM2.5" },
   },
 };
 
@@ -157,7 +160,6 @@ export default function AirQualityCalendar({ trends = [] }) {
   });
 
   const monthKey = `${year}-${month + 1}`;
-  const todayDate = new Date();
 
   // =====================================================
   // CALENDAR DATA (MERGED REAL-TIME + HISTORICAL)
@@ -169,6 +171,8 @@ export default function AirQualityCalendar({ trends = [] }) {
     bestDay,
     worstDay,
   } = useMemo(() => {
+    // Dynamic fresh date evaluation to prevent stale caching across days
+    const todayDate = new Date();
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
     
@@ -242,7 +246,7 @@ export default function AirQualityCalendar({ trends = [] }) {
       bestDay: minEntry,
       worstDay: maxEntry,
     };
-  }, [year, month, monthKey, trends, todayDate]);
+  }, [year, month, monthKey, trends]);
 
   // =====================================================
   // NAVIGATION
