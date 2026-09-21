@@ -139,8 +139,6 @@ const HISTORICAL_DATA_PUNE = {
     19: { aqi: 75, dominant: "PM10" },
     20: { aqi: 85, dominant: "PM2.5" },
     21: { aqi: 68, dominant: "PM2.5" },
-    22: { aqi: 62, dominant: "PM10" },
-    23: { aqi: 70, dominant: "PM2.5" },
   },
 };
 
