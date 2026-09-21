@@ -6,20 +6,101 @@ const supabase = require("../config/supabase");
 
 const HEARTBEAT_INTERVAL = 30 * 1000;
 
-// Default battery for a newly added simulated device
+// Generate new pollutant readings every 60 seconds
+const READING_INTERVAL = 60 * 1000;
+
+// Battery configuration
 const DEFAULT_BATTERY = 75;
-
-// Battery starts charging when it reaches this level
 const LOW_BATTERY_LIMIT = 30;
-
-// Amount consumed every heartbeat
 const BATTERY_CONSUMPTION = 0.01;
-
-// Amount charged every heartbeat when battery is low
 const BATTERY_CHARGE = 0.20;
-
-// Maximum simulated battery
 const MAX_BATTERY = 100;
+
+
+// =========================================================
+// POLLUTANT CONFIGURATION
+// =========================================================
+
+const POLLUTANTS = [
+    {
+        parameter: "PM2.5",
+        unit: "µg/m³",
+        min: 8,
+        max: 95,
+        decimals: 2,
+    },
+
+    {
+        parameter: "PM10",
+        unit: "µg/m³",
+        min: 20,
+        max: 120,
+        decimals: 2,
+    },
+
+    {
+        parameter: "NO2",
+        unit: "µg/m³",
+        min: 8,
+        max: 70,
+        decimals: 2,
+    },
+
+    {
+        parameter: "SO2",
+        unit: "µg/m³",
+        min: 2,
+        max: 40,
+        decimals: 2,
+    },
+
+    {
+        parameter: "CO",
+        unit: "mg/m³",
+        min: 0.3,
+        max: 1.9,
+        decimals: 2,
+    },
+
+    {
+        parameter: "O3",
+        unit: "µg/m³",
+        min: 10,
+        max: 90,
+        decimals: 2,
+    },
+
+    {
+        parameter: "NH3",
+        unit: "µg/m³",
+        min: 5,
+        max: 80,
+        decimals: 2,
+    },
+
+    {
+        parameter: "Pb",
+        unit: "µg/m³",
+        min: 0.05,
+        max: 0.85,
+        decimals: 3,
+    },
+];
+
+
+// =========================================================
+// RANDOM VALUE GENERATOR
+// =========================================================
+
+const randomValue = (min, max, decimals = 2) => {
+
+    const value =
+        Math.random() * (max - min) + min;
+
+    return Number(
+        value.toFixed(decimals)
+    );
+};
 
 
 // =========================================================
@@ -36,8 +117,10 @@ const getSimulatedDevices = async () => {
         .select(`
             device_id,
             gateway_id,
+            station_id,
             battery_level,
             network_status,
+            status,
             is_simulated
         `)
         .eq("is_simulated", true);
@@ -51,6 +134,37 @@ const getSimulatedDevices = async () => {
 
 
 // =========================================================
+// GET SENSORS
+// =========================================================
+
+const getSensors = async () => {
+
+    const {
+        data: sensors,
+        error,
+    } = await supabase
+        .from("sensor")
+        .select(`
+            sensor_id,
+            sensor_type,
+            model,
+            serial_number,
+            device_id,
+            status
+        `)
+        .order("sensor_id", {
+            ascending: true,
+        });
+
+    if (error) {
+        throw error;
+    }
+
+    return sensors || [];
+};
+
+
+// =========================================================
 // CALCULATE BATTERY
 // =========================================================
 
@@ -58,75 +172,52 @@ const calculateBattery = (currentBattery) => {
 
     let battery = Number(currentBattery);
 
-    // ---------------------------------------------------------
-    // NEW DEVICE
-    // ---------------------------------------------------------
-    // If battery is NULL, undefined, or invalid,
-    // automatically start at 75%.
-    // ---------------------------------------------------------
-
+    // New device
     if (!Number.isFinite(battery)) {
         battery = DEFAULT_BATTERY;
     }
 
-    // ---------------------------------------------------------
-    // SAFETY CHECK
-    // ---------------------------------------------------------
-
+    // Safety
     if (battery < 0) {
         battery = DEFAULT_BATTERY;
     }
 
-    // ---------------------------------------------------------
-    // LOW BATTERY
-    // ---------------------------------------------------------
-    // When battery reaches 30%, simulate charging.
-    // ---------------------------------------------------------
-
+    // Charging
     if (battery <= LOW_BATTERY_LIMIT) {
 
         battery += BATTERY_CHARGE;
 
     } else {
 
-        // -----------------------------------------------------
-        // NORMAL DEVICE POWER CONSUMPTION
-        // -----------------------------------------------------
-
+        // Consumption
         battery -= BATTERY_CONSUMPTION;
     }
 
-    // ---------------------------------------------------------
-    // KEEP BATTERY BETWEEN 30% AND 100%
-    // ---------------------------------------------------------
-
+    // Keep between 30 and 100
     battery = Math.min(
         MAX_BATTERY,
-        Math.max(LOW_BATTERY_LIMIT, battery)
+        Math.max(
+            LOW_BATTERY_LIMIT,
+            battery
+        )
     );
 
-    return Number(battery.toFixed(2));
+    return Number(
+        battery.toFixed(2)
+    );
 };
 
 
 // =========================================================
-// SIMULATE DEVICE HEARTBEATS
+// SIMULATE DEVICE HEARTBEAT
 // =========================================================
 
 const simulateDeviceHeartbeat = async () => {
 
     try {
 
-        // -----------------------------------------------------
-        // GET ALL SIMULATED DEVICES
-        // -----------------------------------------------------
-
-        const devices = await getSimulatedDevices();
-
-
-        // -----------------------------------------------------
-        // NO DEVICES
-        // -----------------------------------------------------
+        const devices =
+            await getSimulatedDevices();
 
         if (!devices.length) {
 
@@ -136,7 +227,6 @@ const simulateDeviceHeartbeat = async () => {
 
             return;
         }
-
 
         console.log(
             `Device simulator: processing ${devices.length} simulated device(s).`
@@ -151,44 +241,30 @@ const simulateDeviceHeartbeat = async () => {
 
             try {
 
-                // =================================================
-                // BATTERY
-                // =================================================
+                const oldBattery =
+                    Number(device.battery_level);
 
-                const oldBattery = Number(device.battery_level);
+                const battery =
+                    calculateBattery(
+                        device.battery_level
+                    );
 
-                const battery = calculateBattery(
-                    device.battery_level
-                );
-
-
-                // =================================================
-                // DEVICE HEARTBEAT DATA
-                // =================================================
 
                 const heartbeatData = {
 
-                    // Current server time
                     last_seen_at:
                         new Date().toISOString(),
 
-                    // Device is alive
                     status:
                         "Online",
 
-                    // Network is connected
                     network_status:
                         "Connected",
 
-                    // Updated simulated battery
                     battery_level:
                         battery,
                 };
 
-
-                // =================================================
-                // UPDATE DATABASE
-                // =================================================
 
                 const {
                     error: updateError,
@@ -201,10 +277,6 @@ const simulateDeviceHeartbeat = async () => {
                     );
 
 
-                // =================================================
-                // HANDLE UPDATE ERROR
-                // =================================================
-
                 if (updateError) {
 
                     console.error(
@@ -216,9 +288,9 @@ const simulateDeviceHeartbeat = async () => {
                 }
 
 
-                // =================================================
+                // -------------------------------------------------
                 // LOG
-                // =================================================
+                // -------------------------------------------------
 
                 if (!Number.isFinite(oldBattery)) {
 
@@ -256,7 +328,231 @@ const simulateDeviceHeartbeat = async () => {
     } catch (error) {
 
         console.error(
-            "Device simulator error:",
+            "Device simulator heartbeat error:",
+            error
+        );
+    }
+};
+
+
+// =========================================================
+// GENERATE POLLUTANT READINGS
+// =========================================================
+
+const generatePollutantReadings = async () => {
+
+    try {
+
+        const devices =
+            await getSimulatedDevices();
+
+        if (!devices.length) {
+
+            console.log(
+                "Reading simulator: no simulated devices found."
+            );
+
+            return;
+        }
+
+
+        const sensors =
+            await getSensors();
+
+
+        // -----------------------------------------------------
+        // CREATE DEVICE LOOKUP
+        // -----------------------------------------------------
+
+        const deviceMap = new Map();
+
+        for (const device of devices) {
+
+            deviceMap.set(
+                Number(device.device_id),
+                device
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // FIND ONE SENSOR PER STATION
+        //
+        // Device 3 and Device 5 both belong to Station 3.
+        // We therefore keep only the first sensor for a station.
+        // -----------------------------------------------------
+
+        const stationSensorMap = new Map();
+
+
+        for (const sensor of sensors) {
+
+            const device =
+                deviceMap.get(
+                    Number(sensor.device_id)
+                );
+
+            if (!device) {
+                continue;
+            }
+
+
+            const stationId =
+                Number(device.station_id);
+
+            if (!stationId) {
+                continue;
+            }
+
+
+            // First sensor wins
+            if (
+                !stationSensorMap.has(
+                    stationId
+                )
+            ) {
+
+                stationSensorMap.set(
+                    stationId,
+                    {
+                        sensor,
+                        device,
+                    }
+                );
+            }
+        }
+
+
+        if (!stationSensorMap.size) {
+
+            console.log(
+                "Reading simulator: no sensors found for simulated stations."
+            );
+
+            return;
+        }
+
+
+        // -----------------------------------------------------
+        // GENERATE READINGS
+        // -----------------------------------------------------
+
+        const timestamp =
+            new Date().toISOString();
+
+        const readings = [];
+
+
+        for (
+            const [
+                stationId,
+                stationInfo
+            ]
+            of stationSensorMap
+        ) {
+
+            const sensor =
+                stationInfo.sensor;
+
+
+            // ---------------------------------------------
+            // Generate all pollutants
+            // ---------------------------------------------
+
+            for (
+                const pollutant
+                of POLLUTANTS
+            ) {
+
+                const value =
+                    randomValue(
+                        pollutant.min,
+                        pollutant.max,
+                        pollutant.decimals
+                    );
+
+
+                readings.push({
+
+                    station_id:
+                        stationId,
+
+                    sensor_id:
+                        sensor.sensor_id,
+
+                    timestamp,
+
+                    parameter:
+                        pollutant.parameter,
+
+                    value,
+
+                    unit:
+                        pollutant.unit,
+                });
+            }
+        }
+
+
+        // -----------------------------------------------------
+        // INSERT INTO READING TABLE
+        // -----------------------------------------------------
+
+        if (!readings.length) {
+
+            console.log(
+                "Reading simulator: no readings generated."
+            );
+
+            return;
+        }
+
+
+        const {
+            data,
+            error,
+        } = await supabase
+            .from("reading")
+            .insert(readings)
+            .select();
+
+
+        if (error) {
+
+            console.error(
+                "Reading simulator insert error:",
+                error
+            );
+
+            return;
+        }
+
+
+        console.log(
+            `Reading simulator: inserted ${data?.length || readings.length} pollutant readings.`
+        );
+
+
+        // -----------------------------------------------------
+        // SUMMARY
+        // -----------------------------------------------------
+
+        console.log(
+            `Stations updated: ${stationSensorMap.size}`
+        );
+
+        console.log(
+            `Pollutants per station: ${POLLUTANTS.length}`
+        );
+
+        console.log(
+            `Timestamp: ${timestamp}`
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Reading simulator error:",
             error
         );
     }
@@ -274,7 +570,7 @@ const startDeviceSimulator = () => {
     );
 
     console.log(
-        "DEVICE SIMULATOR STARTED"
+        "DEVICE + SENSOR SIMULATOR STARTED"
     );
 
     console.log(
@@ -282,7 +578,11 @@ const startDeviceSimulator = () => {
     );
 
     console.log(
-        `Default battery for new devices: ${DEFAULT_BATTERY}%`
+        `Readings: every ${READING_INTERVAL / 1000} seconds`
+    );
+
+    console.log(
+        `Default battery: ${DEFAULT_BATTERY}%`
     );
 
     console.log(
@@ -290,24 +590,45 @@ const startDeviceSimulator = () => {
     );
 
     console.log(
+        `Pollutants generated: ${POLLUTANTS.length}`
+    );
+
+    console.log(
         "======================================"
     );
 
 
-    // ---------------------------------------------------------
-    // FIRST HEARTBEAT IMMEDIATELY
-    // ---------------------------------------------------------
+    // -----------------------------------------------------
+    // FIRST HEARTBEAT
+    // -----------------------------------------------------
 
     simulateDeviceHeartbeat();
 
 
-    // ---------------------------------------------------------
-    // CONTINUE EVERY 30 SECONDS
-    // ---------------------------------------------------------
+    // -----------------------------------------------------
+    // FIRST SENSOR READING
+    // -----------------------------------------------------
+
+    generatePollutantReadings();
+
+
+    // -----------------------------------------------------
+    // DEVICE HEARTBEAT
+    // -----------------------------------------------------
 
     setInterval(
         simulateDeviceHeartbeat,
         HEARTBEAT_INTERVAL
+    );
+
+
+    // -----------------------------------------------------
+    // SENSOR READINGS
+    // -----------------------------------------------------
+
+    setInterval(
+        generatePollutantReadings,
+        READING_INTERVAL
     );
 };
 
@@ -321,5 +642,7 @@ module.exports = {
     startDeviceSimulator,
 
     simulateDeviceHeartbeat,
+
+    generatePollutantReadings,
 
 };
