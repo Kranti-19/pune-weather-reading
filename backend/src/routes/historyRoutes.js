@@ -1,15 +1,12 @@
 const express = require("express");
-
-const {
-    getHistoricalCalendar,
-} = require("../controllers/historyController");
-
 const router = express.Router();
 
-// Historical AQI calendar
-router.get(
-    "/calendar",
-    getHistoricalCalendar
-);
+const {
+  getHistoricalCalendar,
+  getHistoricalDay,
+} = require("../controllers/historyController");
+
+router.get("/calendar", getHistoricalCalendar);
+router.get("/day", getHistoricalDay);
 
 module.exports = router;
