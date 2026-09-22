@@ -4,6 +4,7 @@ import AirQualityCalendar from "../components/AirQualityCalendar";
 import MajorPollutantGrid from "../components/MajorPollutantGrid";
 import WardPollutionLeaderboard from "../components/WardPollutionLeaderboard";
 import API from '../api/apiClient';
+import { showDesktopNotification } from "../utils/notifications";
 
 import {
   Wind,
@@ -256,6 +257,35 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [range, setRange] = useState("24h");
+
+  // Background Desktop Notification Polling Loop
+  useEffect(() => {
+    const checkAlertsForNotification = async () => {
+      try {
+        const response = await API.get("/alerts");
+        const data = response.data;
+        
+        if (data.status === "success" && data.alerts) {
+          const criticalAlerts = data.alerts.filter(
+            (alert) => alert.severity === "Critical" && alert.acknowledgement === "Pending"
+          );
+
+          if (criticalAlerts.length > 0) {
+            const latest = criticalAlerts[0];
+            showDesktopNotification(`🚨 Critical AQI Alert: ${latest.station?.name || "Station"}`, {
+              body: `AQI has reached critical levels! Immediate action required.`,
+              tag: `alert-${latest.alert_id}`,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check background alerts:", err);
+      }
+    };
+
+    const interval = setInterval(checkAlertsForNotification, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchPuneWeather = async () => {
     try {

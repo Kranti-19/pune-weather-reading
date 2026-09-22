@@ -87,6 +87,10 @@ export default function Settings() {
   const [error, setError] =
     useState("");
 
+  const [desktopNotifPermission, setDesktopNotifPermission] = useState(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
+  );
+
   // =====================================================
   // LOAD SETTINGS
   // =====================================================
@@ -130,6 +134,30 @@ export default function Settings() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  // =====================================================
+  // DESKTOP NOTIFICATION PERMISSION HANDLER
+  // =====================================================
+
+  const handleRequestDesktopPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notifications.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setDesktopNotifPermission(permission);
+      if (permission === "granted") {
+        new Notification("PMC Air Quality System", {
+          body: "Desktop notifications successfully enabled!",
+          icon: "/favicon.ico",
+        });
+      }
+    } catch (err) {
+      console.error("Error requesting notification permission:", err);
     }
   };
 
@@ -186,10 +214,6 @@ export default function Settings() {
       setSaving(true);
       setError("");
       setSaved(false);
-
-      // -----------------------------------------------
-      // Frontend validation
-      // -----------------------------------------------
 
       if (
         Number(
@@ -496,10 +520,6 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-[#edf3f8] text-slate-800 p-6 sm:p-8 lg:p-10 font-sans">
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5 mb-7">
         <div>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-1">
@@ -582,10 +602,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* =================================================
-          ERROR
-      ================================================= */}
-
       {error && (
         <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center gap-3 text-xs font-bold">
           <AlertTriangle
@@ -596,10 +612,6 @@ export default function Settings() {
           <span>{error}</span>
         </div>
       )}
-
-      {/* =================================================
-          SUCCESS
-      ================================================= */}
 
       {saved && (
         <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3 text-xs font-bold shadow-sm">
@@ -614,15 +626,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* =================================================
-          MAIN SETTINGS CONTAINER
-      ================================================= */}
-
       <div className="bg-white rounded-[26px] border border-slate-100 shadow-sm overflow-hidden">
-        {/* =================================================
-            TABS
-        ================================================= */}
-
         <div className="border-b border-slate-100 px-5 pt-5">
           <div className="flex gap-1 overflow-x-auto pb-0">
             {tabs.map((tab) => {
@@ -659,15 +663,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
         <div className="p-6 sm:p-7">
-          {/* =================================================
-              GENERAL
-          ================================================= */}
-
           {activeTab ===
             "general" && (
             <div className="space-y-6">
@@ -769,10 +765,6 @@ export default function Settings() {
             </div>
           )}
 
-          {/* =================================================
-              AQI & ALERTS
-          ================================================= */}
-
           {activeTab ===
             "aqi" && (
             <div className="space-y-7">
@@ -786,8 +778,6 @@ export default function Settings() {
                 description="Configure warning and critical levels used by the monitoring and alert system."
                 iconClass="bg-rose-50 text-rose-600"
               />
-
-              {/* AQI */}
 
               <div>
                 <h3 className="text-xs font-black text-slate-900 mb-4">
@@ -808,8 +798,6 @@ export default function Settings() {
                   />
                 </div>
               </div>
-
-              {/* POLLUTANTS */}
 
               <div>
                 <h3 className="text-xs font-black text-slate-900 mb-4">
@@ -880,10 +868,6 @@ export default function Settings() {
             </div>
           )}
 
-          {/* =================================================
-              DEVICES & SENSORS
-          ================================================= */}
-
           {activeTab ===
             "devices" && (
             <div className="space-y-6">
@@ -952,10 +936,6 @@ export default function Settings() {
             </div>
           )}
 
-          {/* =================================================
-              DATA SYNCHRONIZATION
-          ================================================= */}
-
           {activeTab ===
             "sync" && (
             <div className="space-y-6">
@@ -969,8 +949,6 @@ export default function Settings() {
                 description="Configure external data ingestion and freshness rules."
                 iconClass="bg-indigo-50 text-indigo-600"
               />
-
-              {/* OpenAQ STATUS */}
 
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1051,10 +1029,6 @@ export default function Settings() {
             </div>
           )}
 
-          {/* =================================================
-              NOTIFICATIONS
-          ================================================= */}
-
           {activeTab ===
             "notifications" && (
             <div className="space-y-6">
@@ -1066,6 +1040,39 @@ export default function Settings() {
                 description="Choose which system events should generate notifications and alerts."
                 iconClass="bg-amber-50 text-amber-600"
               />
+
+              {/* Desktop Browser Notifications Permission Card */}
+              <div className="flex items-center justify-between p-5 rounded-2xl bg-blue-50 border border-blue-200 shadow-sm">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                    <Bell size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">Browser Desktop Notifications</h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {desktopNotifPermission === "granted"
+                        ? "Desktop notifications are currently active and allowed."
+                        : desktopNotifPermission === "denied"
+                        ? "Notifications are blocked by your browser settings. Please reset permissions in your browser bar."
+                        : "Enable native desktop alerts so you get notified even when the app is minimized."}
+                    </p>
+                  </div>
+                </div>
+                {desktopNotifPermission !== "granted" && (
+                  <button
+                    type="button"
+                    onClick={handleRequestDesktopPermission}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm shrink-0"
+                  >
+                    Turn On
+                  </button>
+                )}
+                {desktopNotifPermission === "granted" && (
+                  <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider rounded-lg shrink-0">
+                    Enabled
+                  </span>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <NotificationToggle
@@ -1113,10 +1120,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* =================================================
-          BOTTOM ACTION BAR
-      ================================================= */}
-
       <div className="flex items-center justify-end gap-3 mt-6 pb-4">
         <button
           type="button"
@@ -1151,10 +1154,6 @@ export default function Settings() {
       </div>
     </div>
   );
-
-  // =====================================================
-  // LOCAL COMPONENTS
-  // =====================================================
 
   function NotificationToggle({
     title,
@@ -1247,10 +1246,6 @@ export default function Settings() {
   }
 }
 
-// =====================================================
-// SECTION HEADER
-// =====================================================
-
 function SectionHeader({
   icon,
   title,
@@ -1278,10 +1273,6 @@ function SectionHeader({
   );
 }
 
-// =====================================================
-// TEXT INPUT
-// =====================================================
-
 function TextInput({
   label,
   value,
@@ -1306,10 +1297,6 @@ function TextInput({
     </div>
   );
 }
-
-// =====================================================
-// TOGGLE ROW
-// =====================================================
 
 function ToggleRow({
   title,
