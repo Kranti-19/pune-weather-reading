@@ -326,6 +326,22 @@ export default function Login() {
                   )}
                 </button>
               </form>
+              
+
+              {/* REGISTER LINK */}
+              <div className="mt-4 text-center">
+                <p className="text-[10px] font-medium text-slate-500">
+                  Don't have an account?{" "}
+                  <Link
+                    to="/register"
+                    className="font-black text-[#075BA5] transition hover:text-[#064a87]"
+                  >
+                    Register here
+                  </Link>
+                </p>
+              </div>
+
+
 
               {/* SECURITY */}
               <div className="mt-4 flex items-center justify-center gap-2">
