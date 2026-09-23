@@ -20,6 +20,7 @@ import {
 
 import API from "../api/apiClient";
 
+
 // =====================================================
 // AQI CATEGORY
 // =====================================================
@@ -39,6 +40,7 @@ const getAqiCategory = (aqi) => {
 
   return "Severe";
 };
+
 
 // =====================================================
 // AQI STYLE
@@ -133,71 +135,200 @@ const getHeatmapStyle = (aqi) => {
   };
 };
 
+
+// =====================================================
+// NORMALIZE CALENDAR RESPONSE
+// =====================================================
+//
+// New OpenAQ backend response:
+//
+// {
+//   success: true,
+//   year: 2026,
+//   month: 9,
+//   days: [...]
+// }
+//
+// Old Supabase response:
+//
+// {
+//   status: "success",
+//   data: {
+//      days: [...]
+//   }
+// }
+//
+// This function supports BOTH so the UI does not
+// break during backend transition.
+// =====================================================
+
+const normalizeCalendarResponse = (
+  response
+) => {
+  const result =
+    response?.data || {};
+
+  // New OpenAQ response
+  if (
+    result?.success === true
+  ) {
+    return {
+      days: Array.isArray(
+        result.days
+      )
+        ? result.days
+        : [],
+    };
+  }
+
+  // Old response
+  if (
+    result?.status ===
+    "success"
+  ) {
+    return {
+      days: Array.isArray(
+        result?.data?.days
+      )
+        ? result.data.days
+        : [],
+    };
+  }
+
+  return {
+    days: [],
+  };
+};
+
+
+// =====================================================
+// NORMALIZE DAY RESPONSE
+// =====================================================
+
+const normalizeDayResponse = (
+  response
+) => {
+  const result =
+    response?.data || {};
+
+  // New OpenAQ response
+  if (
+    result?.success === true
+  ) {
+    return result;
+  }
+
+  // Old Supabase response
+  if (
+    result?.status ===
+    "success"
+  ) {
+    return (
+      result?.data || null
+    );
+  }
+
+  return null;
+};
+
+
 // =====================================================
 // COMPONENT
 // =====================================================
 
 export default function AirQualityCalendar() {
+
   // ===================================================
   // MONTH STATE
   // ===================================================
 
-  const [currentDate, setCurrentDate] =
-    useState(new Date());
+  const [
+    currentDate,
+    setCurrentDate,
+  ] = useState(
+    new Date()
+  );
+
 
   // ===================================================
   // CALENDAR DATA
   // ===================================================
 
-  const [calendarData, setCalendarData] =
-    useState([]);
+  const [
+    calendarData,
+    setCalendarData,
+  ] = useState([]);
 
-  const [calendarSummary, setCalendarSummary] =
-    useState({
-      monthlyAverage: null,
-      highestDay: null,
-      lowestDay: null,
-      totalDaysWithData: 0,
-    });
+  const [
+    calendarSummary,
+    setCalendarSummary,
+  ] = useState({
+    monthlyAverage: null,
+    highestDay: null,
+    lowestDay: null,
+    totalDaysWithData: 0,
+  });
 
-  const [loadingCalendar, setLoadingCalendar] =
-    useState(false);
+  const [
+    loadingCalendar,
+    setLoadingCalendar,
+  ] = useState(false);
 
-  const [calendarError, setCalendarError] =
-    useState("");
+  const [
+    calendarError,
+    setCalendarError,
+  ] = useState("");
+
 
   // ===================================================
   // SELECTED DAY
   // ===================================================
 
-  const [selectedDay, setSelectedDay] =
-    useState(null);
+  const [
+    selectedDay,
+    setSelectedDay,
+  ] = useState(null);
 
-  const [selectedDayData, setSelectedDayData] =
-    useState(null);
+  const [
+    selectedDayData,
+    setSelectedDayData,
+  ] = useState(null);
 
-  const [loadingDay, setLoadingDay] =
-    useState(false);
+  const [
+    loadingDay,
+    setLoadingDay,
+  ] = useState(false);
 
-  const [dayError, setDayError] =
-    useState("");
+  const [
+    dayError,
+    setDayError,
+  ] = useState("");
+
 
   // ===================================================
   // TABLE SEARCH
   // ===================================================
 
-  const [stationSearch, setStationSearch] =
-    useState("");
+  const [
+    stationSearch,
+    setStationSearch,
+  ] = useState("");
+
 
   // ===================================================
   // TABLE PAGINATION
   // ===================================================
 
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
 
-  const [rowsPerPage, setRowsPerPage] =
-    useState(25);
+  const [
+    rowsPerPage,
+    setRowsPerPage,
+  ] = useState(25);
+
 
   // ===================================================
   // CURRENT MONTH
@@ -217,98 +348,227 @@ export default function AirQualityCalendar() {
       }
     );
 
+
   // ===================================================
-  // FETCH MONTHLY CALENDAR DATA
+  // FETCH MONTHLY OPENAQ CALENDAR DATA
+  // ===================================================
+  //
+  // NEW BACKEND:
+  //
+  // GET
+  // /api/air-quality/openaq/history/calendar
+  //
+  // Example:
+  //
+  // ?year=2026&month=9
+  //
   // ===================================================
 
   useEffect(() => {
-    const fetchCalendarData = async () => {
-      try {
-        setLoadingCalendar(true);
-        setCalendarError("");
 
-        const response = await API.get(
-          "/history/calendar",
-          {
-            params: {
-              year,
-              month: month + 1,
-            },
-          }
-        );
+    const fetchCalendarData =
+      async () => {
 
-        const result =
-          response.data;
+        try {
 
-        console.log(
-          "Historical calendar API:",
-          result
-        );
-
-        if (
-          result?.status !==
-          "success"
-        ) {
-          throw new Error(
-            result?.message ||
-              "Unable to load historical AQI."
+          setLoadingCalendar(
+            true
           );
+
+          setCalendarError("");
+
+          // Close selected day when
+          // month changes.
+          setSelectedDay(null);
+          setSelectedDayData(null);
+          setDayError("");
+
+          const response =
+            await API.get(
+              "/air-quality/openaq/history/calendar",
+              {
+                params: {
+                  year,
+                  month:
+                    month + 1,
+                },
+              }
+            );
+
+          console.log(
+            "OpenAQ historical calendar API:",
+            response.data
+          );
+
+          const normalized =
+            normalizeCalendarResponse(
+              response
+            );
+
+          const days =
+            normalized.days || [];
+
+          setCalendarData(
+            days
+          );
+
+
+          // --------------------------------------------
+          // Calculate monthly summary on frontend
+          // --------------------------------------------
+
+          const validDays =
+            days.filter(
+              (item) =>
+                item?.aqi !==
+                  null &&
+                item?.aqi !==
+                  undefined &&
+                Number.isFinite(
+                  Number(
+                    item.aqi
+                  )
+                )
+            );
+
+
+          if (
+            validDays.length === 0
+          ) {
+
+            setCalendarSummary({
+              monthlyAverage:
+                null,
+
+              highestDay:
+                null,
+
+              lowestDay:
+                null,
+
+              totalDaysWithData:
+                0,
+            });
+
+          } else {
+
+            const average =
+              validDays.reduce(
+                (
+                  sum,
+                  item
+                ) =>
+                  sum +
+                  Number(
+                    item.aqi
+                  ),
+                0
+              ) /
+              validDays.length;
+
+
+            const highestDay =
+              validDays.reduce(
+                (
+                  highest,
+                  item
+                ) =>
+                  !highest ||
+                  Number(
+                    item.aqi
+                  ) >
+                    Number(
+                      highest.aqi
+                    )
+                    ? item
+                    : highest,
+                null
+              );
+
+
+            const lowestDay =
+              validDays.reduce(
+                (
+                  lowest,
+                  item
+                ) =>
+                  !lowest ||
+                  Number(
+                    item.aqi
+                  ) <
+                    Number(
+                      lowest.aqi
+                    )
+                    ? item
+                    : lowest,
+                null
+              );
+
+
+            setCalendarSummary({
+              monthlyAverage:
+                Math.round(
+                  average
+                ),
+
+              highestDay,
+
+              lowestDay,
+
+              totalDaysWithData:
+                validDays.length,
+            });
+
+          }
+
+        } catch (error) {
+
+          console.error(
+            "OpenAQ historical calendar error:",
+            error
+          );
+
+          setCalendarData([]);
+
+          setCalendarSummary({
+            monthlyAverage:
+              null,
+
+            highestDay:
+              null,
+
+            lowestDay:
+              null,
+
+            totalDaysWithData:
+              0,
+          });
+
+          setCalendarError(
+            error?.response?.data
+              ?.message ||
+              error?.message ||
+              "Unable to load historical OpenAQ AQI."
+          );
+
+        } finally {
+
+          setLoadingCalendar(
+            false
+          );
+
         }
 
-        const data =
-          result?.data || {};
+      };
 
-        setCalendarData(
-          Array.isArray(data.days)
-            ? data.days
-            : []
-        );
-
-        setCalendarSummary({
-          monthlyAverage:
-            data.monthlyAverage ??
-            null,
-
-          highestDay:
-            data.highestDay ??
-            null,
-
-          lowestDay:
-            data.lowestDay ??
-            null,
-
-          totalDaysWithData:
-            data.totalDaysWithData ??
-            0,
-        });
-      } catch (error) {
-        console.error(
-          "Historical calendar error:",
-          error
-        );
-
-        setCalendarData([]);
-
-        setCalendarSummary({
-          monthlyAverage: null,
-          highestDay: null,
-          lowestDay: null,
-          totalDaysWithData: 0,
-        });
-
-        setCalendarError(
-          error?.response?.data
-            ?.message ||
-            error?.message ||
-            "Unable to load historical AQI."
-        );
-      } finally {
-        setLoadingCalendar(false);
-      }
-    };
 
     fetchCalendarData();
-  }, [year, month]);
+
+  }, [
+    year,
+    month,
+  ]);
+
 
   // ===================================================
   // BUILD CALENDAR
@@ -320,8 +580,10 @@ export default function AirQualityCalendar() {
     bestDay,
     worstDay,
   } = useMemo(() => {
+
     const todayDate =
       new Date();
+
 
     const firstDayIndex =
       new Date(
@@ -330,6 +592,7 @@ export default function AirQualityCalendar() {
         1
       ).getDay();
 
+
     const totalDaysInMonth =
       new Date(
         year,
@@ -337,76 +600,111 @@ export default function AirQualityCalendar() {
         0
       ).getDate();
 
+
     // -------------------------------------------------
     // CREATE DAY LOOKUP
     // -------------------------------------------------
 
     const monthDataset = {};
 
-    (calendarData || []).forEach(
+
+    (
+      calendarData || []
+    ).forEach(
       (item) => {
+
         if (!item?.date) {
           return;
         }
 
+
         /*
-         * Backend date format:
-         * YYYY-MM-DD
+         * IMPORTANT:
          *
-         * Do not use new Date(item.date)
-         * here because timezone conversion
-         * can change the day.
+         * Do NOT use:
+         *
+         * new Date(item.date)
+         *
+         * because timezone conversion can
+         * shift the calendar date.
          */
 
+
         const parts =
-          String(item.date).split("-");
+          String(
+            item.date
+          ).split("-");
+
 
         if (
-          parts.length !== 3
+          parts.length !==
+          3
         ) {
           return;
         }
 
+
         const itemYear =
-          Number(parts[0]);
+          Number(
+            parts[0]
+          );
 
         const itemMonth =
-          Number(parts[1]);
+          Number(
+            parts[1]
+          );
 
         const itemDay =
-          Number(parts[2]);
+          Number(
+            parts[2]
+          );
+
 
         if (
-          itemYear !== year ||
+          itemYear !==
+            year ||
           itemMonth !==
             month + 1
         ) {
           return;
         }
 
+
         const rawAqi =
           item.aqi;
+
 
         const aqi =
           rawAqi !== null &&
           rawAqi !== undefined &&
           rawAqi !== ""
-            ? Number(rawAqi)
+            ? Number(
+                rawAqi
+              )
             : null;
+
 
         monthDataset[
           itemDay
         ] = {
-          date: item.date,
+
+          date:
+            item.date,
 
           aqi:
-            Number.isFinite(aqi)
-              ? Math.round(aqi)
+            Number.isFinite(
+              aqi
+            )
+              ? Math.round(
+                  aqi
+                )
               : null,
 
           category:
             item.category ||
-            getAqiCategory(aqi),
+            getAqiCategory(
+              aqi
+            ),
 
           dominant:
             item.dominant ||
@@ -422,35 +720,47 @@ export default function AirQualityCalendar() {
             Number(
               item.stationCount
             ) || 0,
+
         };
+
       }
     );
 
+
     // -------------------------------------------------
-    // CREATE CELLS
+    // CREATE CALENDAR CELLS
     // -------------------------------------------------
 
     const cells = [];
+
 
     for (
       let i = 0;
       i < firstDayIndex;
       i++
     ) {
+
       cells.push({
         empty: true,
-        id: `empty-${i}`,
+        id:
+          `empty-${i}`,
       });
+
     }
+
 
     for (
       let day = 1;
-      day <= totalDaysInMonth;
+      day <=
+      totalDaysInMonth;
       day++
     ) {
+
       const entry =
-        monthDataset[day] ||
-        null;
+        monthDataset[
+          day
+        ] || null;
+
 
       const isToday =
         day ===
@@ -460,7 +770,23 @@ export default function AirQualityCalendar() {
         year ===
           todayDate.getFullYear();
 
+
+      const fallbackDate =
+        `${year}-${String(
+          month + 1
+        ).padStart(
+          2,
+          "0"
+        )}-${String(
+          day
+        ).padStart(
+          2,
+          "0"
+        )}`;
+
+
       cells.push({
+
         empty: false,
 
         day,
@@ -487,22 +813,17 @@ export default function AirQualityCalendar() {
 
         date:
           entry?.date ||
-          `${year}-${String(
-            month + 1
-          ).padStart(
-            2,
-            "0"
-          )}-${String(day).padStart(
-            2,
-            "0"
-          )}`,
+          fallbackDate,
 
         isToday,
+
       });
+
     }
 
+
     // -------------------------------------------------
-    // CALCULATED STATISTICS
+    // STATISTICS
     // -------------------------------------------------
 
     const validDays =
@@ -510,11 +831,15 @@ export default function AirQualityCalendar() {
         monthDataset
       ).filter(
         (item) =>
-          item.aqi !== null &&
+          item.aqi !==
+            null &&
           Number.isFinite(
-            item.aqi
+            Number(
+              item.aqi
+            )
           )
       );
+
 
     const calculatedAverage =
       validDays.length
@@ -534,6 +859,7 @@ export default function AirQualityCalendar() {
           )
         : null;
 
+
     const calculatedBest =
       validDays.length
         ? validDays.reduce(
@@ -542,13 +868,18 @@ export default function AirQualityCalendar() {
               item
             ) =>
               !best ||
-              item.aqi <
-                best.aqi
+              Number(
+                item.aqi
+              ) <
+                Number(
+                  best.aqi
+                )
                 ? item
                 : best,
             null
           )
         : null;
+
 
     const calculatedWorst =
       validDays.length
@@ -558,19 +889,26 @@ export default function AirQualityCalendar() {
               item
             ) =>
               !worst ||
-              item.aqi >
-                worst.aqi
+              Number(
+                item.aqi
+              ) >
+                Number(
+                  worst.aqi
+                )
                 ? item
                 : worst,
             null
           )
         : null;
 
+
     return {
+
       calendarCells:
         cells,
 
       monthStats: {
+
         average:
           calendarSummary
             .monthlyAverage ??
@@ -582,6 +920,7 @@ export default function AirQualityCalendar() {
             .totalDaysWithData ||
           validDays.length ||
           0,
+
       },
 
       bestDay:
@@ -593,7 +932,9 @@ export default function AirQualityCalendar() {
         calendarSummary
           .highestDay ||
         calculatedWorst,
+
     };
+
   }, [
     year,
     month,
@@ -601,12 +942,14 @@ export default function AirQualityCalendar() {
     calendarSummary,
   ]);
 
+
   // ===================================================
   // PREVIOUS MONTH
   // ===================================================
 
   const handlePrevMonth =
     () => {
+
       setSelectedDay(null);
       setSelectedDayData(null);
       setDayError("");
@@ -618,7 +961,9 @@ export default function AirQualityCalendar() {
           1
         )
       );
+
     };
+
 
   // ===================================================
   // NEXT MONTH
@@ -626,6 +971,7 @@ export default function AirQualityCalendar() {
 
   const handleNextMonth =
     () => {
+
       setSelectedDay(null);
       setSelectedDayData(null);
       setDayError("");
@@ -637,20 +983,35 @@ export default function AirQualityCalendar() {
           1
         )
       );
+
     };
+
 
   // ===================================================
   // CLICK DATE
   // ===================================================
+  //
+  // NEW BACKEND:
+  //
+  // GET
+  // /api/air-quality/openaq/history/day
+  //
+  // ?date=YYYY-MM-DD
+  //
+  // ===================================================
 
   const handleDateClick =
-    async (cell) => {
+    async (
+      cell
+    ) => {
+
       if (
         !cell ||
         cell.empty
       ) {
         return;
       }
+
 
       const selectedDate =
         cell.date ||
@@ -666,10 +1027,12 @@ export default function AirQualityCalendar() {
           "0"
         )}`;
 
+
       console.log(
-        "Selected date:",
+        "Selected OpenAQ historical date:",
         selectedDate
       );
+
 
       setSelectedDay(
         cell
@@ -683,14 +1046,20 @@ export default function AirQualityCalendar() {
 
       setStationSearch("");
 
-      setCurrentPage(1);
+      setCurrentPage(
+        1
+      );
 
-      setLoadingDay(true);
+      setLoadingDay(
+        true
+      );
+
 
       try {
+
         const response =
           await API.get(
-            "/history/day",
+            "/air-quality/openaq/history/day",
             {
               params: {
                 date:
@@ -699,50 +1068,64 @@ export default function AirQualityCalendar() {
             }
           );
 
-        const result =
-          response.data;
 
         console.log(
-          "Selected date AQI:",
-          result
+          "OpenAQ selected day API:",
+          response.data
         );
 
-        if (
-          result?.status !==
-          "success"
-        ) {
-          throw new Error(
-            result?.message ||
-              "Unable to load AQI for selected date."
+
+        const data =
+          normalizeDayResponse(
+            response
           );
+
+
+        if (!data) {
+
+          throw new Error(
+            response?.data
+              ?.message ||
+              "Unable to load station-wise OpenAQ AQI."
+          );
+
         }
 
+
         setSelectedDayData(
-          result?.data ||
-            null
+          data
         );
+
       } catch (error) {
+
         console.error(
-          "Selected day AQI error:",
+          "OpenAQ selected day error:",
           error
         );
+
 
         setSelectedDayData(
           null
         );
 
+
         setDayError(
-          error?.response
-            ?.data?.message ||
+          error?.response?.data
+            ?.message ||
             error?.message ||
             "Unable to load station-wise AQI."
         );
+
       } finally {
+
         setLoadingDay(
           false
         );
+
       }
+
     };
+
 
   // ===================================================
   // CLOSE DETAILS
@@ -750,12 +1133,23 @@ export default function AirQualityCalendar() {
 
   const closeDetails =
     () => {
+
       setSelectedDay(null);
-      setSelectedDayData(null);
+
+      setSelectedDayData(
+        null
+      );
+
       setDayError("");
+
       setStationSearch("");
-      setCurrentPage(1);
+
+      setCurrentPage(
+        1
+      );
+
     };
+
 
   // ===================================================
   // FORMAT DATE
@@ -763,29 +1157,43 @@ export default function AirQualityCalendar() {
 
   const formatDate =
     (dateValue) => {
+
       if (!dateValue) {
         return "—";
       }
+
 
       const parts =
         String(
           dateValue
         ).split("-");
 
+
       if (
-        parts.length !== 3
+        parts.length !==
+        3
       ) {
+
         return String(
           dateValue
         );
+
       }
+
 
       const date =
         new Date(
-          Number(parts[0]),
-          Number(parts[1]) - 1,
-          Number(parts[2])
+          Number(
+            parts[0]
+          ),
+          Number(
+            parts[1]
+          ) - 1,
+          Number(
+            parts[2]
+          )
         );
+
 
       return date.toLocaleDateString(
         "en-IN",
@@ -795,7 +1203,9 @@ export default function AirQualityCalendar() {
           year: "numeric",
         }
       );
+
     };
+
 
   // ===================================================
   // STATION DATA
@@ -805,58 +1215,79 @@ export default function AirQualityCalendar() {
     selectedDayData?.stations ||
     [];
 
+
   // ===================================================
   // SEARCH STATIONS
   // ===================================================
 
   const filteredStations =
     useMemo(() => {
+
       const search =
         stationSearch
           .trim()
           .toLowerCase();
 
+
       if (!search) {
         return stationRows;
       }
 
+
       return stationRows.filter(
         (station) =>
+
           String(
             station.station ||
               ""
           )
             .toLowerCase()
-            .includes(search) ||
+            .includes(
+              search
+            ) ||
+
           String(
             station.ward ||
               ""
           )
             .toLowerCase()
-            .includes(search) ||
+            .includes(
+              search
+            ) ||
+
           String(
             station.zone ||
               ""
           )
             .toLowerCase()
-            .includes(search) ||
+            .includes(
+              search
+            ) ||
+
           String(
             station.category ||
               ""
           )
             .toLowerCase()
-            .includes(search) ||
+            .includes(
+              search
+            ) ||
+
           String(
             station.dominant ||
               ""
           )
             .toLowerCase()
-            .includes(search)
+            .includes(
+              search
+            )
       );
+
     }, [
       stationRows,
       stationSearch,
     ]);
+
 
   // ===================================================
   // PAGINATION
@@ -871,19 +1302,26 @@ export default function AirQualityCalendar() {
       )
     );
 
+
   const safeCurrentPage =
     Math.min(
       currentPage,
       totalPages
     );
 
+
   const startIndex =
-    (safeCurrentPage - 1) *
+    (
+      safeCurrentPage -
+      1
+    ) *
     rowsPerPage;
+
 
   const endIndex =
     startIndex +
     rowsPerPage;
+
 
   const paginatedStations =
     filteredStations.slice(
@@ -891,22 +1329,27 @@ export default function AirQualityCalendar() {
       endIndex
     );
 
+
   // ===================================================
   // RESET PAGE WHEN SEARCH/PAGE SIZE CHANGES
   // ===================================================
 
   useEffect(() => {
+
     setCurrentPage(1);
+
   }, [
     stationSearch,
     rowsPerPage,
   ]);
+
 
   // ===================================================
   // UI
   // ===================================================
 
   return (
+
     <div className="mb-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
 
       {/* =================================================
@@ -918,6 +1361,7 @@ export default function AirQualityCalendar() {
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
           <div>
+
             <div className="flex items-center gap-3">
 
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1f5f97] text-white shadow-lg shadow-blue-200">
@@ -928,11 +1372,21 @@ export default function AirQualityCalendar() {
 
               </div>
 
+
               <div>
 
-                <h2 className="text-lg font-black tracking-tight text-slate-900">
-                  Air Quality History
-                </h2>
+                <div className="flex items-center gap-2">
+
+                  <h2 className="text-lg font-black tracking-tight text-slate-900">
+                    Air Quality History
+                  </h2>
+
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-emerald-600">
+                    OpenAQ
+                  </span>
+
+                </div>
+
 
                 <p className="mt-1 text-xs text-slate-500">
                   Click any date to view station-wise AQI
@@ -941,7 +1395,9 @@ export default function AirQualityCalendar() {
               </div>
 
             </div>
+
           </div>
+
 
           {/* MONTH NAVIGATION */}
 
@@ -956,10 +1412,13 @@ export default function AirQualityCalendar() {
               }
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-600 hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
             >
+
               <ChevronLeft
                 size={18}
               />
+
             </button>
+
 
             <div className="min-w-[150px] text-center">
 
@@ -969,10 +1428,11 @@ export default function AirQualityCalendar() {
               </p>
 
               <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                Monthly Overview
+                OpenAQ Historical Data
               </p>
 
             </div>
+
 
             <button
               onClick={
@@ -983,15 +1443,19 @@ export default function AirQualityCalendar() {
               }
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-600 hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
             >
+
               <ChevronRight
                 size={18}
               />
+
             </button>
 
           </div>
 
         </div>
+
       </div>
+
 
       {/* =================================================
           STATISTICS
@@ -1013,6 +1477,7 @@ export default function AirQualityCalendar() {
           accent="#2563eb"
         />
 
+
         <StatCard
           icon={
             <TrendingUp
@@ -1033,6 +1498,7 @@ export default function AirQualityCalendar() {
           }
           accent="#22c55e"
         />
+
 
         <StatCard
           icon={
@@ -1057,6 +1523,7 @@ export default function AirQualityCalendar() {
 
       </div>
 
+
       {/* =================================================
           CALENDAR
       ================================================== */}
@@ -1066,6 +1533,7 @@ export default function AirQualityCalendar() {
         {/* LOADING */}
 
         {loadingCalendar && (
+
           <div className="mb-3 flex items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 py-3 text-xs font-medium text-blue-700">
 
             <Loader2
@@ -1073,19 +1541,26 @@ export default function AirQualityCalendar() {
               className="animate-spin"
             />
 
-            Loading historical AQI...
+            Loading historical AQI from OpenAQ...
 
           </div>
+
         )}
+
 
         {/* ERROR */}
 
         {!loadingCalendar &&
           calendarError && (
+
             <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+
               {calendarError}
+
             </div>
+
           )}
+
 
         {/* WEEK DAYS */}
 
@@ -1101,16 +1576,19 @@ export default function AirQualityCalendar() {
             "Sat",
           ].map(
             (day) => (
+
               <div
                 key={day}
                 className="text-center text-[9px] font-black uppercase tracking-[0.14em] text-slate-400"
               >
                 {day}
               </div>
+
             )
           )}
 
         </div>
+
 
         {/* CALENDAR */}
 
@@ -1122,15 +1600,20 @@ export default function AirQualityCalendar() {
               if (
                 cell.empty
               ) {
+
                 return (
+
                   <div
                     key={
                       cell.id
                     }
                     className="h-[64px] sm:h-[72px]"
                   />
+
                 );
+
               }
+
 
               const hasData =
                 cell.aqi !==
@@ -1143,19 +1626,23 @@ export default function AirQualityCalendar() {
                   )
                 );
 
+
               const heatmap =
                 getHeatmapStyle(
                   cell.aqi
                 );
 
+
               const isSelected =
-                selectedDay?.day ===
-                cell.day;
+                selectedDay?.date ===
+                cell.date;
+
 
               return (
+
                 <button
                   key={
-                    cell.day
+                    cell.date
                   }
                   disabled={
                     loadingDay ||
@@ -1210,17 +1697,22 @@ export default function AirQualityCalendar() {
 
                   </div>
 
+
                   {/* TODAY */}
 
                   {cell.isToday && (
+
                     <span className="absolute right-2 top-2 rounded-md bg-blue-600 px-1.5 py-[2px] text-[7px] font-black uppercase tracking-wide text-white shadow-sm">
                       Today
                     </span>
+
                   )}
+
 
                   {/* AQI */}
 
                   {hasData ? (
+
                     <div className="flex h-full flex-col items-center justify-center pt-1">
 
                       <span
@@ -1233,6 +1725,7 @@ export default function AirQualityCalendar() {
                         {cell.aqi}
                       </span>
 
+
                       <span
                         className="mt-1 text-[7px] font-bold uppercase tracking-[0.12em]"
                         style={{
@@ -1244,7 +1737,9 @@ export default function AirQualityCalendar() {
                       </span>
 
                     </div>
+
                   ) : (
+
                     <div className="flex h-full flex-col items-center justify-center">
 
                       <span className="text-[10px] text-slate-300">
@@ -1252,11 +1747,14 @@ export default function AirQualityCalendar() {
                       </span>
 
                     </div>
+
                   )}
+
 
                   {/* BOTTOM BAR */}
 
                   {hasData && (
+
                     <div
                       className="absolute bottom-0 left-0 h-[3px] w-full"
                       style={{
@@ -1264,21 +1762,27 @@ export default function AirQualityCalendar() {
                           heatmap.accent,
                       }}
                     />
+
                   )}
 
                 </button>
+
               );
+
             }
           )}
 
         </div>
+
       </div>
+
 
       {/* =================================================
           STATION-WISE TABLE
       ================================================== */}
 
       {selectedDay && (
+
         <div className="border-t border-slate-200 bg-slate-50/80 p-4 sm:p-6">
 
           {/* TABLE HEADER */}
@@ -1300,15 +1804,15 @@ export default function AirQualityCalendar() {
 
               </div>
 
-              <p className="mt-1 text-sm text-slate-500">
 
+              <p className="mt-1 text-sm text-slate-500">
                 {formatDate(
                   selectedDay.date
                 )}
-
               </p>
 
             </div>
+
 
             <button
               onClick={
@@ -1316,16 +1820,20 @@ export default function AirQualityCalendar() {
               }
               className="flex h-9 w-9 items-center justify-center self-end rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-red-600 lg:self-auto"
             >
+
               <X
                 size={17}
               />
+
             </button>
 
           </div>
 
+
           {/* LOADING */}
 
           {loadingDay && (
+
             <div className="flex items-center justify-center rounded-xl border border-blue-100 bg-blue-50 py-10">
 
               <div className="flex items-center gap-3 text-sm font-medium text-blue-700">
@@ -1335,32 +1843,40 @@ export default function AirQualityCalendar() {
                   className="animate-spin"
                 />
 
-                Loading station-wise AQI...
+                Loading station-wise AQI from OpenAQ...
 
               </div>
 
             </div>
+
           )}
+
 
           {/* ERROR */}
 
           {!loadingDay &&
             dayError && (
+
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+
                 {dayError}
+
               </div>
+
             )}
+
 
           {/* DATA */}
 
           {!loadingDay &&
             !dayError &&
             selectedDayData && (
+
               <>
 
                 {/* SUMMARY CARDS */}
 
-                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
 
                   <StatCard
                     icon={
@@ -1380,6 +1896,7 @@ export default function AirQualityCalendar() {
                     accent="#2563eb"
                   />
 
+
                   <StatCard
                     icon={
                       <MapPin
@@ -1389,17 +1906,30 @@ export default function AirQualityCalendar() {
                     label="Stations"
                     value={
                       selectedDayData.totalStations ??
+                      stationRows.length ??
                       0
                     }
-                    sublabel="Stations"
+                    sublabel="Mapped Stations"
                     accent="#22c55e"
+                  />
+
+
+                  <StatCard
+                    icon={
+                      <Wind
+                        size={17}
+                      />
+                    }
+                    label="Data Source"
+                    value="OpenAQ"
+                    sublabel="Historical"
+                    accent="#f59e0b"
                   />
 
                 </div>
 
-                {/* =================================================
-                    SEARCH + ROW SIZE
-                ================================================== */}
+
+                {/* SEARCH + ROW SIZE */}
 
                 <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 md:flex-row md:items-center md:justify-between">
 
@@ -1412,14 +1942,18 @@ export default function AirQualityCalendar() {
                       className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
 
+
                     <input
                       type="text"
                       value={
                         stationSearch
                       }
-                      onChange={(e) =>
+                      onChange={(
+                        e
+                      ) =>
                         setStationSearch(
-                          e.target.value
+                          e.target
+                            .value
                         )
                       }
                       placeholder="Search station, ward, zone..."
@@ -1427,6 +1961,7 @@ export default function AirQualityCalendar() {
                     />
 
                   </div>
+
 
                   {/* ROW SIZE */}
 
@@ -1436,35 +1971,46 @@ export default function AirQualityCalendar() {
                       Rows:
                     </span>
 
+
                     <div className="relative">
 
                       <select
                         value={
                           rowsPerPage
                         }
-                        onChange={(e) =>
+                        onChange={(
+                          e
+                        ) =>
                           setRowsPerPage(
                             Number(
-                              e.target.value
+                              e.target
+                                .value
                             )
                           )
                         }
                         className="appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       >
 
-                        <option value={25}>
+                        <option
+                          value={25}
+                        >
                           25
                         </option>
 
-                        <option value={50}>
+                        <option
+                          value={50}
+                        >
                           50
                         </option>
 
-                        <option value={100}>
+                        <option
+                          value={100}
+                        >
                           100
                         </option>
 
                       </select>
+
 
                       <ChevronDown
                         size={14}
@@ -1477,10 +2023,8 @@ export default function AirQualityCalendar() {
 
                 </div>
 
-                {/* =================================================
-                    RESULT COUNT
-                    Total observations REMOVED
-                ================================================== */}
+
+                {/* RESULT COUNT */}
 
                 <div className="mb-3">
 
@@ -1489,28 +2033,34 @@ export default function AirQualityCalendar() {
                     Showing{" "}
 
                     <span className="font-bold text-slate-700">
+
                       {filteredStations.length ===
                       0
                         ? 0
                         : startIndex +
                           1}
+
                     </span>
 
                     {" "}to{" "}
 
                     <span className="font-bold text-slate-700">
+
                       {Math.min(
                         endIndex,
                         filteredStations.length
                       )}
+
                     </span>
 
                     {" "}of{" "}
 
                     <span className="font-bold text-slate-700">
+
                       {
                         filteredStations.length
                       }
+
                     </span>
 
                     {" "}stations
@@ -1519,9 +2069,8 @@ export default function AirQualityCalendar() {
 
                 </div>
 
-                {/* =================================================
-                    TABLE
-                ================================================== */}
+
+                {/* TABLE */}
 
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
@@ -1537,41 +2086,50 @@ export default function AirQualityCalendar() {
                             #
                           </th>
 
+
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             Station
                           </th>
+
 
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             Ward
                           </th>
 
+
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             Zone
                           </th>
+
 
                           <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-wider text-slate-500">
                             AQI
                           </th>
 
+
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             Category
                           </th>
+
 
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
                             Dominant
                           </th>
 
-                          <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-wider text-slate-500">
-                            Observations
-                          </th>
 
                           <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
-                            Latest Reading
+                            Pollutants
+                          </th>
+
+
+                          <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-wider text-slate-500">
+                            Data
                           </th>
 
                         </tr>
 
                       </thead>
+
 
                       <tbody>
 
@@ -1584,20 +2142,33 @@ export default function AirQualityCalendar() {
                             const aqi =
                               station.aqi;
 
+
                             const style =
                               getHeatmapStyle(
                                 aqi
                               );
+
 
                             const rowNumber =
                               startIndex +
                               index +
                               1;
 
+
+                            const hasPollutants =
+                              station.pollutants &&
+                              Object.keys(
+                                station.pollutants
+                              ).length >
+                                0;
+
+
                             return (
+
                               <tr
                                 key={
-                                  station.stationId
+                                  station.stationId ??
+                                  `${station.station}-${index}`
                                 }
                                 className="border-b border-slate-100 transition hover:bg-blue-50/40"
                               >
@@ -1608,30 +2179,40 @@ export default function AirQualityCalendar() {
                                   {rowNumber}
                                 </td>
 
+
                                 {/* STATION */}
 
                                 <td className="px-4 py-3">
 
                                   <div className="font-bold text-slate-800">
-                                    {station.station ||
-                                      "Unknown Station"}
+                                    {
+                                      station.station ||
+                                      "Unknown Station"
+                                    }
                                   </div>
 
                                 </td>
 
+
                                 {/* WARD */}
 
                                 <td className="px-4 py-3 text-sm text-slate-600">
-                                  {station.ward ||
-                                    "—"}
+                                  {
+                                    station.ward ||
+                                    "—"
+                                  }
                                 </td>
+
 
                                 {/* ZONE */}
 
                                 <td className="px-4 py-3 text-sm text-slate-600">
-                                  {station.zone ||
-                                    "—"}
+                                  {
+                                    station.zone ||
+                                    "—"
+                                  }
                                 </td>
+
 
                                 {/* AQI */}
 
@@ -1650,11 +2231,14 @@ export default function AirQualityCalendar() {
                                         `1px solid ${style.border}`,
                                     }}
                                   >
+
                                     {aqi ??
-                                      "—"}
+                                      "N/A"}
+
                                   </span>
 
                                 </td>
+
 
                                 {/* CATEGORY */}
 
@@ -1670,85 +2254,110 @@ export default function AirQualityCalendar() {
                                         style.text,
                                     }}
                                   >
-                                    {station.category ||
+
+                                    {
+                                      station.category ||
                                       getAqiCategory(
                                         aqi
-                                      )}
+                                      )
+                                    }
+
                                   </span>
 
                                 </td>
+
 
                                 {/* DOMINANT */}
 
                                 <td className="px-4 py-3 text-sm font-semibold text-slate-700">
-                                  {station.dominant ||
-                                    "—"}
+                                  {
+                                    station.dominant ||
+                                    "—"
+                                  }
                                 </td>
 
-                                {/* OBSERVATIONS */}
 
-                                <td className="px-4 py-3 text-center">
-
-                                  <span className="inline-flex min-w-[45px] items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
-                                    {station.observationCount ??
-                                      0}
-                                  </span>
-
-                                </td>
-
-                                {/* LATEST READING */}
+                                {/* POLLUTANTS */}
 
                                 <td className="px-4 py-3">
 
-                                  {station.latestTimestamp ? (
-                                    <div>
+                                  {hasPollutants ? (
 
-                                      <p className="text-xs font-semibold text-slate-700">
+                                    <div className="flex max-w-[280px] flex-wrap gap-1">
 
-                                        {new Date(
-                                          station.latestTimestamp
-                                        ).toLocaleDateString(
-                                          "en-IN",
-                                          {
-                                            day: "2-digit",
-                                            month: "short",
-                                            year: "numeric",
-                                          }
-                                        )}
+                                      {Object.entries(
+                                        station.pollutants
+                                      ).map(
+                                        ([
+                                          parameter,
+                                          value,
+                                        ]) => (
 
-                                      </p>
+                                          <span
+                                            key={
+                                              parameter
+                                            }
+                                            className="rounded-md bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600"
+                                          >
 
-                                      <p className="mt-0.5 text-[11px] text-slate-400">
+                                            {parameter.toUpperCase()}
+                                            :{" "}
+                                            {Number(
+                                              value
+                                            ).toFixed(
+                                              1
+                                            )}
 
-                                        {new Date(
-                                          station.latestTimestamp
-                                        ).toLocaleTimeString(
-                                          "en-IN",
-                                          {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          }
-                                        )}
+                                          </span>
 
-                                      </p>
+                                        )
+                                      )}
 
                                     </div>
+
                                   ) : (
+
                                     <span className="text-xs text-slate-400">
                                       —
                                     </span>
+
                                   )}
 
                                 </td>
 
+
+                                {/* DATA */}
+
+                                <td className="px-4 py-3 text-center">
+
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-1 text-[9px] font-black ${
+                                      station.dataAvailable
+                                        ? "bg-emerald-50 text-emerald-600"
+                                        : "bg-slate-100 text-slate-400"
+                                    }`}
+                                  >
+
+                                    {station.dataAvailable
+                                      ? "Available"
+                                      : "No Data"}
+
+                                  </span>
+
+                                </td>
+
                               </tr>
+
                             );
+
                           }
                         )}
+
 
                         {/* NO RESULTS */}
 
                         {!paginatedStations.length && (
+
                           <tr>
 
                             <td
@@ -1763,12 +2372,14 @@ export default function AirQualityCalendar() {
                                   className="mb-2 text-slate-300"
                                 />
 
+
                                 <p className="text-sm font-semibold text-slate-500">
                                   No station records found
                                 </p>
 
+
                                 <p className="mt-1 text-xs text-slate-400">
-                                  Try changing your search.
+                                  Try changing your search or selected date.
                                 </p>
 
                               </div>
@@ -1776,6 +2387,7 @@ export default function AirQualityCalendar() {
                             </td>
 
                           </tr>
+
                         )}
 
                       </tbody>
@@ -1786,12 +2398,12 @@ export default function AirQualityCalendar() {
 
                 </div>
 
-                {/* =================================================
-                    PAGINATION
-                ================================================== */}
+
+                {/* PAGINATION */}
 
                 {filteredStations.length >
                   rowsPerPage && (
+
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
                     <p className="text-xs text-slate-500">
@@ -1799,16 +2411,21 @@ export default function AirQualityCalendar() {
                       Page{" "}
 
                       <span className="font-bold text-slate-700">
-                        {safeCurrentPage}
+                        {
+                          safeCurrentPage
+                        }
                       </span>
 
                       {" "}of{" "}
 
                       <span className="font-bold text-slate-700">
-                        {totalPages}
+                        {
+                          totalPages
+                        }
                       </span>
 
                     </p>
+
 
                     <div className="flex items-center gap-2">
 
@@ -1819,10 +2436,13 @@ export default function AirQualityCalendar() {
                         }
                         onClick={() =>
                           setCurrentPage(
-                            (page) =>
+                            (
+                              page
+                            ) =>
                               Math.max(
                                 1,
-                                page - 1
+                                page -
+                                  1
                               )
                           )
                         }
@@ -1837,6 +2457,7 @@ export default function AirQualityCalendar() {
 
                       </button>
 
+
                       {/* PAGE NUMBERS */}
 
                       {Array.from(
@@ -1847,41 +2468,55 @@ export default function AirQualityCalendar() {
                               5
                             ),
                         },
-                        (_, index) => {
+                        (
+                          _,
+                          index
+                        ) => {
 
                           let pageNumber;
+
 
                           if (
                             totalPages <=
                             5
                           ) {
+
                             pageNumber =
                               index +
                               1;
+
                           } else if (
                             safeCurrentPage <=
                             3
                           ) {
+
                             pageNumber =
                               index +
                               1;
+
                           } else if (
                             safeCurrentPage >=
                             totalPages -
                               2
                           ) {
+
                             pageNumber =
                               totalPages -
                               4 +
                               index;
+
                           } else {
+
                             pageNumber =
                               safeCurrentPage -
                               2 +
                               index;
+
                           }
 
+
                           return (
+
                             <button
                               key={
                                 pageNumber
@@ -1901,13 +2536,18 @@ export default function AirQualityCalendar() {
                                 }
                               `}
                             >
+
                               {
                                 pageNumber
                               }
+
                             </button>
+
                           );
+
                         }
                       )}
+
 
                       <button
                         disabled={
@@ -1916,10 +2556,13 @@ export default function AirQualityCalendar() {
                         }
                         onClick={() =>
                           setCurrentPage(
-                            (page) =>
+                            (
+                              page
+                            ) =>
                               Math.min(
                                 totalPages,
-                                page + 1
+                                page +
+                                  1
                               )
                           )
                         }
@@ -1937,13 +2580,17 @@ export default function AirQualityCalendar() {
                     </div>
 
                   </div>
+
                 )}
 
               </>
+
             )}
 
         </div>
+
       )}
+
 
       {/* =================================================
           FOOTER
@@ -1985,6 +2632,7 @@ export default function AirQualityCalendar() {
 
         </div>
 
+
         <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-400">
 
           <MapPin
@@ -1992,7 +2640,9 @@ export default function AirQualityCalendar() {
           />
 
           <span>
-            {monthStats.monitoredDays}{" "}
+            {
+              monthStats.monitoredDays
+            }{" "}
             monitored days
           </span>
 
@@ -2001,8 +2651,10 @@ export default function AirQualityCalendar() {
       </div>
 
     </div>
+
   );
 }
+
 
 // =====================================================
 // STAT CARD
@@ -2015,7 +2667,9 @@ function StatCard({
   sublabel,
   accent,
 }) {
+
   return (
+
     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
 
       <div
@@ -2027,8 +2681,11 @@ function StatCard({
             accent,
         }}
       >
+
         {icon}
+
       </div>
+
 
       <div>
 
@@ -2036,11 +2693,13 @@ function StatCard({
           {label}
         </p>
 
+
         <div className="mt-0.5 flex items-baseline gap-2">
 
           <span className="font-mono text-xl font-black text-slate-900">
             {value}
           </span>
+
 
           <span className="text-[9px] font-semibold text-slate-400">
             {sublabel}
@@ -2051,8 +2710,10 @@ function StatCard({
       </div>
 
     </div>
+
   );
 }
+
 
 // =====================================================
 // LEGEND
@@ -2062,7 +2723,9 @@ function Legend({
   color,
   label,
 }) {
+
   return (
+
     <div className="flex items-center gap-1.5">
 
       <span
@@ -2073,10 +2736,12 @@ function Legend({
         }}
       />
 
+
       <span className="text-[9px] font-semibold text-slate-500">
         {label}
       </span>
 
     </div>
+
   );
 }
