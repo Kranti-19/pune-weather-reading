@@ -1,8 +1,4 @@
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   FileText,
@@ -16,889 +12,1003 @@ import {
   RefreshCw,
   Search,
   XCircle,
+  Activity,
+  ShieldAlert,
+  Wrench,
+  BarChart3,
+  Database,
+  Clock3,
+  Filter,
 } from "lucide-react";
 
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+import API from "../api/apiClient";
 
 // ============================================================
-// BACKEND
-// ============================================================
-
-const API_BASE_URL =
-  "https://pune-weather-reading.onrender.com/api";
-
-
-// ============================================================
-// TODAY
+// DATE HELPERS
 // ============================================================
 
 const getToday = () => {
-
   const date = new Date();
 
-  const year =
-    date.getFullYear();
-
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(2, "0");
-
-  const day =
-    String(
-      date.getDate()
-    ).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 };
 
+const getDaysAgo = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+};
 
 // ============================================================
 // REPORT TEMPLATES
 // ============================================================
 
 const REPORT_TEMPLATES = [
-
   {
     id: "CPCB_DAILY",
     title: "Daily CAAQM Station Audit",
     code: "FORM-IV / CPCB",
-    desc:
-      "24-hour pollutant averages with AQI classification and station data-quality status.",
+    desc: "24-hour pollutant averages with AQI classification and station data-quality status.",
     frequency: "Daily Automatic",
     status: "Ready",
+    icon: FileText,
   },
-
   {
-    id: "WARD_EXCEED",
-    title: "Ward Exceedance & Breach Log",
-    code: "PMC-ENV-2026",
-    desc:
-      "Audit of PM2.5, PM10 and NO₂ concentration exceedances by monitoring station.",
-    frequency: "Event Driven",
+    id: "WARD_AQI",
+    title: "Ward-wise AQI Report",
+    code: "PMC-ENV-WARD",
+    desc: "Daily or monthly AQI summary grouped according to municipal ward.",
+    frequency: "Daily / Monthly",
     status: "Ready",
+    icon: Building2,
   },
-
+  {
+    id: "POLLUTANT_TREND",
+    title: "Pollutant Trend Report",
+    code: "PMC-ENV-TREND",
+    desc: "Daily PM2.5, PM10 and NO2 concentration trends.",
+    frequency: "Custom Range",
+    status: "Ready",
+    icon: BarChart3,
+  },
   {
     id: "UPTIME_QAQC",
     title: "Station Uptime & Data Completeness",
     code: "QAQC-TEL-99",
-    desc:
-      "Station reading count, data availability, current/historical status and completeness.",
+    desc: "Station reading count, data availability, current status and completeness.",
     frequency: "Weekly Audit",
     status: "Certified",
+    icon: Activity,
   },
-
+  {
+    id: "ALERT_SUMMARY",
+    title: "Alert Summary Report",
+    code: "PMC-ALERT",
+    desc: "Environmental alerts grouped by severity, parameter and station.",
+    frequency: "Event Driven",
+    status: "Ready",
+    icon: ShieldAlert,
+  },
+  {
+    id: "MAINTENANCE",
+    title: "Maintenance & Calibration",
+    code: "PMC-MAINT",
+    desc: "Maintenance records, calibration records and overdue activities.",
+    frequency: "Scheduled",
+    status: "Ready",
+    icon: Wrench,
+  },
 ];
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+const toNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
+};
+
+const formatNumber = (value, decimals = 1) => {
+  const number = toNumber(value);
+
+  if (number === null) {
+    return "N/A";
+  }
+
+  return number.toFixed(decimals);
+};
+
+const formatDate = (value) => {
+  if (!value) return "N/A";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "N/A";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getAqiCategory = (value) => {
+  const aqi = toNumber(value);
+
+  if (aqi === null) return "N/A";
+
+  if (aqi <= 50) return "Good";
+  if (aqi <= 100) return "Satisfactory";
+  if (aqi <= 200) return "Moderate";
+  if (aqi <= 300) return "Poor";
+  if (aqi <= 400) return "Very Poor";
+
+  return "Severe";
+};
+
+const getAqiClass = (value) => {
+  const aqi = toNumber(value);
+
+  if (aqi === null) {
+    return "bg-slate-100 text-slate-600";
+  }
+
+  if (aqi <= 50) {
+    return "bg-green-100 text-green-700";
+  }
+
+  if (aqi <= 100) {
+    return "bg-lime-100 text-lime-700";
+  }
+
+  if (aqi <= 200) {
+    return "bg-yellow-100 text-yellow-700";
+  }
+
+  if (aqi <= 300) {
+    return "bg-orange-100 text-orange-700";
+  }
+
+  if (aqi <= 400) {
+    return "bg-red-100 text-red-700";
+  }
+
+  return "bg-purple-100 text-purple-700";
+};
+
+const getDataStatusClass = (status) => {
+  switch (String(status || "").toLowerCase()) {
+    case "current":
+      return "bg-green-50 text-green-700 border-green-200";
+
+    case "historical":
+      return "bg-yellow-50 text-yellow-700 border-yellow-200";
+
+    case "mixed":
+      return "bg-blue-50 text-blue-700 border-blue-200";
+
+    case "no data":
+      return "bg-red-50 text-red-700 border-red-200";
+
+    default:
+      return "bg-slate-50 text-slate-600 border-slate-200";
+  }
+};
+
+const escapeCSV = (value) => {
+  const text =
+    value === null || value === undefined
+      ? ""
+      : String(value);
+
+  return `"${text.replace(/"/g, '""')}"`;
+};
 
 // ============================================================
-// COMPONENT
+// SUMMARY CARD
+// ============================================================
+
+const SummaryCard = ({
+  icon: Icon,
+  title,
+  value,
+  valueClass = "text-slate-800",
+}) => {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-slate-500">{title}</p>
+
+          <p
+            className={`mt-1 text-2xl font-bold ${valueClass}`}
+          >
+            {value}
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+          <Icon size={21} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// COMPLIANCE BADGE
+// ============================================================
+
+const ComplianceBadge = ({ value }) => {
+  const text = String(value || "N/A");
+
+  let className =
+    "bg-slate-100 text-slate-600";
+
+  if (text.toLowerCase() === "compliant") {
+    className =
+      "bg-green-100 text-green-700";
+  }
+
+  if (text.toLowerCase().includes("action")) {
+    className =
+      "bg-orange-100 text-orange-700";
+  }
+
+  if (text.toLowerCase().includes("no data")) {
+    className =
+      "bg-red-100 text-red-700";
+  }
+
+  return (
+    <span
+      className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}
+    >
+      {text}
+    </span>
+  );
+};
+
+// ============================================================
+// MAIN COMPONENT
 // ============================================================
 
 export default function Reports() {
+  // ==========================================================
+  // FILTERS
+  // ==========================================================
 
-  const [
-    selectedStation,
-    setSelectedStation,
-  ] = useState("ALL");
+  const [selectedStation, setSelectedStation] =
+    useState("ALL");
 
+  const [reportType, setReportType] =
+    useState("CPCB_DAILY");
 
-  const [
-    reportType,
-    setReportType,
-  ] = useState("CPCB_DAILY");
+  const [fromDate, setFromDate] =
+    useState(getToday());
 
+  const [toDate, setToDate] =
+    useState(getToday());
 
-  const [
-    observationDate,
-    setObservationDate,
-  ] = useState(
-    getToday()
-  );
+  const [wardGroupBy, setWardGroupBy] =
+    useState("day");
 
+  const [pollutantParameter, setPollutantParameter] =
+    useState("ALL");
 
-  const [
-    stations,
-    setStations,
-  ] = useState([]);
+  // ==========================================================
+  // DATA
+  // ==========================================================
 
+  const [stations, setStations] = useState([]);
 
-  const [
-    complianceRecords,
-    setComplianceRecords,
-  ] = useState([]);
+  const [complianceRecords, setComplianceRecords] =
+    useState([]);
 
+  const [wardRecords, setWardRecords] =
+    useState([]);
 
-  const [
-    reportSummary,
-    setReportSummary,
-  ] = useState(null);
+  const [pollutantRecords, setPollutantRecords] =
+    useState([]);
 
+  const [uptimeRecords, setUptimeRecords] =
+    useState([]);
 
-  const [
-    reportPeriod,
-    setReportPeriod,
-  ] = useState(null);
+  const [alertRecords, setAlertRecords] =
+    useState([]);
 
+  const [alertSummary, setAlertSummary] =
+    useState(null);
 
-  const [
-    isLoading,
-    setIsLoading,
-  ] = useState(false);
+  const [maintenanceRecords, setMaintenanceRecords] =
+    useState([]);
 
+  const [calibrationRecords, setCalibrationRecords] =
+    useState([]);
 
-  const [
-    isGenerating,
-    setIsGenerating,
-  ] = useState(false);
+  const [maintenanceSummary, setMaintenanceSummary] =
+    useState(null);
 
+  const [reportSummary, setReportSummary] =
+    useState(null);
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [reportPeriod, setReportPeriod] =
+    useState(null);
 
+  // ==========================================================
+  // UI
+  // ==========================================================
 
-  // ============================================================
-  // FETCH REPORT DATA
-  // ============================================================
+  const [isLoading, setIsLoading] =
+    useState(false);
 
-  const fetchReportData = async () => {
+  const [isGenerating, setIsGenerating] =
+    useState(false);
 
+  const [error, setError] =
+    useState("");
+
+  const [lastUpdated, setLastUpdated] =
+    useState(null);
+
+  // ==========================================================
+  // LOAD STATIONS ONLY
+  // ==========================================================
+
+  const fetchStations = async () => {
     try {
+      const response = await API.get("/stations");
 
+      const result = response.data;
+
+      const stationList =
+        Array.isArray(result?.stations)
+          ? result.stations
+          : Array.isArray(result?.data)
+            ? result.data
+            : [];
+
+      setStations(stationList);
+    } catch (err) {
+      console.error(
+        "Station loading error:",
+        err
+      );
+    }
+  };
+
+  // ==========================================================
+  // STATION MAP
+  // ==========================================================
+
+  const stationMap = useMemo(() => {
+    const map = {};
+
+    stations.forEach((station) => {
+      const id =
+        station.station_id ??
+        station.stationId ??
+        station.id;
+
+      if (id !== undefined && id !== null) {
+        map[String(id)] =
+          station.name ??
+          station.station_name ??
+          station.stationName ??
+          `Station ${id}`;
+      }
+    });
+
+    return map;
+  }, [stations]);
+
+  // ==========================================================
+  // MAIN REPORT
+  // ==========================================================
+
+  const fetchMainReport = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+    };
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports",
+      { params }
+    );
+
+    const result = response.data;
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load station report."
+      );
+    }
+
+    setStations(
+      Array.isArray(result.stations)
+        ? result.stations
+        : stations
+    );
+
+    setComplianceRecords(
+      Array.isArray(result.data)
+        ? result.data
+        : []
+    );
+
+    setReportSummary(
+      result.summary || null
+    );
+
+    setReportPeriod(
+      result.reportPeriod || null
+    );
+  };
+
+  // ==========================================================
+  // WARD REPORT
+  // ==========================================================
+
+  const fetchWardReport = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+      groupBy: wardGroupBy,
+    };
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports/ward",
+      { params }
+    );
+
+    const result = response.data;
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load ward report."
+      );
+    }
+
+    setWardRecords(
+      Array.isArray(result.data)
+        ? result.data
+        : []
+    );
+  };
+
+  // ==========================================================
+  // POLLUTANT TREND
+  // ==========================================================
+
+  const fetchPollutantTrend = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+    };
+
+    if (pollutantParameter !== "ALL") {
+      params.parameter =
+        pollutantParameter;
+    }
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports/pollutant-trend",
+      { params }
+    );
+
+    const result = response.data;
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load pollutant trend."
+      );
+    }
+
+    setPollutantRecords(
+      Array.isArray(result.data)
+        ? result.data
+        : []
+    );
+  };
+
+  // ==========================================================
+  // UPTIME REPORT
+  // ==========================================================
+
+  const fetchUptimeReport = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+    };
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports/uptime",
+      { params }
+    );
+
+    const result = response.data;
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load uptime report."
+      );
+    }
+
+    setUptimeRecords(
+      Array.isArray(result.data)
+        ? result.data.map((row) => ({
+            ...row,
+
+            battery:
+              row.batteryLevel ??
+              row.battery ??
+              row.battery_level ??
+              null,
+          }))
+        : []
+    );
+  };
+
+  // ==========================================================
+  // ALERT REPORT
+  // ==========================================================
+
+  const fetchAlertReport = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+    };
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports/alerts",
+      { params }
+    );
+
+    const result = response.data;
+
+    console.log(
+      "Alert response:",
+      result
+    );
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load alert report."
+      );
+    }
+
+    // --------------------------------------------------------
+    // IMPORTANT:
+    // Convert station_id into station name
+    // --------------------------------------------------------
+
+    const records =
+      Array.isArray(result.data)
+        ? result.data.map((row) => ({
+            ...row,
+
+            station:
+              row.station ??
+              row.stationName ??
+              row.station_name ??
+              stationMap[
+                String(
+                  row.station_id ??
+                    row.stationId ??
+                    ""
+                )
+              ] ??
+              `Station ${
+                row.station_id ??
+                row.stationId ??
+                "N/A"
+              }`,
+
+            severity:
+              row.severity ??
+              "N/A",
+
+            parameter:
+              row.parameter ??
+              "N/A",
+
+            message:
+              row.message ??
+              row.description ??
+              row.alert_message ??
+              "N/A",
+
+            started_time:
+              row.started_time ??
+              row.startedTime ??
+              row.start_time ??
+              null,
+
+            ended_time:
+              row.ended_time ??
+              row.endedTime ??
+              row.end_time ??
+              null,
+
+            status:
+              row.status ??
+              (
+                row.acknowledged_at ||
+                String(
+                  row.acknowledgement ??
+                    ""
+                ).toLowerCase() ===
+                  "acknowledged"
+                  ? "Acknowledged"
+                  : "Active"
+              ),
+          }))
+        : [];
+
+    setAlertRecords(records);
+
+    setAlertSummary(
+      result.summary || {
+        totalAlerts: records.length,
+        activeAlerts: records.filter(
+          (row) =>
+            String(
+              row.status
+            ).toLowerCase() !==
+            "acknowledged"
+        ).length,
+        acknowledgedAlerts: records.filter(
+          (row) =>
+            String(
+              row.status
+            ).toLowerCase() ===
+            "acknowledged"
+        ).length,
+        bySeverity: {},
+        byParameter: {},
+        byStation: {},
+      }
+    );
+  };
+
+  // ==========================================================
+  // MAINTENANCE + CALIBRATION
+  // ==========================================================
+
+  const fetchMaintenanceReport = async () => {
+    const params = {
+      from: fromDate,
+      to: toDate,
+    };
+
+    if (selectedStation !== "ALL") {
+      params.stationId = selectedStation;
+    }
+
+    const response = await API.get(
+      "/reports/maintenance-calibration",
+      { params }
+    );
+
+    const result = response.data;
+
+    if (result?.status !== "success") {
+      throw new Error(
+        result?.message ||
+          "Unable to load maintenance report."
+      );
+    }
+
+    setMaintenanceRecords(
+      Array.isArray(result.maintenance)
+        ? result.maintenance
+        : []
+    );
+
+    setCalibrationRecords(
+      Array.isArray(result.calibration)
+        ? result.calibration
+        : []
+    );
+
+    setMaintenanceSummary(
+      result.summary || null
+    );
+  };
+
+  // ==========================================================
+  // LOAD SELECTED REPORT ONLY
+  // ==========================================================
+
+  const fetchReports = async () => {
+    try {
       setIsLoading(true);
-
       setError("");
 
+      // Clear only the selected report
+      // before loading new data.
 
-      let url =
-        `${API_BASE_URL}/reports` +
-        `?date=${encodeURIComponent(
-          observationDate
-        )}`;
+      if (reportType === "CPCB_DAILY") {
+        setComplianceRecords([]);
+        await fetchMainReport();
+      }
 
+      if (reportType === "WARD_AQI") {
+        setWardRecords([]);
+        await fetchWardReport();
+      }
 
       if (
-        selectedStation !== "ALL"
+        reportType ===
+        "POLLUTANT_TREND"
       ) {
-
-        url +=
-          `&stationId=${encodeURIComponent(
-            selectedStation
-          )}`;
-
+        setPollutantRecords([]);
+        await fetchPollutantTrend();
       }
-
-
-      console.log(
-        "Fetching report:",
-        url
-      );
-
-
-      const response =
-        await fetch(url);
-
-
-      const contentType =
-        response.headers.get(
-          "content-type"
-        ) || "";
-
-
-      // --------------------------------------------------------
-      // SERVER ERROR
-      // --------------------------------------------------------
-
-      if (!response.ok) {
-
-        let message =
-          `Server returned ${response.status}`;
-
-
-        if (
-          contentType.includes(
-            "application/json"
-          )
-        ) {
-
-          try {
-
-            const errorData =
-              await response.json();
-
-
-            message =
-              errorData?.message ||
-              errorData?.error ||
-              message;
-
-          } catch {
-
-            // Ignore JSON parse error
-
-          }
-
-        } else {
-
-          try {
-
-            const text =
-              await response.text();
-
-
-            if (
-              text.includes(
-                "<!DOCTYPE"
-              ) ||
-              text.includes(
-                "<html"
-              )
-            ) {
-
-              message =
-                `Backend route not found (${response.status}). ` +
-                `Check /api/reports in server.js.`;
-
-            }
-
-          } catch {
-
-            // Ignore
-
-          }
-
-        }
-
-
-        throw new Error(
-          message
-        );
-
-      }
-
-
-      // --------------------------------------------------------
-      // CHECK JSON
-      // --------------------------------------------------------
 
       if (
-        !contentType.includes(
-          "application/json"
-        )
+        reportType ===
+        "UPTIME_QAQC"
       ) {
-
-        throw new Error(
-          "Backend did not return JSON. Check your /api/reports route."
-        );
-
+        setUptimeRecords([]);
+        await fetchUptimeReport();
       }
-
-
-      const result =
-        await response.json();
-
-
-      console.log(
-        "Report API response:",
-        result
-      );
-
 
       if (
-        result.status !==
-        "success"
+        reportType ===
+        "ALERT_SUMMARY"
       ) {
-
-        throw new Error(
-          result.message ||
-          "Unable to load report data."
-        );
-
+        setAlertRecords([]);
+        setAlertSummary(null);
+        await fetchAlertReport();
       }
 
+      if (
+        reportType ===
+        "MAINTENANCE"
+      ) {
+        setMaintenanceRecords([]);
+        setCalibrationRecords([]);
+        await fetchMaintenanceReport();
+      }
 
-      // --------------------------------------------------------
-      // STATIONS
-      // --------------------------------------------------------
-
-      setStations(
-        Array.isArray(
-          result.stations
-        )
-          ? result.stations
-          : []
+      setLastUpdated(
+        new Date()
       );
-
-
-      // --------------------------------------------------------
-      // REPORT DATA
-      // --------------------------------------------------------
-
-      setComplianceRecords(
-        Array.isArray(
-          result.data
-        )
-          ? result.data
-          : []
-      );
-
-
-      // --------------------------------------------------------
-      // SUMMARY
-      // --------------------------------------------------------
-
-      setReportSummary(
-        result.summary ||
-        null
-      );
-
-
-      // --------------------------------------------------------
-      // REPORT PERIOD
-      // --------------------------------------------------------
-
-      setReportPeriod(
-        result.reportPeriod ||
-        null
-      );
-
-
     } catch (err) {
-
       console.error(
-        "Report API error:",
+        "Reports loading error:",
         err
       );
 
-
       setError(
-        err?.message ||
-        "Unable to connect to the backend."
+        err?.response?.data?.message ||
+          err?.message ||
+          "Unable to load report."
       );
-
-
-      setStations([]);
-
-      setComplianceRecords([]);
-
-      setReportSummary(null);
-
-      setReportPeriod(null);
-
-
     } finally {
-
       setIsLoading(false);
-
     }
-
   };
 
-
-  // ============================================================
-  // LOAD REPORT
-  // ============================================================
+  // ==========================================================
+  // INITIAL LOAD
+  // ==========================================================
 
   useEffect(() => {
+    fetchStations();
 
-    fetchReportData();
+    // Load only the default report.
+    fetchReports();
+  }, []);
 
-  }, [
-    observationDate,
-    selectedStation,
-  ]);
+  // ==========================================================
+  // NORMALIZE MAIN REPORT
+  // ==========================================================
 
+  const normalizedRecords = useMemo(() => {
+    return complianceRecords.map(
+      (row, index) => {
+        const station =
+          row.station ??
+          row.stationName ??
+          row.station_name ??
+          "Unknown Station";
 
-  // ============================================================
-  // NORMALIZE DATA
-  // ============================================================
+        const stationId =
+          row.stationId ??
+          row.station_id ??
+          row.id ??
+          `ROW-${index + 1}`;
 
-  const normalizedRecords =
-    useMemo(() => {
+        const pm25 =
+          row.pm25 ??
+          row.PM25 ??
+          row.pm2_5 ??
+          row.pm2_5_avg ??
+          null;
 
-      return complianceRecords.map(
-        (row, index) => {
+        const pm10 =
+          row.pm10 ??
+          row.PM10 ??
+          row.pm10_avg ??
+          null;
 
-          const station =
-            row.station ??
-            row.stationName ??
-            row.station_name ??
-            "Unknown Station";
+        const no2 =
+          row.no2 ??
+          row.NO2 ??
+          row.no2_avg ??
+          null;
 
+        const aqi =
+          row.aqi ??
+          row.AQI ??
+          row.latestAqi ??
+          row.latest_aqi ??
+          null;
 
-          const stationId =
-            row.stationId ??
-            row.station_id ??
-            row.id ??
-            `ROW-${index + 1}`;
+        const category =
+          row.category ??
+          row.aqiCategory ??
+          row.aqi_category ??
+          getAqiCategory(aqi);
 
+        const dominant =
+          row.dominant ??
+          row.dominantPollutant ??
+          row.dominant_pollutant ??
+          "N/A";
 
-          const ward =
+        const availability =
+          row.availability ??
+          row.dataAvailability ??
+          row.data_availability ??
+          row.dataRate ??
+          null;
+
+        const compliance =
+          row.compliance ??
+          (
+            row.isCompliant === true
+              ? "Compliant"
+              : row.isCompliant === false
+                ? "Action Triggered"
+                : "N/A"
+          );
+
+        const dataStatus =
+          row.dataStatus ??
+          row.data_status ??
+          "Unknown";
+
+        return {
+          ...row,
+
+          station,
+          stationId,
+          ward:
             row.ward ??
             row.stationWard ??
-            "";
-
-
-          const pm25 =
-            row.pm25 ??
-            row.PM25 ??
-            row.pm2_5 ??
-            row.pm2_5_avg ??
-            null;
-
-
-          const pm10 =
-            row.pm10 ??
-            row.PM10 ??
-            row.pm10_avg ??
-            null;
-
-
-          const no2 =
-            row.no2 ??
-            row.NO2 ??
-            row.no2_avg ??
-            null;
-
-
-          const aqi =
-            row.aqi ??
-            row.AQI ??
-            row.latestAqi ??
-            row.latest_aqi ??
-            null;
-
-
-          const category =
-            row.category ??
-            row.aqiCategory ??
-            row.aqi_category ??
-            "N/A";
-
-
-          const dominant =
-            row.dominant ??
-            row.dominantPollutant ??
-            row.dominant_pollutant ??
-            "-";
-
-
-          const availability =
-            row.availability ??
-            row.dataAvailability ??
-            row.data_availability ??
-            row.dataRate ??
-            null;
-
-
-          const compliance =
-            row.compliance ??
-            (
-              row.isCompliant === true
-                ? "Compliant"
-                : row.isCompliant === false
-                  ? "Action Triggered"
-                  : "N/A"
-            );
-
-
-          const dataStatus =
-            row.dataStatus ??
-            row.data_status ??
-            "Unknown";
-
-
-          return {
-
-            ...row,
-
-            station,
-
-            stationId,
-
-            ward,
-
-            pm25,
-
-            pm10,
-
-            no2,
-
-            aqi,
-
-            category,
-
-            dominant,
-
-            availability,
-
-            compliance,
-
-            dataStatus,
-
-            currentReadings:
-              row.currentReadings ??
-              0,
-
-            historicalReadings:
-              row.historicalReadings ??
-              0,
-
-            totalReadings:
-              row.totalReadings ??
-              0,
-
-            pm25Readings:
-              row.pm25Readings ??
-              0,
-
-            pm10Readings:
-              row.pm10Readings ??
-              0,
-
-            no2Readings:
-              row.no2Readings ??
-              0,
-
-            reportCompleteness:
-              row.reportCompleteness ??
-              "0%",
-
-            firstReading:
-              row.firstReading ??
-              null,
-
-            lastReading:
-              row.lastReading ??
-              null,
-
-            externalSource:
-              row.externalSource ??
-              null,
-
-            externalStationId:
-              row.externalStationId ??
-              null,
-
-            source:
-              row.source ??
-              null,
-
-          };
-
-        }
-      );
-
-    }, [
-      complianceRecords,
-    ]);
-
-
-  // ============================================================
-  // FORMAT NUMBER
-  // ============================================================
-
-  const numberValue = (
-    value
-  ) => {
-
-    if (
-      value === null ||
-      value === undefined ||
-      value === "" ||
-      Number.isNaN(
-        Number(value)
-      )
-    ) {
-
-      return null;
-
-    }
-
-
-    return Number(value);
-
-  };
-
-
-  // ============================================================
-  // FORMAT POLLUTANT
-  // ============================================================
-
-  const formatPollutant = (
-    value
-  ) => {
-
-    const number =
-      numberValue(value);
-
-
-    if (
-      number === null
-    ) {
-
-      return "N/A";
-
-    }
-
-
-    return `${number.toFixed(
-      1
-    )} µg/m³`;
-
-  };
-
-
-  // ============================================================
-  // FORMAT AQI
-  // ============================================================
-
-  const formatAQI = (
-    value
-  ) => {
-
-    const number =
-      numberValue(value);
-
-
-    if (
-      number === null
-    ) {
-
-      return "N/A";
-
-    }
-
-
-    return Math.round(
-      number
+            "",
+          zone:
+            row.zone ??
+            "",
+          pm25,
+          pm10,
+          no2,
+          aqi,
+          category,
+          dominant,
+          availability,
+          compliance,
+          dataStatus,
+
+          totalReadings:
+            row.totalReadings ??
+            0,
+        };
+      }
     );
+  }, [complianceRecords]);
 
-  };
-
-
-  // ============================================================
-  // FORMAT AVAILABILITY
-  // ============================================================
-
-  const formatAvailability = (
-    value
-  ) => {
-
-    if (
-      value === null ||
-      value === undefined ||
-      value === ""
-    ) {
-
-      return "N/A";
-
-    }
-
-
-    if (
-      typeof value === "number"
-    ) {
-
-      return `${value.toFixed(
-        1
-      )}%`;
-
-    }
-
-
-    const text =
-      String(value);
-
-
-    if (
-      text.includes("%")
-    ) {
-
-      return text;
-
-    }
-
-
-    return `${text}%`;
-
-  };
-
-
-  // ============================================================
-  // COMPLIANCE
-  // ============================================================
-
-  const isCompliant = (
-    value
-  ) => {
-
-    if (
-      !value
-    ) {
-
-      return false;
-
-    }
-
-
-    return String(value)
-      .toLowerCase()
-      .includes(
-        "compliant"
-      );
-
-  };
-
-
-  // ============================================================
-  // DATA STATUS
-  // ============================================================
-
-  const getDataStatusClasses = (
-    status
-  ) => {
-
-    switch (
-      String(status)
-        .toLowerCase()
-    ) {
-
-      case "current":
-
-        return (
-          "bg-emerald-50 " +
-          "text-emerald-700 " +
-          "border-emerald-200"
-        );
-
-
-      case "historical":
-
-        return (
-          "bg-amber-50 " +
-          "text-amber-700 " +
-          "border-amber-200"
-        );
-
-
-      case "mixed":
-
-        return (
-          "bg-blue-50 " +
-          "text-blue-700 " +
-          "border-blue-200"
-        );
-
-
-      case "no data":
-
-        return (
-          "bg-red-50 " +
-          "text-red-700 " +
-          "border-red-200"
-        );
-
-
-      default:
-
-        return (
-          "bg-slate-50 " +
-          "text-slate-600 " +
-          "border-slate-200"
-        );
-
-    }
-
-  };
-
-
-  // ============================================================
-  // SELECTED TEMPLATE
-  // ============================================================
-
-  const selectedTemplate =
-    REPORT_TEMPLATES.find(
-      (item) =>
-        item.id ===
-        reportType
-    ) ||
-    REPORT_TEMPLATES[0];
-
-
-  // ============================================================
-  // SELECTED STATION NAME
-  // ============================================================
-
-  const selectedStationName =
-    selectedStation === "ALL"
-      ? "All Municipal Wards"
-      : (
-        stations.find(
-          (station) =>
-            String(
-              station.station_id ??
-              station.stationId ??
-              station.id
-            ) ===
-            String(
-              selectedStation
-            )
-        )?.name ||
-
-        stations.find(
-          (station) =>
-            String(
-              station.station_id ??
-              station.stationId ??
-              station.id
-            ) ===
-            String(
-              selectedStation
-            )
-        )?.station_name ||
-
-        "Selected Station"
-      );
-
-
-  // ============================================================
-  // SUMMARY
-  // ============================================================
+  // ==========================================================
+  // SUMMARY VALUES
+  // ==========================================================
 
   const totalStations =
     normalizedRecords.length;
 
-
   const compliantStations =
     normalizedRecords.filter(
       (row) =>
-        row.compliance ===
-        "Compliant"
+        String(
+          row.compliance
+        ).toLowerCase() ===
+        "compliant"
     ).length;
-
 
   const actionRequired =
     normalizedRecords.filter(
       (row) =>
-        row.compliance ===
-        "Action Triggered"
+        String(
+          row.compliance
+        ).toLowerCase()
+          .includes("action")
     ).length;
-
 
   const noDataStations =
     normalizedRecords.filter(
       (row) =>
-        row.compliance ===
-        "No Data"
+        String(
+          row.compliance
+        ).toLowerCase()
+          .includes("no data")
     ).length;
-
 
   const currentStations =
     normalizedRecords.filter(
@@ -909,2461 +1019,3226 @@ export default function Reports() {
         "current"
     ).length;
 
+  const averageAQI = useMemo(() => {
+    const values =
+      normalizedRecords
+        .map((row) =>
+          toNumber(row.aqi)
+        )
+        .filter(
+          (value) =>
+            value !== null
+        );
 
-  const historicalStations =
-    normalizedRecords.filter(
-      (row) =>
-        String(
-          row.dataStatus
-        ).toLowerCase() ===
-        "historical"
-    ).length;
-
-
-  const mixedStations =
-    normalizedRecords.filter(
-      (row) =>
-        String(
-          row.dataStatus
-        ).toLowerCase() ===
-        "mixed"
-    ).length;
-
-
-  // ============================================================
-  // RESET
-  // ============================================================
-
-  const resetFilters = () => {
-
-    setSelectedStation(
-      "ALL"
-    );
-
-    setObservationDate(
-      getToday()
-    );
-
-    setReportType(
-      "CPCB_DAILY"
-    );
-
-  };
-
-
-  // ============================================================
-  // EXCEL EXPORT
-  // ============================================================
-
-  const exportExcel = async () => {
-
-    if (
-      !normalizedRecords.length
-    ) {
-
-      alert(
-        "No report data is available for export."
-      );
-
-      return;
-
+    if (!values.length) {
+      return null;
     }
 
+    return (
+      values.reduce(
+        (sum, value) =>
+          sum + value,
+        0
+      ) / values.length
+    );
+  }, [normalizedRecords]);
 
-    try {
-
-      setIsGenerating(true);
-
-
-      const workbook =
-        new ExcelJS.Workbook();
-
-
-      workbook.creator =
-        "PMC CAAQM System";
-
-
-      workbook.lastModifiedBy =
-        "PMC CAAQM System";
-
-
-      workbook.created =
-        new Date();
-
-
-      workbook.modified =
-        new Date();
-
-
-      const worksheet =
-        workbook.addWorksheet(
-          "Air Quality Report"
+  const maxWardAQI = useMemo(() => {
+    const values =
+      wardRecords
+        .map((row) =>
+          toNumber(
+            row.averageAQI ??
+              row.averageAqi ??
+              row.maximumAQI ??
+              row.maxAQI
+          )
+        )
+        .filter(
+          (value) =>
+            value !== null
         );
 
+    return values.length
+      ? Math.max(...values)
+      : null;
+  }, [wardRecords]);
 
-      // --------------------------------------------------------
-      // COLUMN WIDTHS
-      // --------------------------------------------------------
+  const pollutantMax = useMemo(() => {
+    const values =
+      pollutantRecords
+        .map((row) =>
+          toNumber(
+            row.maximum ??
+              row.average
+          )
+        )
+        .filter(
+          (value) =>
+            value !== null
+        );
 
-      worksheet.columns = [
+    return values.length
+      ? Math.max(...values)
+      : 0;
+  }, [pollutantRecords]);
 
-        {
-          header:
-            "Station / Ward Node",
-          key:
-            "station",
-          width:
-            32,
-        },
+  // ==========================================================
+  // RESET
+  // ==========================================================
 
-        {
-          header:
-            "Station ID",
-          key:
-            "stationId",
-          width:
-            14,
-        },
+  const resetFilters = () => {
+    setSelectedStation("ALL");
+    setReportType("CPCB_DAILY");
+    setFromDate(getToday());
+    setToDate(getToday());
+    setWardGroupBy("day");
+    setPollutantParameter("ALL");
 
-        {
-          header:
-            "Ward",
-          key:
-            "ward",
-          width:
-            18,
-        },
+    setTimeout(() => {
+      fetchStations();
+    }, 0);
+  };
 
-        {
-          header:
-            "PM2.5 24h (µg/m³)",
-          key:
-            "pm25",
-          width:
-            20,
-        },
+  // ==========================================================
+  // CSV EXPORT
+  // ==========================================================
 
-        {
-          header:
-            "PM10 24h (µg/m³)",
-          key:
-            "pm10",
-          width:
-            20,
-        },
+  const exportCSV = () => {
+    let headers = [];
+    let rows = [];
 
-        {
-          header:
-            "NO2 24h (µg/m³)",
-          key:
-            "no2",
-          width:
-            20,
-        },
-
-        {
-          header:
-            "AQI",
-          key:
-            "aqi",
-          width:
-            12,
-        },
-
-        {
-          header:
-            "AQI Category",
-          key:
-            "category",
-          width:
-            18,
-        },
-
-        {
-          header:
-            "Dominant Pollutant",
-          key:
-            "dominant",
-          width:
-            22,
-        },
-
-        {
-          header:
-            "Data Status",
-          key:
-            "dataStatus",
-          width:
-            16,
-        },
-
-        {
-          header:
-            "Data Completeness",
-          key:
-            "completeness",
-          width:
-            20,
-        },
-
-        {
-          header:
-            "Total Readings",
-          key:
-            "totalReadings",
-          width:
-            16,
-        },
-
-        {
-          header:
-            "Regulatory Audit",
-          key:
-            "compliance",
-          width:
-            22,
-        },
-
+    if (reportType === "CPCB_DAILY") {
+      headers = [
+        "Station",
+        "Station ID",
+        "Ward",
+        "Zone",
+        "PM2.5",
+        "PM10",
+        "NO2",
+        "AQI",
+        "Category",
+        "Dominant",
+        "Availability",
+        "Data Status",
+        "Compliance",
       ];
 
+      rows = normalizedRecords.map(
+        (row) => [
+          row.station,
+          row.stationId,
+          row.ward,
+          row.zone,
+          row.pm25 ?? "",
+          row.pm10 ?? "",
+          row.no2 ?? "",
+          row.aqi ?? "",
+          row.category,
+          row.dominant,
+          row.availability ?? "",
+          row.dataStatus,
+          row.compliance,
+        ]
+      );
+    }
 
-      // --------------------------------------------------------
-      // TITLE
-      // --------------------------------------------------------
+    if (reportType === "WARD_AQI") {
+      headers = [
+        "Ward",
+        "Period",
+        "Average AQI",
+        "Maximum AQI",
+        "Minimum AQI",
+        "Category",
+      ];
 
-      worksheet.mergeCells(
-        "A1:M1"
+      rows = wardRecords.map(
+        (row) => [
+          row.ward ??
+            row.wardName ??
+            "",
+          row.period ??
+            row.date ??
+            row.month ??
+            "",
+          row.averageAQI ??
+            row.averageAqi ??
+            "",
+          row.maximumAQI ??
+            row.maximumAqi ??
+            "",
+          row.minimumAQI ??
+            row.minimumAqi ??
+            "",
+          row.category ??
+            getAqiCategory(
+              row.averageAQI ??
+                row.averageAqi
+            ),
+        ]
+      );
+    }
+
+    if (
+      reportType ===
+      "POLLUTANT_TREND"
+    ) {
+      headers = [
+        "Date",
+        "Parameter",
+        "Average",
+        "Minimum",
+        "Maximum",
+        "Samples",
+      ];
+
+      rows =
+        pollutantRecords.map(
+          (row) => [
+            row.date ?? "",
+            row.parameter ?? "",
+            row.average ?? "",
+            row.minimum ?? "",
+            row.maximum ?? "",
+            row.samples ?? 0,
+          ]
+        );
+    }
+
+    if (
+      reportType ===
+      "UPTIME_QAQC"
+    ) {
+      headers = [
+        "Station",
+        "Station ID",
+        "Devices",
+        "Online",
+        "Offline",
+        "Battery",
+        "Network",
+        "Last Heartbeat",
+        "Availability",
+        "Readings",
+      ];
+
+      rows =
+        uptimeRecords.map(
+          (row) => [
+            row.station ??
+              row.stationName ??
+              "",
+            row.stationId ??
+              row.station_id ??
+              "",
+            row.deviceCount ??
+              row.device_count ??
+              0,
+            row.onlineDevices ??
+              row.online_devices ??
+              0,
+            row.offlineDevices ??
+              row.offline_devices ??
+              0,
+            row.batteryLevel ??
+              row.battery ??
+              row.battery_level ??
+              "",
+            row.networkStatus ??
+              row.network_status ??
+              "",
+            row.latestHeartbeat ??
+              row.latest_heartbeat ??
+              "",
+            row.dataAvailability ??
+              row.data_availability ??
+              "",
+            row.totalReadings ??
+              row.total_readings ??
+              0,
+          ]
+        );
+    }
+
+    if (
+      reportType ===
+      "ALERT_SUMMARY"
+    ) {
+      headers = [
+        "Alert ID",
+        "Station",
+        "Station ID",
+        "Severity",
+        "Parameter",
+        "Message",
+        "Started",
+        "Ended",
+        "Status",
+      ];
+
+      rows =
+        alertRecords.map(
+          (row) => [
+            row.alert_id ??
+              row.alertId ??
+              row.id ??
+              "",
+            row.station ?? "",
+            row.station_id ??
+              row.stationId ??
+              "",
+            row.severity ?? "",
+            row.parameter ?? "",
+            row.message ?? "",
+            row.started_time ?? "",
+            row.ended_time ?? "",
+            row.status ?? "",
+          ]
+        );
+    }
+
+    if (
+      reportType ===
+      "MAINTENANCE"
+    ) {
+      headers = [
+        "Maintenance ID",
+        "Station",
+        "Device",
+        "Service Date",
+        "Next Service Date",
+        "Type",
+        "Status",
+        "Remarks",
+      ];
+
+      rows =
+        maintenanceRecords.map(
+          (row) => [
+            row.maintenance_id ??
+              row.maintenanceId ??
+              row.id ??
+              "",
+            row.station ??
+              row.stationName ??
+              "",
+            row.device ??
+              row.deviceName ??
+              row.device_id ??
+              "",
+            row.service_date ??
+              row.serviceDate ??
+              "",
+            row.next_service_date ??
+              row.nextServiceDate ??
+              "",
+            row.maintenance_type ??
+              row.type ??
+              "",
+            row.status ?? "",
+            row.remarks ??
+              row.notes ??
+              "",
+          ]
+        );
+    }
+
+    if (!rows.length) {
+      alert(
+        "No data available for CSV export."
+      );
+      return;
+    }
+
+    const csv = [
+      headers,
+      ...rows,
+    ]
+      .map((row) =>
+        row
+          .map(escapeCSV)
+          .join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(
+      [csv],
+      {
+        type:
+          "text/csv;charset=utf-8;",
+      }
+    );
+
+    const url =
+      window.URL.createObjectURL(
+        blob
       );
 
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `PMC_Report_${reportType}_${fromDate}_to_${toDate}.csv`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  };
+
+  // ==========================================================
+  // EXCEL EXPORT
+  // ==========================================================
+const exportExcel = async () => {
+  try {
+    setIsGenerating(true);
+
+    const workbook = new ExcelJS.Workbook();
+
+    workbook.creator = "PMC CAAQM System";
+    workbook.lastModifiedBy = "PMC CAAQM System";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    // =========================================================
+    // COLORS
+    // =========================================================
+
+    const COLORS = {
+      navy: "1F4E78",
+      header: "D9E2F3",
+      border: "B7C9D6",
+      white: "FFFFFF",
+      black: "000000",
+      gray: "F7F9FB",
+      darkGray: "595959",
+
+      green: "E2F0D9",
+      greenText: "548235",
+
+      yellow: "FFF2CC",
+      yellowText: "BF9000",
+
+      orange: "FCE4D6",
+      orangeText: "C65911",
+
+      red: "F4CCCC",
+      redText: "C00000",
+    };
+
+    const border = {
+      top: {
+        style: "thin",
+        color: { argb: COLORS.border },
+      },
+      bottom: {
+        style: "thin",
+        color: { argb: COLORS.border },
+      },
+      left: {
+        style: "thin",
+        color: { argb: COLORS.border },
+      },
+      right: {
+        style: "thin",
+        color: { argb: COLORS.border },
+      },
+    };
+
+    // =========================================================
+    // HELPERS
+    // =========================================================
+
+    const safeNumber = (value) => {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
+      }
+
+      const number = Number(value);
+
+      return Number.isFinite(number)
+        ? number
+        : null;
+    };
+
+    const safeDate = (value) => {
+      if (!value) {
+        return null;
+      }
+
+      const date = new Date(value);
+
+      return Number.isNaN(date.getTime())
+        ? null
+        : date;
+    };
+
+    const getStationName = (row) => {
+      const stationId =
+        row?.station_id ??
+        row?.stationId ??
+        row?.stationID;
+
+      return (
+        row?.station ??
+        row?.stationName ??
+        row?.station_name ??
+        stationMap?.[String(stationId)] ??
+        (stationId
+          ? `Station ${stationId}`
+          : "N/A")
+      );
+    };
+
+    // =========================================================
+    // REPORT HEADER
+    // =========================================================
+
+    const addReportHeader = (
+      sheet,
+      reportTitle,
+      description,
+      totalColumns
+    ) => {
+      // -------------------------------------------------------
+      // ROW 1 - MAIN TITLE
+      // -------------------------------------------------------
+
+      const lastColumn =
+        String.fromCharCode(
+          64 + totalColumns
+        );
+
+      sheet.mergeCells(
+        `A1:${lastColumn}1`
+      );
 
       const titleCell =
-        worksheet.getCell(
-          "A1"
-        );
-
+        sheet.getCell("A1");
 
       titleCell.value =
-        "PUNE MUNICIPAL CORPORATION";
-
+        "PMC AIR QUALITY MONITORING SYSTEM";
 
       titleCell.font = {
-
-        name:
-          "Arial",
-
-        size:
-          18,
-
-        bold:
-          true,
-
+        name: "Arial",
+        size: 18,
+        bold: true,
+        color: COLORS.white,
       };
 
+      titleCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: {
+          argb: COLORS.navy,
+        },
+      };
 
       titleCell.alignment = {
-
-        horizontal:
-          "center",
-
-        vertical:
-          "middle",
-
+        horizontal: "center",
+        vertical: "middle",
       };
 
+      titleCell.border = border;
 
-      worksheet.getRow(
-        1
-      ).height = 30;
+      sheet.getRow(1).height = 34;
 
+      // -------------------------------------------------------
+      // ROW 2 - REPORT TITLE
+      // -------------------------------------------------------
 
-      // --------------------------------------------------------
-      // SUBTITLE
-      // --------------------------------------------------------
-
-      worksheet.mergeCells(
-        "A2:M2"
+      sheet.mergeCells(
+        `A2:${lastColumn}2`
       );
 
+      const reportTitleCell =
+        sheet.getCell("A2");
 
-      const subtitleCell =
-        worksheet.getCell(
-          "A2"
+      reportTitleCell.value =
+        reportTitle;
+
+      reportTitleCell.font = {
+        name: "Arial",
+        size: 14,
+        bold: true,
+        color: COLORS.navy,
+      };
+
+      reportTitleCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+      sheet.getRow(2).height = 25;
+
+      // -------------------------------------------------------
+      // ROW 3 - DESCRIPTION
+      // -------------------------------------------------------
+
+      sheet.mergeCells(
+        `A3:${lastColumn}3`
+      );
+
+      const descriptionCell =
+        sheet.getCell("A3");
+
+      descriptionCell.value =
+        description;
+
+      descriptionCell.font = {
+        name: "Arial",
+        size: 10,
+        italic: true,
+        color: COLORS.darkGray,
+      };
+
+      descriptionCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+      sheet.getRow(3).height = 22;
+
+      // -------------------------------------------------------
+      // ROW 4 - DATE INFORMATION
+      // -------------------------------------------------------
+
+      const middleColumn =
+        Math.floor(
+          totalColumns / 2
         );
 
+      const middleLetter =
+        String.fromCharCode(
+          64 + middleColumn
+        );
 
-      subtitleCell.value =
-        "REGULATORY AIR QUALITY MONITORING REPORT";
+      const nextLetter =
+        String.fromCharCode(
+          65 + middleColumn
+        );
 
+      sheet.mergeCells(
+        `A4:${middleLetter}4`
+      );
 
-      subtitleCell.font = {
+      sheet.mergeCells(
+        `${nextLetter}4:${lastColumn}4`
+      );
 
-        name:
-          "Arial",
+      const periodCell =
+        sheet.getCell("A4");
 
-        size:
-          14,
+      periodCell.value =
+        `Report Period: ${fromDate} to ${toDate}`;
 
-        bold:
-          true,
-
+      periodCell.font = {
+        name: "Arial",
+        size: 10,
+        bold: true,
+        color: COLORS.darkGray,
       };
 
-
-      subtitleCell.alignment = {
-
-        horizontal:
-          "center",
-
-        vertical:
-          "middle",
-
+      periodCell.alignment = {
+        horizontal: "left",
+        vertical: "middle",
       };
 
+      const generatedCell =
+        sheet.getCell(
+          4,
+          middleColumn + 1
+        );
 
-      worksheet.getRow(
-        2
-      ).height = 25;
+      generatedCell.value =
+        `Generated: ${new Date().toLocaleString(
+          "en-IN"
+        )}`;
 
-
-      // --------------------------------------------------------
-      // REPORT INFORMATION
-      // --------------------------------------------------------
-
-      worksheet.mergeCells(
-        "A4:B4"
-      );
-
-
-      worksheet.getCell(
-        "A4"
-      ).value =
-        "Report Type";
-
-
-      worksheet.getCell(
-        "A4"
-      ).font = {
-        bold:
-          true,
+      generatedCell.font = {
+        name: "Arial",
+        size: 10,
+        color: COLORS.darkGray,
       };
 
-
-      worksheet.mergeCells(
-        "C4:E4"
-      );
-
-
-      worksheet.getCell(
-        "C4"
-      ).value =
-        selectedTemplate.title;
-
-
-      worksheet.mergeCells(
-        "F4:G4"
-      );
-
-
-      worksheet.getCell(
-        "F4"
-      ).value =
-        "Observation Date";
-
-
-      worksheet.getCell(
-        "F4"
-      ).font = {
-        bold:
-          true,
+      generatedCell.alignment = {
+        horizontal: "right",
+        vertical: "middle",
       };
 
+      sheet.getRow(4).height = 22;
+    };
 
-      worksheet.mergeCells(
-        "H4:M4"
+    // =========================================================
+    // SUMMARY BOXES
+    // =========================================================
+
+    const addSummaryBoxes = (
+      sheet,
+      items,
+      totalColumns
+    ) => {
+      const boxCount = items.length;
+
+      const baseWidth = Math.floor(
+        totalColumns / boxCount
       );
 
+      let startColumn = 1;
 
-      worksheet.getCell(
-        "H4"
-      ).value =
-        observationDate;
+      items.forEach(
+        (item, index) => {
+          let endColumn =
+            startColumn +
+            baseWidth -
+            1;
 
+          if (
+            index ===
+            boxCount - 1
+          ) {
+            endColumn =
+              totalColumns;
+          }
 
-      worksheet.mergeCells(
-        "A5:B5"
-      );
+          const startLetter =
+            String.fromCharCode(
+              64 + startColumn
+            );
 
+          const endLetter =
+            String.fromCharCode(
+              64 + endColumn
+            );
 
-      worksheet.getCell(
-        "A5"
-      ).value =
-        "Report Code";
+          // Label
+          sheet.mergeCells(
+            `${startLetter}5:${endLetter}5`
+          );
 
+          // Value
+          sheet.mergeCells(
+            `${startLetter}6:${endLetter}6`
+          );
 
-      worksheet.getCell(
-        "A5"
-      ).font = {
-        bold:
-          true,
-      };
+          const labelCell =
+            sheet.getCell(
+              5,
+              startColumn
+            );
 
+          const valueCell =
+            sheet.getCell(
+              6,
+              startColumn
+            );
 
-      worksheet.mergeCells(
-        "C5:E5"
-      );
+          labelCell.value =
+            item.label;
 
-
-      worksheet.getCell(
-        "C5"
-      ).value =
-        selectedTemplate.code;
-
-
-      worksheet.mergeCells(
-        "F5:G5"
-      );
-
-
-      worksheet.getCell(
-        "F5"
-      ).value =
-        "Station Filter";
-
-
-      worksheet.getCell(
-        "F5"
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        "H5:M5"
-      );
-
-
-      worksheet.getCell(
-        "H5"
-      ).value =
-        selectedStationName;
-
-
-      // --------------------------------------------------------
-      // DATA PERIOD
-      // --------------------------------------------------------
-
-      worksheet.mergeCells(
-        "A6:B6"
-      );
-
-
-      worksheet.getCell(
-        "A6"
-      ).value =
-        "Report Period";
-
-
-      worksheet.getCell(
-        "A6"
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        "C6:E6"
-      );
-
-
-      worksheet.getCell(
-        "C6"
-      ).value =
-        reportPeriod
-          ? "24 hours"
-          : "24 hours";
-
-
-      worksheet.mergeCells(
-        "F6:G6"
-      );
-
-
-      worksheet.getCell(
-        "F6"
-      ).value =
-        "Data Source";
-
-
-      worksheet.getCell(
-        "F6"
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        "H6:M6"
-      );
-
-
-      worksheet.getCell(
-        "H6"
-      ).value =
-        "PMC CAAQM / OpenAQ";
-
-
-      // --------------------------------------------------------
-      // TABLE HEADER
-      // --------------------------------------------------------
-
-      const headerRow =
-        worksheet.addRow([
-          "Station / Ward Node",
-          "Station ID",
-          "Ward",
-          "PM2.5 24h (µg/m³)",
-          "PM10 24h (µg/m³)",
-          "NO2 24h (µg/m³)",
-          "AQI",
-          "AQI Category",
-          "Dominant Pollutant",
-          "Data Status",
-          "Data Completeness",
-          "Total Readings",
-          "Regulatory Audit",
-        ]);
-
-
-      headerRow.height =
-        35;
-
-
-      headerRow.eachCell(
-        (cell) => {
-
-          cell.font = {
-
-            bold:
-              true,
-
-            color: {
-              argb:
-                "FFFFFF",
-            },
-
+          labelCell.font = {
+            name: "Arial",
+            size: 10,
+            bold: true,
+            color:
+              item.color ||
+              COLORS.navy,
           };
 
-
-          cell.alignment = {
-
-            horizontal:
-              "center",
-
-            vertical:
-              "middle",
-
-            wrapText:
-              true,
-
-          };
-
-
-          cell.fill = {
-
-            type:
-              "pattern",
-
-            pattern:
-              "solid",
-
+          labelCell.fill = {
+            type: "pattern",
+            pattern: "solid",
             fgColor: {
               argb:
-                "1D4ED8",
+                item.background ||
+                COLORS.header,
             },
-
           };
 
-
-          cell.border = {
-
-            top: {
-              style:
-                "thin",
-
-              color: {
-                argb:
-                  "CBD5E1",
-              },
-            },
-
-            bottom: {
-              style:
-                "thin",
-
-              color: {
-                argb:
-                  "CBD5E1",
-              },
-            },
-
-            left: {
-              style:
-                "thin",
-
-              color: {
-                argb:
-                  "CBD5E1",
-              },
-            },
-
-            right: {
-              style:
-                "thin",
-
-              color: {
-                argb:
-                  "CBD5E1",
-              },
-            },
-
+          labelCell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
           };
 
+          labelCell.border = border;
+
+          valueCell.value =
+            item.value;
+
+          valueCell.font = {
+            name: "Arial",
+            size: 16,
+            bold: true,
+            color:
+              item.color ||
+              COLORS.navy,
+          };
+
+          valueCell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb:
+                item.background ||
+                COLORS.header,
+            },
+          };
+
+          valueCell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+          };
+
+          valueCell.border = border;
+
+          startColumn =
+            endColumn + 1;
         }
       );
 
+      sheet.getRow(5).height = 22;
+      sheet.getRow(6).height = 30;
+      sheet.getRow(7).height = 8;
+    };
 
-      // --------------------------------------------------------
-      // DATA ROWS
-      // --------------------------------------------------------
+    // =========================================================
+    // TABLE HEADER
+    // =========================================================
+
+    const styleTableHeader = (
+      sheet,
+      rowNumber
+    ) => {
+      const row =
+        sheet.getRow(rowNumber);
+
+      row.height = 30;
+
+      row.eachCell(
+        (cell) => {
+          cell.font = {
+            name: "Arial",
+            size: 10,
+            bold: true,
+            color: COLORS.navy,
+          };
+
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: COLORS.header,
+            },
+          };
+
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+
+          cell.border = border;
+        }
+      );
+    };
+
+    // =========================================================
+    // TABLE BODY
+    // =========================================================
+
+    const styleTableBody = (
+      sheet,
+      startRow
+    ) => {
+      for (
+        let rowNumber = startRow;
+        rowNumber <=
+        sheet.rowCount;
+        rowNumber++
+      ) {
+        const row =
+          sheet.getRow(rowNumber);
+
+        row.height = 22;
+
+        row.eachCell(
+          (cell) => {
+            cell.font = {
+              name: "Arial",
+              size: 10,
+              color: COLORS.black,
+            };
+
+            cell.alignment = {
+              vertical: "middle",
+              wrapText: true,
+            };
+
+            cell.border = border;
+
+            if (
+              rowNumber % 2 ===
+              0
+            ) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: {
+                  argb: COLORS.gray,
+                },
+              };
+            }
+          }
+        );
+      }
+    };
+
+    // =========================================================
+    // AQI COLOR
+    // =========================================================
+
+    const applyAQIColor = (
+      cell,
+      value
+    ) => {
+      const aqi =
+        safeNumber(value);
+
+      if (aqi === null) {
+        return;
+      }
+
+      if (aqi <= 50) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: COLORS.green,
+          },
+        };
+
+        cell.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color: COLORS.greenText,
+        };
+      } else if (
+        aqi <= 100
+      ) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: COLORS.yellow,
+          },
+        };
+
+        cell.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color:
+            COLORS.yellowText,
+        };
+      } else if (
+        aqi <= 200
+      ) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: COLORS.orange,
+          },
+        };
+
+        cell.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color:
+            COLORS.orangeText,
+        };
+      } else {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: {
+            argb: COLORS.red,
+          },
+        };
+
+        cell.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color: COLORS.redText,
+        };
+      }
+
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+    };
+
+    // =========================================================
+    // FINAL SHEET SETTINGS
+    // =========================================================
+
+    const finalizeSheet = (
+      sheet,
+      headerRow,
+      totalColumns
+    ) => {
+      sheet.views = [
+        {
+          state: "frozen",
+          ySplit: headerRow,
+        },
+      ];
+
+      if (sheet.rowCount >= headerRow) {
+        sheet.autoFilter = {
+          from: {
+            row: headerRow,
+            column: 1,
+          },
+          to: {
+            row: sheet.rowCount,
+            column: totalColumns,
+          },
+        };
+      }
+
+      sheet.pageSetup = {
+        orientation: "landscape",
+        paperSize: 9,
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+      };
+
+      sheet.pageMargins = {
+        left: 0.25,
+        right: 0.25,
+        top: 0.5,
+        bottom: 0.5,
+        header: 0.2,
+        footer: 0.2,
+      };
+
+      sheet.headerFooter.oddFooter =
+        "PMC CAAQM System | Page &P of &N";
+    };
+
+    // =========================================================
+    // 1. CPCB DAILY REPORT
+    // =========================================================
+
+    if (
+      reportType ===
+      "CPCB_DAILY"
+    ) {
+      const sheet =
+        workbook.addWorksheet(
+          "Daily Station Report"
+        );
+
+      const TOTAL_COLUMNS = 13;
+
+      addReportHeader(
+        sheet,
+        "Daily CAAQM Station Audit",
+        "Station-wise pollutant, AQI and data-quality report",
+        TOTAL_COLUMNS
+      );
+
+      addSummaryBoxes(
+        sheet,
+        [
+          {
+            label: "STATIONS",
+            value:
+              totalStations,
+            background:
+              COLORS.header,
+            color:
+              COLORS.navy,
+          },
+          {
+            label: "COMPLIANT",
+            value:
+              compliantStations,
+            background:
+              COLORS.green,
+            color:
+              COLORS.greenText,
+          },
+          {
+            label:
+              "ACTION REQUIRED",
+            value:
+              actionRequired,
+            background:
+              COLORS.orange,
+            color:
+              COLORS.orangeText,
+          },
+          {
+            label:
+              "AVERAGE AQI",
+            value:
+              averageAQI !==
+                null &&
+              averageAQI !==
+                undefined
+                ? Math.round(
+                    averageAQI
+                  )
+                : "N/A",
+            background:
+              COLORS.header,
+            color:
+              COLORS.navy,
+          },
+        ],
+        TOTAL_COLUMNS
+      );
+
+      // -------------------------------------------------------
+      // TABLE HEADER - ONLY ONCE
+      // -------------------------------------------------------
+
+      sheet.getRow(8).values = [
+        "Station",
+        "Station ID",
+        "Ward",
+        "Zone",
+        "PM2.5",
+        "PM10",
+        "NO2",
+        "AQI",
+        "Category",
+        "Dominant Pollutant",
+        "Availability",
+        "Data Status",
+        "Compliance",
+      ];
+
+      styleTableHeader(
+        sheet,
+        8
+      );
+
+      // -------------------------------------------------------
+      // TABLE DATA - ONLY ONCE
+      // -------------------------------------------------------
 
       normalizedRecords.forEach(
         (row) => {
-
-          const excelRow =
-            worksheet.addRow([
-
-              row.station,
-
-              row.stationId,
-
-              row.ward ||
-                "-",
-
-              numberValue(
-                row.pm25
-              ),
-
-              numberValue(
-                row.pm10
-              ),
-
-              numberValue(
-                row.no2
-              ),
-
-              numberValue(
-                row.aqi
-              ),
-
-              row.category ||
-                "N/A",
-
-              row.dominant ||
-                "-",
-
-              row.dataStatus ||
-                "Unknown",
-
-              row.reportCompleteness ||
-                "0%",
-
-              row.totalReadings ??
-                0,
-
-              row.compliance ||
-                "N/A",
-
-            ]);
-
-
-          excelRow.height =
-            25;
-
-
-          excelRow.eachCell(
-            (cell) => {
-
-              cell.alignment = {
-
-                vertical:
-                  "middle",
-
-                horizontal:
-                  "left",
-
-              };
-
-
-              cell.border = {
-
-                top: {
-                  style:
-                    "thin",
-
-                  color: {
-                    argb:
-                      "E2E8F0",
-                  },
-                },
-
-                bottom: {
-                  style:
-                    "thin",
-
-                  color: {
-                    argb:
-                      "E2E8F0",
-                  },
-                },
-
-                left: {
-                  style:
-                    "thin",
-
-                  color: {
-                    argb:
-                      "E2E8F0",
-                  },
-                },
-
-                right: {
-                  style:
-                    "thin",
-
-                  color: {
-                    argb:
-                      "E2E8F0",
-                  },
-                },
-
-              };
-
-            }
-          );
-
-
-          // Number formatting
-
-          excelRow.getCell(
-            4
-          ).numFmt =
-            "0.0";
-
-
-          excelRow.getCell(
-            5
-          ).numFmt =
-            "0.0";
-
-
-          excelRow.getCell(
-            6
-          ).numFmt =
-            "0.0";
-
-
-          excelRow.getCell(
-            7
-          ).numFmt =
-            "0";
-
-
-          // Data status formatting
-
-          const statusCell =
-            excelRow.getCell(
-              10
-            );
-
-
-          if (
-            row.dataStatus ===
-            "Current"
-          ) {
-
-            statusCell.font = {
-
-              bold:
-                true,
-
-              color: {
-                argb:
-                  "047857",
-              },
-
-            };
-
-
-          } else if (
-            row.dataStatus ===
-            "Historical"
-          ) {
-
-            statusCell.font = {
-
-              bold:
-                true,
-
-              color: {
-                argb:
-                  "B45309",
-              },
-
-            };
-
-          }
-
-
-          // Compliance formatting
-
-          const complianceCell =
-            excelRow.getCell(
-              13
-            );
-
-
-          if (
-            isCompliant(
-              row.compliance
-            )
-          ) {
-
-            complianceCell.font = {
-
-              bold:
-                true,
-
-              color: {
-                argb:
-                  "047857",
-              },
-
-            };
-
-
-            complianceCell.fill = {
-
-              type:
-                "pattern",
-
-              pattern:
-                "solid",
-
-              fgColor: {
-                argb:
-                  "DCFCE7",
-              },
-
-            };
-
-          } else {
-
-            complianceCell.font = {
-
-              bold:
-                true,
-
-              color: {
-                argb:
-                  "B45309",
-              },
-
-            };
-
-
-            complianceCell.fill = {
-
-              type:
-                "pattern",
-
-              pattern:
-                "solid",
-
-              fgColor: {
-                argb:
-                  "FEF3C7",
-              },
-
-            };
-
-          }
-
-        }
-      );
-
-
-      // --------------------------------------------------------
-      // SUMMARY
-      // --------------------------------------------------------
-
-      const summaryStart =
-        worksheet.rowCount + 3;
-
-
-      worksheet.mergeCells(
-        `A${summaryStart}:M${summaryStart}`
-      );
-
-
-      worksheet.getCell(
-        `A${summaryStart}`
-      ).value =
-        "REPORT SUMMARY";
-
-
-      worksheet.getCell(
-        `A${summaryStart}`
-      ).font = {
-
-        bold:
-          true,
-
-        size:
-          13,
-
-      };
-
-
-      worksheet.getCell(
-        `A${summaryStart}`
-      ).fill = {
-
-        type:
-          "pattern",
-
-        pattern:
-          "solid",
-
-        fgColor: {
-          argb:
-            "DBEAFE",
-        },
-
-      };
-
-
-      worksheet.mergeCells(
-        `A${summaryStart + 1}:C${summaryStart + 1}`
-      );
-
-
-      worksheet.getCell(
-        `A${summaryStart + 1}`
-      ).value =
-        "Total Stations";
-
-
-      worksheet.getCell(
-        `A${summaryStart + 1}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        `D${summaryStart + 1}:E${summaryStart + 1}`
-      );
-
-
-      worksheet.getCell(
-        `D${summaryStart + 1}`
-      ).value =
-        totalStations;
-
-
-      worksheet.mergeCells(
-        `F${summaryStart + 1}:H${summaryStart + 1}`
-      );
-
-
-      worksheet.getCell(
-        `F${summaryStart + 1}`
-      ).value =
-        "Current Stations";
-
-
-      worksheet.getCell(
-        `F${summaryStart + 1}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        `I${summaryStart + 1}:J${summaryStart + 1}`
-      );
-
-
-      worksheet.getCell(
-        `I${summaryStart + 1}`
-      ).value =
-        currentStations;
-
-
-      worksheet.mergeCells(
-        `K${summaryStart + 1}:L${summaryStart + 1}`
-      );
-
-
-      worksheet.getCell(
-        `K${summaryStart + 1}`
-      ).value =
-        "Historical";
-
-
-      worksheet.getCell(
-        `K${summaryStart + 1}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.getCell(
-        `M${summaryStart + 1}`
-      ).value =
-        historicalStations;
-
-
-      worksheet.mergeCells(
-        `A${summaryStart + 2}:C${summaryStart + 2}`
-      );
-
-
-      worksheet.getCell(
-        `A${summaryStart + 2}`
-      ).value =
-        "Compliant Stations";
-
-
-      worksheet.getCell(
-        `A${summaryStart + 2}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        `D${summaryStart + 2}:E${summaryStart + 2}`
-      );
-
-
-      worksheet.getCell(
-        `D${summaryStart + 2}`
-      ).value =
-        compliantStations;
-
-
-      worksheet.mergeCells(
-        `F${summaryStart + 2}:H${summaryStart + 2}`
-      );
-
-
-      worksheet.getCell(
-        `F${summaryStart + 2}`
-      ).value =
-        "Action Required";
-
-
-      worksheet.getCell(
-        `F${summaryStart + 2}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.mergeCells(
-        `I${summaryStart + 2}:J${summaryStart + 2}`
-      );
-
-
-      worksheet.getCell(
-        `I${summaryStart + 2}`
-      ).value =
-        actionRequired;
-
-
-      worksheet.mergeCells(
-        `K${summaryStart + 2}:L${summaryStart + 2}`
-      );
-
-
-      worksheet.getCell(
-        `K${summaryStart + 2}`
-      ).value =
-        "No Data";
-
-
-      worksheet.getCell(
-        `K${summaryStart + 2}`
-      ).font = {
-        bold:
-          true,
-      };
-
-
-      worksheet.getCell(
-        `M${summaryStart + 2}`
-      ).value =
-        noDataStations;
-
-
-      // --------------------------------------------------------
-      // FOOTER
-      // --------------------------------------------------------
-
-      const footerRow =
-        summaryStart + 4;
-
-
-      worksheet.mergeCells(
-        `A${footerRow}:M${footerRow}`
-      );
-
-
-      worksheet.getCell(
-        `A${footerRow}`
-      ).value =
-        "PMC CAAQM System Gateway Engine | Data source: PMC / OpenAQ";
-
-
-      worksheet.getCell(
-        `A${footerRow}`
-      ).font = {
-
-        italic:
-          true,
-
-        size:
-          10,
-
-        color: {
-          argb:
-            "64748B",
-        },
-
-      };
-
-
-      worksheet.getCell(
-        `A${footerRow}`
-      ).alignment = {
-
-        horizontal:
-          "center",
-
-      };
-
-
-      // --------------------------------------------------------
-      // AUTO FILTER
-      // --------------------------------------------------------
-
-      const tableHeaderNumber =
-        8;
-
-
-      worksheet.autoFilter = {
-
-        from:
-          `A${tableHeaderNumber}`,
-
-        to:
-          `M${
-            tableHeaderNumber +
-            normalizedRecords.length
-          }`,
-
-      };
-
-
-      // --------------------------------------------------------
-      // PAGE SETUP
-      // --------------------------------------------------------
-
-      worksheet.pageSetup = {
-
-        orientation:
-          "landscape",
-
-        paperSize:
-          worksheet.PAPERSIZE_A4,
-
-        fitToPage:
-          true,
-
-        fitToWidth:
-          1,
-
-        fitToHeight:
-          0,
-
-        margins: {
-
-          left:
-            0.25,
-
-          right:
-            0.25,
-
-          top:
-            0.5,
-
-          bottom:
-            0.5,
-
-          header:
-            0.2,
-
-          footer:
-            0.2,
-
-        },
-
-      };
-
-
-      // --------------------------------------------------------
-      // DOWNLOAD XLSX
-      // --------------------------------------------------------
-
-      const buffer =
-        await workbook.xlsx
-          .writeBuffer();
-
-
-      const blob =
-        new Blob(
-          [buffer],
-          {
-            type:
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          }
-        );
-
-
-      const url =
-        window.URL.createObjectURL(
-          blob
-        );
-
-
-      const link =
-        document.createElement(
-          "a"
-        );
-
-
-      link.href =
-        url;
-
-
-      link.download =
-        `PMC_Air_Quality_Report_${observationDate}.xlsx`;
-
-
-      document.body.appendChild(
-        link
-      );
-
-
-      link.click();
-
-
-      document.body.removeChild(
-        link
-      );
-
-
-      window.URL.revokeObjectURL(
-        url
-      );
-
-
-    } catch (err) {
-
-      console.error(
-        "Excel generation error:",
-        err
-      );
-
-
-      alert(
-        "Unable to generate the Excel report."
-      );
-
-
-    } finally {
-
-      setIsGenerating(false);
-
-    }
-
-  };
-
-
-  // ============================================================
-  // PDF EXPORT
-  // ============================================================
-
-  const exportPDF = () => {
-
-    if (
-      !normalizedRecords.length
-    ) {
-
-      alert(
-        "No report data is available for export."
-      );
-
-      return;
-
-    }
-
-
-    try {
-
-      setIsGenerating(true);
-
-
-      const doc =
-        new jsPDF({
-
-          orientation:
-            "landscape",
-
-          unit:
-            "mm",
-
-          format:
-            "a4",
-
-        });
-
-
-      const pageWidth =
-        doc.internal.pageSize
-          .getWidth();
-
-
-      const pageHeight =
-        doc.internal.pageSize
-          .getHeight();
-
-
-      // --------------------------------------------------------
-      // TITLE
-      // --------------------------------------------------------
-
-      doc.setFont(
-        "helvetica",
-        "bold"
-      );
-
-
-      doc.setFontSize(
-        18
-      );
-
-
-      doc.text(
-        "PUNE MUNICIPAL CORPORATION",
-        pageWidth / 2,
-        15,
-        {
-          align:
-            "center",
-        }
-      );
-
-
-      doc.setFontSize(
-        14
-      );
-
-
-      doc.text(
-        "REGULATORY AIR QUALITY MONITORING REPORT",
-        pageWidth / 2,
-        23,
-        {
-          align:
-            "center",
-        }
-      );
-
-
-      // --------------------------------------------------------
-      // REPORT DETAILS
-      // --------------------------------------------------------
-
-      doc.setFontSize(
-        9
-      );
-
-
-      doc.setFont(
-        "helvetica",
-        "normal"
-      );
-
-
-      doc.text(
-        `Report Type: ${selectedTemplate.title}`,
-        14,
-        32
-      );
-
-
-      doc.text(
-        `Report Code: ${selectedTemplate.code}`,
-        14,
-        38
-      );
-
-
-      doc.text(
-        `Observation Date: ${observationDate}`,
-        14,
-        44
-      );
-
-
-      doc.text(
-        `Station: ${selectedStationName}`,
-        120,
-        32
-      );
-
-
-      doc.text(
-        `Generated: ${new Date().toLocaleString(
-          "en-IN"
-        )}`,
-        120,
-        38
-      );
-
-
-      doc.text(
-        "Report Period: 24 hours",
-        120,
-        44
-      );
-
-
-      // --------------------------------------------------------
-      // TABLE DATA
-      // --------------------------------------------------------
-
-      const tableRows =
-        normalizedRecords.map(
-          (row) => [
-
-            row.station,
-
-            String(
-              row.stationId
-            ),
+          sheet.addRow([
+            row.station ||
+              "N/A",
+
+            row.stationId ??
+              "N/A",
 
             row.ward ||
-              "-",
+              "N/A",
 
-            row.pm25 !== null &&
-            row.pm25 !== undefined
-              ? Number(
-                  row.pm25
-                ).toFixed(1)
-              : "N/A",
+            row.zone ||
+              "N/A",
 
-            row.pm10 !== null &&
-            row.pm10 !== undefined
-              ? Number(
-                  row.pm10
-                ).toFixed(1)
-              : "N/A",
+            safeNumber(
+              row.pm25
+            ),
 
-            row.no2 !== null &&
-            row.no2 !== undefined
-              ? Number(
-                  row.no2
-                ).toFixed(1)
-              : "N/A",
+            safeNumber(
+              row.pm10
+            ),
 
-            row.aqi !== null &&
-            row.aqi !== undefined
-              ? String(
-                  Math.round(
-                    Number(
-                      row.aqi
-                    )
-                  )
-                )
-              : "N/A",
+            safeNumber(
+              row.no2
+            ),
+
+            safeNumber(
+              row.aqi
+            ),
 
             row.category ||
               "N/A",
 
             row.dominant ||
-              "-",
+              "N/A",
+
+            row.availability ??
+              "N/A",
 
             row.dataStatus ||
-              "Unknown",
-
-            row.reportCompleteness ||
-              "0%",
+              "N/A",
 
             row.compliance ||
               "N/A",
-
-          ]
-        );
-
-
-      // --------------------------------------------------------
-      // TABLE
-      // --------------------------------------------------------
-
-      autoTable(
-        doc,
-        {
-
-          startY:
-            50,
-
-          head: [
-
-            [
-
-              "Station / Ward",
-
-              "ID",
-
-              "Ward",
-
-              "PM2.5 24h",
-
-              "PM10 24h",
-
-              "NO2 24h",
-
-              "AQI",
-
-              "Category",
-
-              "Dominant",
-
-              "Data Status",
-
-              "Completeness",
-
-              "Audit",
-
-            ],
-
-          ],
-
-          body:
-            tableRows,
-
-          theme:
-            "grid",
-
-          styles: {
-
-            font:
-              "helvetica",
-
-            fontSize:
-              7.2,
-
-            cellPadding:
-              2.2,
-
-            valign:
-              "middle",
-
-            lineWidth:
-              0.1,
-
-          },
-
-          headStyles: {
-
-            fontStyle:
-              "bold",
-
-            halign:
-              "center",
-
-            valign:
-              "middle",
-
-            fontSize:
-              7.2,
-
-          },
-
-          bodyStyles: {
-
-            valign:
-              "middle",
-
-          },
-
-          columnStyles: {
-
-            0: {
-              cellWidth:
-                35,
-            },
-
-            1: {
-              cellWidth:
-                13,
-
-              halign:
-                "center",
-            },
-
-            2: {
-              cellWidth:
-                18,
-            },
-
-            3: {
-              cellWidth:
-                17,
-
-              halign:
-                "center",
-            },
-
-            4: {
-              cellWidth:
-                17,
-
-              halign:
-                "center",
-            },
-
-            5: {
-              cellWidth:
-                17,
-
-              halign:
-                "center",
-            },
-
-            6: {
-              cellWidth:
-                12,
-
-              halign:
-                "center",
-            },
-
-            7: {
-              cellWidth:
-                20,
-            },
-
-            8: {
-              cellWidth:
-                21,
-            },
-
-            9: {
-              cellWidth:
-                18,
-
-              halign:
-                "center",
-            },
-
-            10: {
-              cellWidth:
-                19,
-
-              halign:
-                "center",
-            },
-
-            11: {
-              cellWidth:
-                25,
-            },
-
-          },
-
-
-          didParseCell:
-            (data) => {
-
-              if (
-                data.section !==
-                "body"
-              ) {
-
-                return;
-
-              }
-
-
-              // Data Status
-
-              if (
-                data.column.index ===
-                9
-              ) {
-
-                const value =
-                  String(
-                    data.cell.raw ||
-                    ""
-                  ).toLowerCase();
-
-
-                if (
-                  value ===
-                  "current"
-                ) {
-
-                  data.cell.styles.fontStyle =
-                    "bold";
-
-                }
-
-
-                if (
-                  value ===
-                  "historical"
-                ) {
-
-                  data.cell.styles.fontStyle =
-                    "bold";
-
-                }
-
-              }
-
-
-              // Compliance
-
-              if (
-                data.column.index ===
-                11
-              ) {
-
-                data.cell.styles.fontStyle =
-                  "bold";
-
-              }
-
-            },
-
+          ]);
         }
       );
 
-
-      // --------------------------------------------------------
-      // SUMMARY
-      // --------------------------------------------------------
-
-      const finalY =
-        doc.lastAutoTable
-          ?.finalY ||
-        55;
-
-
-      let summaryY =
-        finalY + 12;
-
-
-      if (
-        summaryY >
-        pageHeight - 35
-      ) {
-
-        doc.addPage();
-
-        summaryY = 20;
-
-      }
-
-
-      doc.setFont(
-        "helvetica",
-        "bold"
-      );
-
-
-      doc.setFontSize(
-        11
-      );
-
-
-      doc.text(
-        "REPORT SUMMARY",
-        14,
-        summaryY
-      );
-
-
-      doc.setFont(
-        "helvetica",
-        "normal"
-      );
-
-
-      doc.setFontSize(
+      styleTableBody(
+        sheet,
         9
       );
 
+      // -------------------------------------------------------
+      // FORMATTING
+      // -------------------------------------------------------
 
-      doc.text(
-        `Total Stations: ${totalStations}`,
-        14,
-        summaryY + 7
-      );
+      for (
+        let row = 9;
+        row <= sheet.rowCount;
+        row++
+      ) {
+        sheet.getCell(
+          row,
+          5
+        ).numFmt = "0.00";
 
+        sheet.getCell(
+          row,
+          6
+        ).numFmt = "0.00";
 
-      doc.text(
-        `Current Stations: ${currentStations}`,
-        70,
-        summaryY + 7
-      );
+        sheet.getCell(
+          row,
+          7
+        ).numFmt = "0.00";
 
+        sheet.getCell(
+          row,
+          8
+        ).numFmt = "0";
 
-      doc.text(
-        `Historical Stations: ${historicalStations}`,
-        135,
-        summaryY + 7
-      );
-
-
-      doc.text(
-        `Compliant: ${compliantStations}`,
-        14,
-        summaryY + 14
-      );
-
-
-      doc.text(
-        `Action Required: ${actionRequired}`,
-        70,
-        summaryY + 14
-      );
-
-
-      doc.text(
-        `No Data: ${noDataStations}`,
-        135,
-        summaryY + 14
-      );
-
-
-      // --------------------------------------------------------
-      // FOOTER
-      // --------------------------------------------------------
-
-      doc.setFontSize(
-        7.5
-      );
-
-
-      doc.setFont(
-        "helvetica",
-        "italic"
-      );
-
-
-      doc.text(
-        "PMC CAAQM System Gateway Engine | Data source: PMC / OpenAQ",
-        pageWidth / 2,
-        pageHeight - 12,
-        {
-          align:
+        // Station ID
+        sheet.getCell(
+          row,
+          2
+        ).alignment = {
+          horizontal:
             "center",
-        }
+          vertical:
+            "middle",
+        };
+
+        // AQI
+        applyAQIColor(
+          sheet.getCell(
+            row,
+            8
+          ),
+          sheet.getCell(
+            row,
+            8
+          ).value
+        );
+      }
+
+      // -------------------------------------------------------
+      // COLUMN WIDTHS
+      // -------------------------------------------------------
+
+      sheet.columns = [
+        {
+          width: 30,
+        },
+        {
+          width: 12,
+        },
+        {
+          width: 22,
+        },
+        {
+          width: 16,
+        },
+        {
+          width: 12,
+        },
+        {
+          width: 12,
+        },
+        {
+          width: 12,
+        },
+        {
+          width: 10,
+        },
+        {
+          width: 17,
+        },
+        {
+          width: 22,
+        },
+        {
+          width: 16,
+        },
+        {
+          width: 16,
+        },
+        {
+          width: 18,
+        },
+      ];
+
+      finalizeSheet(
+        sheet,
+        8,
+        TOTAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // 2. WARD AQI REPORT
+    // =========================================================
+
+    if (
+      reportType ===
+      "WARD_AQI"
+    ) {
+      const sheet =
+        workbook.addWorksheet(
+          "Ward AQI Report"
+        );
+
+      const TOTAL_COLUMNS = 6;
+
+      addReportHeader(
+        sheet,
+        "Ward-wise AQI Report",
+        "Daily / monthly AQI aggregation by municipal ward",
+        TOTAL_COLUMNS
       );
 
+      addSummaryBoxes(
+        sheet,
+        [
+          {
+            label:
+              "TOTAL RECORDS",
+            value:
+              wardRecords?.length ??
+              0,
+          },
+          {
+            label:
+              "HIGHEST AQI",
+            value:
+              maxWardAQI !==
+                null &&
+              maxWardAQI !==
+                undefined
+                ? Math.round(
+                    maxWardAQI
+                  )
+                : "N/A",
+            background:
+              COLORS.red,
+            color:
+              COLORS.redText,
+          },
+        ],
+        TOTAL_COLUMNS
+      );
+
+      sheet.getRow(8).values = [
+        "Ward",
+        "Period",
+        "Average AQI",
+        "Maximum AQI",
+        "Minimum AQI",
+        "Category",
+      ];
+
+      styleTableHeader(
+        sheet,
+        8
+      );
+
+      (
+        wardRecords || []
+      ).forEach((row) => {
+        sheet.addRow([
+          row.ward ??
+            row.wardName ??
+            "N/A",
+
+          row.period ??
+            row.date ??
+            row.month ??
+            "N/A",
+
+          safeNumber(
+            row.averageAQI ??
+              row.averageAqi
+          ),
+
+          safeNumber(
+            row.maximumAQI ??
+              row.maximumAqi ??
+              row.maxAQI
+          ),
+
+          safeNumber(
+            row.minimumAQI ??
+              row.minimumAqi ??
+              row.minAQI
+          ),
+
+          row.category ??
+            "N/A",
+        ]);
+      });
+
+      styleTableBody(
+        sheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <= sheet.rowCount;
+        row++
+      ) {
+        sheet.getCell(
+          row,
+          3
+        ).numFmt = "0";
+
+        sheet.getCell(
+          row,
+          4
+        ).numFmt = "0";
+
+        sheet.getCell(
+          row,
+          5
+        ).numFmt = "0";
+
+        applyAQIColor(
+          sheet.getCell(
+            row,
+            3
+          ),
+          sheet.getCell(
+            row,
+            3
+          ).value
+        );
+      }
+
+      sheet.columns = [
+        { width: 30 },
+        { width: 20 },
+        { width: 18 },
+        { width: 18 },
+        { width: 18 },
+        { width: 20 },
+      ];
+
+      finalizeSheet(
+        sheet,
+        8,
+        TOTAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // 3. POLLUTANT TREND
+    // =========================================================
+
+    if (
+      reportType ===
+      "POLLUTANT_TREND"
+    ) {
+      const sheet =
+        workbook.addWorksheet(
+          "Pollutant Trend"
+        );
+
+      const TOTAL_COLUMNS = 6;
+
+      addReportHeader(
+        sheet,
+        "Pollutant Trend Report",
+        "Daily pollutant concentration trend",
+        TOTAL_COLUMNS
+      );
+
+      addSummaryBoxes(
+        sheet,
+        [
+          {
+            label:
+              "TOTAL RECORDS",
+            value:
+              pollutantRecords?.length ??
+              0,
+          },
+          {
+            label:
+              "MAXIMUM VALUE",
+            value:
+              pollutantMax !==
+                null &&
+              pollutantMax !==
+                undefined
+                ? formatNumber(
+                    pollutantMax
+                  )
+                : "N/A",
+          },
+        ],
+        TOTAL_COLUMNS
+      );
+
+      sheet.getRow(8).values = [
+        "Date",
+        "Parameter",
+        "Average",
+        "Minimum",
+        "Maximum",
+        "Samples",
+      ];
+
+      styleTableHeader(
+        sheet,
+        8
+      );
+
+      (
+        pollutantRecords || []
+      ).forEach((row) => {
+        sheet.addRow([
+          safeDate(
+            row.date
+          ),
+
+          row.parameter ??
+            "N/A",
+
+          safeNumber(
+            row.average
+          ),
+
+          safeNumber(
+            row.minimum
+          ),
+
+          safeNumber(
+            row.maximum
+          ),
+
+          row.samples ?? 0,
+        ]);
+      });
+
+      styleTableBody(
+        sheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <= sheet.rowCount;
+        row++
+      ) {
+        sheet.getCell(
+          row,
+          1
+        ).numFmt =
+          "dd-mmm-yyyy";
+
+        sheet.getCell(
+          row,
+          3
+        ).numFmt = "0.00";
+
+        sheet.getCell(
+          row,
+          4
+        ).numFmt = "0.00";
+
+        sheet.getCell(
+          row,
+          5
+        ).numFmt = "0.00";
+      }
+
+      sheet.columns = [
+        { width: 18 },
+        { width: 20 },
+        { width: 16 },
+        { width: 16 },
+        { width: 16 },
+        { width: 14 },
+      ];
+
+      finalizeSheet(
+        sheet,
+        8,
+        TOTAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // 4. STATION UPTIME
+    // =========================================================
+
+    if (
+      reportType ===
+      "UPTIME_QAQC"
+    ) {
+      const sheet =
+        workbook.addWorksheet(
+          "Station Uptime"
+        );
+
+      const TOTAL_COLUMNS = 10;
+
+      addReportHeader(
+        sheet,
+        "Station Uptime & Data Completeness",
+        "Device health, heartbeat and reading availability",
+        TOTAL_COLUMNS
+      );
+
+      addSummaryBoxes(
+        sheet,
+        [
+          {
+            label:
+              "TOTAL STATIONS",
+            value:
+              uptimeRecords?.length ??
+              0,
+          },
+        ],
+        TOTAL_COLUMNS
+      );
+
+      sheet.getRow(8).values = [
+        "Station",
+        "Station ID",
+        "Devices",
+        "Online",
+        "Offline",
+        "Battery (%)",
+        "Network",
+        "Last Heartbeat",
+        "Availability",
+        "Readings",
+      ];
+
+      styleTableHeader(
+        sheet,
+        8
+      );
+
+      (
+        uptimeRecords || []
+      ).forEach((row) => {
+        sheet.addRow([
+          getStationName(
+            row
+          ),
+
+          row.stationId ??
+            row.station_id ??
+            "N/A",
+
+          row.deviceCount ??
+            row.device_count ??
+            0,
+
+          row.onlineDevices ??
+            row.online_devices ??
+            0,
+
+          row.offlineDevices ??
+            row.offline_devices ??
+            0,
+
+          safeNumber(
+            row.batteryLevel ??
+              row.battery ??
+              row.battery_level
+          ),
+
+          row.networkStatus ??
+            row.network_status ??
+            "N/A",
+
+          safeDate(
+            row.latestHeartbeat ??
+              row.latest_heartbeat
+          ),
+
+          row.dataAvailability ??
+            row.data_availability ??
+            "N/A",
+
+          row.totalReadings ??
+            row.total_readings ??
+            0,
+        ]);
+      });
+
+      styleTableBody(
+        sheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <= sheet.rowCount;
+        row++
+      ) {
+        sheet.getCell(
+          row,
+          6
+        ).numFmt = "0.00";
+
+        sheet.getCell(
+          row,
+          8
+        ).numFmt =
+          "dd-mmm-yyyy hh:mm AM/PM";
+      }
+
+      sheet.columns = [
+        { width: 30 },
+        { width: 12 },
+        { width: 12 },
+        { width: 12 },
+        { width: 12 },
+        { width: 15 },
+        { width: 16 },
+        { width: 25 },
+        { width: 18 },
+        { width: 15 },
+      ];
+
+      finalizeSheet(
+        sheet,
+        8,
+        TOTAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // 5. ALERT SUMMARY
+    // =========================================================
+
+    if (
+      reportType ===
+      "ALERT_SUMMARY"
+    ) {
+      const sheet =
+        workbook.addWorksheet(
+          "Alert Summary"
+        );
+
+      const TOTAL_COLUMNS = 9;
+
+      addReportHeader(
+        sheet,
+        "Environmental Alert Summary",
+        "Environmental alerts during the selected period",
+        TOTAL_COLUMNS
+      );
+
+      addSummaryBoxes(
+        sheet,
+        [
+          {
+            label:
+              "TOTAL ALERTS",
+            value:
+              alertSummary?.totalAlerts ??
+              alertRecords?.length ??
+              0,
+          },
+          {
+            label: "ACTIVE",
+            value:
+              alertSummary?.activeAlerts ??
+              0,
+            background:
+              COLORS.red,
+            color:
+              COLORS.redText,
+          },
+          {
+            label:
+              "ACKNOWLEDGED",
+            value:
+              alertSummary?.acknowledgedAlerts ??
+              0,
+            background:
+              COLORS.green,
+            color:
+              COLORS.greenText,
+          },
+        ],
+        TOTAL_COLUMNS
+      );
+
+      sheet.getRow(8).values = [
+        "Alert ID",
+        "Station",
+        "Station ID",
+        "Severity",
+        "Parameter",
+        "Message",
+        "Started",
+        "Ended",
+        "Status",
+      ];
+
+      styleTableHeader(
+        sheet,
+        8
+      );
+
+      (
+        alertRecords || []
+      ).forEach((row) => {
+        const started =
+          row.started_time ??
+          row.startedTime ??
+          row.start_time;
+
+        const ended =
+          row.ended_time ??
+          row.endedTime ??
+          row.end_time;
+
+        sheet.addRow([
+          row.alert_id ??
+            row.alertId ??
+            row.id ??
+            "N/A",
+
+          getStationName(
+            row
+          ),
+
+          row.station_id ??
+            row.stationId ??
+            "N/A",
+
+          row.severity ??
+            "N/A",
+
+          row.parameter ??
+            "N/A",
+
+          row.message ??
+            row.description ??
+            row.alert_message ??
+            "N/A",
+
+          safeDate(
+            started
+          ),
+
+          safeDate(
+            ended
+          ),
+
+          row.status ??
+            "Active",
+        ]);
+      });
+
+      styleTableBody(
+        sheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <= sheet.rowCount;
+        row++
+      ) {
+        sheet.getCell(
+          row,
+          7
+        ).numFmt =
+          "dd-mmm-yyyy hh:mm AM/PM";
+
+        sheet.getCell(
+          row,
+          8
+        ).numFmt =
+          "dd-mmm-yyyy hh:mm AM/PM";
+
+        const severity =
+          String(
+            sheet.getCell(
+              row,
+              4
+            ).value || ""
+          ).toLowerCase();
+
+        if (
+          severity ===
+          "critical"
+        ) {
+          sheet.getCell(
+            row,
+            4
+          ).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: COLORS.red,
+            },
+          };
+
+          sheet.getCell(
+            row,
+            4
+          ).font = {
+            name: "Arial",
+            size: 10,
+            bold: true,
+            color:
+              COLORS.redText,
+          };
+        } else if (
+          severity ===
+          "warning"
+        ) {
+          sheet.getCell(
+            row,
+            4
+          ).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb: COLORS.yellow,
+            },
+          };
+
+          sheet.getCell(
+            row,
+            4
+          ).font = {
+            name: "Arial",
+            size: 10,
+            bold: true,
+            color:
+              COLORS.yellowText,
+          };
+        }
+      }
+
+      sheet.columns = [
+        { width: 14 },
+        { width: 30 },
+        { width: 14 },
+        { width: 14 },
+        { width: 16 },
+        { width: 45 },
+        { width: 24 },
+        { width: 24 },
+        { width: 18 },
+      ];
+
+      finalizeSheet(
+        sheet,
+        8,
+        TOTAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // 6. MAINTENANCE + CALIBRATION
+    // =========================================================
+
+    if (
+      reportType ===
+      "MAINTENANCE"
+    ) {
+      // -------------------------------------------------------
+      // MAINTENANCE
+      // -------------------------------------------------------
+
+      const maintenanceSheet =
+        workbook.addWorksheet(
+          "Maintenance"
+        );
+
+      const MAINT_COLUMNS = 8;
+
+      addReportHeader(
+        maintenanceSheet,
+        "Maintenance Report",
+        "Station maintenance and service records",
+        MAINT_COLUMNS
+      );
+
+      addSummaryBoxes(
+        maintenanceSheet,
+        [
+          {
+            label:
+              "MAINTENANCE RECORDS",
+            value:
+              maintenanceRecords?.length ??
+              0,
+          },
+          {
+            label: "OVERDUE",
+            value:
+              maintenanceSummary?.overdueMaintenance ??
+              0,
+            background:
+              COLORS.red,
+            color:
+              COLORS.redText,
+          },
+        ],
+        MAINT_COLUMNS
+      );
+
+      maintenanceSheet.getRow(
+        8
+      ).values = [
+        "Maintenance ID",
+        "Station",
+        "Device",
+        "Service Date",
+        "Next Service Date",
+        "Type",
+        "Status",
+        "Remarks",
+      ];
+
+      styleTableHeader(
+        maintenanceSheet,
+        8
+      );
+
+      (
+        maintenanceRecords || []
+      ).forEach((row) => {
+        maintenanceSheet.addRow([
+          row.maintenance_id ??
+            row.maintenanceId ??
+            row.id ??
+            "N/A",
+
+          getStationName(
+            row
+          ),
+
+          row.device ??
+            row.deviceName ??
+            row.device_id ??
+            "N/A",
+
+          safeDate(
+            row.service_date ??
+              row.serviceDate
+          ),
+
+          safeDate(
+            row.next_service_date ??
+              row.nextServiceDate
+          ),
+
+          row.maintenance_type ??
+            row.type ??
+            "N/A",
+
+          row.status ??
+            "N/A",
+
+          row.remarks ??
+            row.notes ??
+            "N/A",
+        ]);
+      });
+
+      styleTableBody(
+        maintenanceSheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <=
+        maintenanceSheet.rowCount;
+        row++
+      ) {
+        maintenanceSheet.getCell(
+          row,
+          4
+        ).numFmt =
+          "dd-mmm-yyyy";
+
+        maintenanceSheet.getCell(
+          row,
+          5
+        ).numFmt =
+          "dd-mmm-yyyy";
+      }
+
+      maintenanceSheet.columns = [
+        { width: 18 },
+        { width: 30 },
+        { width: 24 },
+        { width: 18 },
+        { width: 22 },
+        { width: 20 },
+        { width: 18 },
+        { width: 40 },
+      ];
+
+      finalizeSheet(
+        maintenanceSheet,
+        8,
+        MAINT_COLUMNS
+      );
+
+      // -------------------------------------------------------
+      // CALIBRATION
+      // -------------------------------------------------------
+
+      const calibrationSheet =
+        workbook.addWorksheet(
+          "Calibration"
+        );
+
+      const CAL_COLUMNS = 7;
+
+      addReportHeader(
+        calibrationSheet,
+        "Calibration Report",
+        "Sensor calibration records and schedule",
+        CAL_COLUMNS
+      );
+
+      addSummaryBoxes(
+        calibrationSheet,
+        [
+          {
+            label:
+              "CALIBRATION RECORDS",
+            value:
+              calibrationRecords?.length ??
+              0,
+          },
+          {
+            label: "OVERDUE",
+            value:
+              maintenanceSummary?.overdueCalibration ??
+              0,
+            background:
+              COLORS.red,
+            color:
+              COLORS.redText,
+          },
+        ],
+        CAL_COLUMNS
+      );
+
+      calibrationSheet.getRow(
+        8
+      ).values = [
+        "Calibration ID",
+        "Sensor",
+        "Sensor ID",
+        "Calibration Date",
+        "Next Calibration Date",
+        "Status",
+        "Remarks",
+      ];
+
+      styleTableHeader(
+        calibrationSheet,
+        8
+      );
+
+      (
+        calibrationRecords || []
+      ).forEach((row) => {
+        calibrationSheet.addRow([
+          row.calibration_id ??
+            row.calibrationId ??
+            row.id ??
+            "N/A",
+
+          row.sensor ??
+            row.sensorName ??
+            "N/A",
+
+          row.sensor_id ??
+            row.sensorId ??
+            "N/A",
+
+          safeDate(
+            row.calibration_date ??
+              row.calibrationDate
+          ),
+
+          safeDate(
+            row.next_calibration_date ??
+              row.nextCalibrationDate
+          ),
+
+          row.status ??
+            "N/A",
+
+          row.remarks ??
+            row.notes ??
+            "N/A",
+        ]);
+      });
+
+      styleTableBody(
+        calibrationSheet,
+        9
+      );
+
+      for (
+        let row = 9;
+        row <=
+        calibrationSheet.rowCount;
+        row++
+      ) {
+        calibrationSheet.getCell(
+          row,
+          4
+        ).numFmt =
+          "dd-mmm-yyyy";
+
+        calibrationSheet.getCell(
+          row,
+          5
+        ).numFmt =
+          "dd-mmm-yyyy";
+      }
+
+      calibrationSheet.columns = [
+        { width: 18 },
+        { width: 30 },
+        { width: 15 },
+        { width: 22 },
+        { width: 25 },
+        { width: 18 },
+        { width: 40 },
+      ];
+
+      finalizeSheet(
+        calibrationSheet,
+        8,
+        CAL_COLUMNS
+      );
+    }
+
+    // =========================================================
+    // CHECK THAT A SHEET WAS CREATED
+    // =========================================================
+
+    if (
+      workbook.worksheets.length ===
+      0
+    ) {
+      throw new Error(
+        `No Excel report was created for report type: ${reportType}`
+      );
+    }
+
+    // =========================================================
+    // GENERATE XLSX
+    // =========================================================
+
+    const buffer =
+      await workbook.xlsx.writeBuffer();
+
+    const blob = new Blob(
+      [buffer],
+      {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }
+    );
+
+    const url =
+      window.URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `PMC_Air_Quality_${reportType}_${fromDate}_to_${toDate}.xlsx`;
+
+    document.body.appendChild(
+      link
+    );
+
+    link.click();
+
+    document.body.removeChild(
+      link
+    );
+
+    window.URL.revokeObjectURL(
+      url
+    );
+
+  } catch (error) {
+    console.error(
+      "Excel export error:",
+      error
+    );
+
+    alert(
+      `Unable to generate Excel report: ${
+        error?.message ||
+        "Unknown error"
+      }`
+    );
+  } finally {
+    setIsGenerating(false);
+  }
+};
+  // ==========================================================
+  // PDF EXPORT
+  // ==========================================================
+
+  const exportPDF = () => {
+    try {
+      setIsGenerating(true);
+
+      const doc = new jsPDF(
+        "landscape",
+        "mm",
+        "a4"
+      );
+
+      const template =
+        REPORT_TEMPLATES.find(
+          (item) =>
+            item.id === reportType
+        );
+
+      doc.setFontSize(18);
 
       doc.text(
-        `Page 1`,
-        pageWidth - 14,
-        pageHeight - 6,
+        "PMC AIR QUALITY MONITORING REPORT",
+        148,
+        15,
         {
-          align:
-            "right",
+          align: "center",
         }
       );
 
+      doc.setFontSize(10);
 
-      // --------------------------------------------------------
-      // SAVE
-      // --------------------------------------------------------
+      doc.text(
+        `Period: ${fromDate} to ${toDate}`,
+        148,
+        22,
+        {
+          align: "center",
+        }
+      );
+
+      doc.text(
+        `Report: ${template?.title ?? reportType}`,
+        148,
+        28,
+        {
+          align: "center",
+        }
+      );
+
+      let headers = [];
+      let rows = [];
+
+      if (
+        reportType ===
+        "CPCB_DAILY"
+      ) {
+        headers = [
+          "Station",
+          "Ward",
+          "PM2.5",
+          "PM10",
+          "NO2",
+          "AQI",
+          "Category",
+          "Dominant",
+          "Availability",
+          "Status",
+          "Compliance",
+        ];
+
+        rows =
+          normalizedRecords.map(
+            (row) => [
+              row.station,
+              row.ward,
+              formatNumber(
+                row.pm25
+              ),
+              formatNumber(
+                row.pm10
+              ),
+              formatNumber(
+                row.no2
+              ),
+              formatNumber(
+                row.aqi,
+                0
+              ),
+              row.category,
+              row.dominant,
+              row.availability ??
+                "N/A",
+              row.dataStatus,
+              row.compliance,
+            ]
+          );
+      }
+
+      if (
+        reportType ===
+        "WARD_AQI"
+      ) {
+        headers = [
+          "Ward",
+          "Period",
+          "Average AQI",
+          "Maximum AQI",
+          "Minimum AQI",
+          "Category",
+        ];
+
+        rows =
+          wardRecords.map(
+            (row) => [
+              row.ward ??
+                row.wardName ??
+                "N/A",
+              row.period ??
+                row.date ??
+                row.month ??
+                "N/A",
+              formatNumber(
+                row.averageAQI ??
+                  row.averageAqi,
+                0
+              ),
+              formatNumber(
+                row.maximumAQI ??
+                  row.maximumAqi,
+                0
+              ),
+              formatNumber(
+                row.minimumAQI ??
+                  row.minimumAqi,
+                0
+              ),
+              row.category ??
+                getAqiCategory(
+                  row.averageAQI ??
+                    row.averageAqi
+                ),
+            ]
+          );
+      }
+
+      if (
+        reportType ===
+        "POLLUTANT_TREND"
+      ) {
+        headers = [
+          "Date",
+          "Parameter",
+          "Average",
+          "Minimum",
+          "Maximum",
+          "Samples",
+        ];
+
+        rows =
+          pollutantRecords.map(
+            (row) => [
+              row.date,
+              row.parameter,
+              formatNumber(
+                row.average
+              ),
+              formatNumber(
+                row.minimum
+              ),
+              formatNumber(
+                row.maximum
+              ),
+              row.samples ?? 0,
+            ]
+          );
+      }
+
+      if (
+        reportType ===
+        "UPTIME_QAQC"
+      ) {
+        headers = [
+          "Station",
+          "Devices",
+          "Online",
+          "Offline",
+          "Battery",
+          "Network",
+          "Heartbeat",
+          "Availability",
+          "Readings",
+        ];
+
+        rows =
+          uptimeRecords.map(
+            (row) => [
+              row.station ??
+                row.stationName ??
+                "N/A",
+              row.deviceCount ??
+                row.device_count ??
+                0,
+              row.onlineDevices ??
+                row.online_devices ??
+                0,
+              row.offlineDevices ??
+                row.offline_devices ??
+                0,
+              row.batteryLevel ??
+                row.battery ??
+                row.battery_level ??
+                "N/A",
+              row.networkStatus ??
+                row.network_status ??
+                "N/A",
+              formatDateTime(
+                row.latestHeartbeat ??
+                  row.latest_heartbeat
+              ),
+              row.dataAvailability ??
+                row.data_availability ??
+                "N/A",
+              row.totalReadings ??
+                row.total_readings ??
+                0,
+            ]
+          );
+      }
+
+      if (
+        reportType ===
+        "ALERT_SUMMARY"
+      ) {
+        headers = [
+          "Station",
+          "Severity",
+          "Parameter",
+          "Message",
+          "Started",
+          "Ended",
+          "Status",
+        ];
+
+        rows =
+          alertRecords.map(
+            (row) => [
+              row.station ?? "N/A",
+              row.severity ?? "N/A",
+              row.parameter ?? "N/A",
+              row.message ?? "N/A",
+              formatDateTime(
+                row.started_time
+              ),
+              formatDateTime(
+                row.ended_time
+              ),
+              row.status ?? "N/A",
+            ]
+          );
+      }
+
+      if (
+        reportType ===
+        "MAINTENANCE"
+      ) {
+        headers = [
+          "Station",
+          "Device",
+          "Service Date",
+          "Next Service",
+          "Type",
+          "Status",
+          "Remarks",
+        ];
+
+        rows =
+          maintenanceRecords.map(
+            (row) => [
+              row.station ??
+                row.stationName ??
+                "N/A",
+              row.device ??
+                row.deviceName ??
+                row.device_id ??
+                "N/A",
+              row.service_date ??
+                row.serviceDate ??
+                "N/A",
+              row.next_service_date ??
+                row.nextServiceDate ??
+                "N/A",
+              row.maintenance_type ??
+                row.type ??
+                "N/A",
+              row.status ?? "N/A",
+              row.remarks ??
+                row.notes ??
+                "N/A",
+            ]
+          );
+      }
+
+      if (!rows.length) {
+        alert(
+          "No data available for PDF export."
+        );
+
+        return;
+      }
+
+      autoTable(doc, {
+        startY: 35,
+        head: [headers],
+        body: rows,
+        styles: {
+          fontSize: 7,
+          cellPadding: 2,
+        },
+        headStyles: {
+          fontSize: 7,
+        },
+        margin: {
+          left: 8,
+          right: 8,
+        },
+      });
+
+      const pageCount =
+        doc.internal.getNumberOfPages();
+
+      for (
+        let page = 1;
+        page <= pageCount;
+        page++
+      ) {
+        doc.setPage(page);
+
+        doc.setFontSize(8);
+
+        doc.text(
+          `PMC CAAQM System | Page ${page} of ${pageCount}`,
+          148,
+          202,
+          {
+            align: "center",
+          }
+        );
+      }
 
       doc.save(
-        `PMC_Air_Quality_Report_${observationDate}.pdf`
+        `PMC_Report_${reportType}_${fromDate}_to_${toDate}.pdf`
       );
-
-
     } catch (err) {
-
       console.error(
-        "PDF generation error:",
+        "PDF export error:",
         err
       );
 
-
       alert(
-        "Unable to generate the PDF report."
+        "Unable to generate PDF report."
       );
-
-
     } finally {
-
       setIsGenerating(false);
-
     }
-
   };
 
+  // ==========================================================
+  // PRINT
+  // ==========================================================
 
-  // ============================================================
-  // EXPORT HANDLER
-  // ============================================================
-
-  const handleExport = (
-    format
-  ) => {
-
-    if (
-      format ===
-      "PDF"
-    ) {
-
-      exportPDF();
-
-    }
-
-
-    if (
-      format ===
-      "XLSX"
-    ) {
-
-      exportExcel();
-
-    }
-
+  const printReport = () => {
+    window.print();
   };
 
+  // ==========================================================
+  // SELECTED TEMPLATE
+  // ==========================================================
 
-  // ============================================================
-  // RETURN
-  // ============================================================
+  const selectedTemplate =
+    REPORT_TEMPLATES.find(
+      (item) =>
+        item.id === reportType
+    ) ||
+    REPORT_TEMPLATES[0];
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
 
-    <div className="min-h-screen bg-[#edf2f7] text-slate-800 p-4 sm:p-6 lg:p-8 font-sans">
-
-      {/* ======================================================
+      {/* ====================================================
           HEADER
-      ====================================================== */}
+      ==================================================== */}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-7">
+      <div className="mb-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
-        <div>
+          <div className="flex items-center gap-3">
 
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
+            <div className="rounded-xl bg-blue-600 p-3 text-white">
+              <FileText size={24} />
+            </div>
 
-            <span>
-              Regulatory Compliance & Audits
-            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">
+                Air Quality Reports
+              </h1>
 
-            <span>
-              /
-            </span>
-
-            <span className="text-blue-600 font-bold">
-              CPCB Section 11 Documentation
-            </span>
-
-          </div>
-
-
-          <div className="flex items-center gap-3 flex-wrap">
-
-            <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight leading-snug">
-              Regulatory Air Quality Reports
-            </h1>
-
-          </div>
-
-        </div>
-
-
-        {/* EXPORT BUTTONS */}
-
-        <div className="flex items-center gap-3">
-
-          <button
-            type="button"
-            onClick={() =>
-              handleExport(
-                "PDF"
-              )
-            }
-            disabled={
-              isGenerating ||
-              isLoading ||
-              !normalizedRecords.length
-            }
-            className="flex items-center gap-2 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95"
-          >
-
-            {isGenerating ? (
-
-              <RefreshCw
-                size={14}
-                className="animate-spin"
-              />
-
-            ) : (
-
-              <Download
-                size={14}
-                className="text-rose-500"
-              />
-
-            )}
-
-            <span>
-              Export Official PDF
-            </span>
-
-          </button>
-
-
-          <button
-            type="button"
-            onClick={() =>
-              handleExport(
-                "XLSX"
-              )
-            }
-            disabled={
-              isGenerating ||
-              isLoading ||
-              !normalizedRecords.length
-            }
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 transition active:scale-95"
-          >
-
-            {isGenerating ? (
-
-              <RefreshCw
-                size={14}
-                className="animate-spin"
-              />
-
-            ) : (
-
-              <FileSpreadsheet
-                size={14}
-              />
-
-            )}
-
-            <span>
-              Export Excel (.xlsx)
-            </span>
-
-          </button>
-
-        </div>
-
-      </div>
-
-
-      {/* ======================================================
-          ERROR
-      ====================================================== */}
-
-      {error && (
-
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4">
-
-          <div className="flex items-start gap-3">
-
-            <XCircle
-              size={20}
-              className="text-red-500 mt-0.5"
-            />
-
-            <div className="flex-1">
-
-              <p className="text-sm font-black text-red-700">
-                Unable to load report data
+              <p className="text-sm text-slate-500">
+                PMC CAAQM monitoring and environmental reporting
               </p>
-
-
-              <p className="text-xs text-red-600 mt-1">
-                {error}
-              </p>
-
-
-              <button
-                type="button"
-                onClick={
-                  fetchReportData
-                }
-                className="mt-3 inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold"
-              >
-
-                <RefreshCw
-                  size={13}
-                />
-
-                Retry
-
-              </button>
-
             </div>
 
           </div>
 
+          <div className="flex flex-wrap gap-2">
+
+            <button
+              onClick={fetchReports}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={16}
+                className={
+                  isLoading
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+
+              Refresh
+            </button>
+
+            <button
+              onClick={printReport}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              <Printer size={16} />
+
+              Print
+            </button>
+
+          </div>
+
         </div>
+      </div>
 
-      )}
-
-
-      {/* ======================================================
+      {/* ====================================================
           REPORT TEMPLATES
-      ====================================================== */}
+      ==================================================== */}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 
         {REPORT_TEMPLATES.map(
-          (item) => {
+          (template) => {
+            const Icon =
+              template.icon;
 
-            const isSelected =
+            const active =
               reportType ===
-              item.id;
-
+              template.id;
 
             return (
-
-              <div
-                key={item.id}
-                onClick={() =>
+              <button
+                key={template.id}
+                onClick={() => {
                   setReportType(
-                    item.id
-                  )
-                }
-                className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? "bg-white border-blue-500 shadow-[0_10px_30px_rgba(37,99,235,0.12)] ring-2 ring-blue-500/20"
-                    : "bg-white/80 hover:bg-white border-slate-200 shadow-sm"
+                    template.id
+                  );
+
+                  // Load only this report.
+                  setTimeout(
+                    () => {
+                      fetchReports();
+                    },
+                    0
+                  );
+                }}
+                className={`rounded-xl border p-4 text-left transition ${
+                  active
+                    ? "border-blue-500 bg-blue-50 shadow-sm"
+                    : "border-slate-200 bg-white hover:border-blue-300"
                 }`}
               >
 
-                <div>
+                <div className="flex items-start justify-between gap-3">
 
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
 
-                    <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                    <div
+                      className={`rounded-lg p-2 ${
+                        active
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      <Icon size={19} />
+                    </div>
 
-                      {item.code}
+                    <div>
+                      <h3 className="font-semibold text-slate-800">
+                        {template.title}
+                      </h3>
 
-                    </span>
-
-
-                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-
-                      {item.status}
-
-                    </span>
+                      <p className="text-xs text-slate-500">
+                        {template.code}
+                      </p>
+                    </div>
 
                   </div>
 
-
-                  <h3 className="text-base font-black text-slate-900 mt-2">
-
-                    {item.title}
-
-                  </h3>
-
-
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-
-                    {item.desc}
-
-                  </p>
-
-                </div>
-
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-400">
-
-                  <span>
-                    Cycle: {item.frequency}
-                  </span>
-
-
-                  <span className="text-blue-600 font-bold">
-
-                    {isSelected
-                      ? "Selected ✓"
-                      : "Select Template →"}
-
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs ${
+                      template.status ===
+                      "Certified"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {template.status}
                   </span>
 
                 </div>
 
-              </div>
+                <p className="mt-3 text-sm text-slate-600">
+                  {template.desc}
+                </p>
 
+                <div className="mt-3 text-xs text-slate-500">
+                  Frequency:{" "}
+                  <span className="font-medium">
+                    {template.frequency}
+                  </span>
+                </div>
+
+              </button>
             );
-
           }
         )}
 
       </div>
 
+      {/* ====================================================
+          FILTERS
+      ==================================================== */}
 
-      {/* ======================================================
-          PARAMETERS
-      ====================================================== */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] mb-7">
+        <div className="mb-4 flex items-center gap-2">
+          <Filter
+            size={18}
+            className="text-blue-600"
+          />
 
-        <div className="flex items-center gap-2 mb-5">
-
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-
-            <FileText
-              size={18}
-            />
-
-          </div>
-
-
-          <div>
-
-            <h2 className="text-sm font-black text-slate-900">
-
-              Report Generation Parameters
-
-            </h2>
-
-          </div>
-
+          <h2 className="font-semibold text-slate-800">
+            Report Filters
+          </h2>
         </div>
 
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-          {/* STATION */}
-
-          <div>
-
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 pl-1">
-
-              Monitoring Station / Node
-
-            </label>
-
-
-            <div className="relative">
-
-              <Building2
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-              />
-
-
-              <select
-                value={
-                  selectedStation
-                }
-                onChange={(e) =>
-                  setSelectedStation(
-                    e.target.value
-                  )
-                }
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 cursor-pointer transition shadow-inner"
-              >
-
-                <option value="ALL">
-
-                  All Municipal Wards
-                  (Consolidated)
-
-                </option>
-
-
-                {stations.map(
-                  (station) => {
-
-                    const stationId =
-                      station.station_id ??
-                      station.stationId ??
-                      station.id;
-
-
-                    const stationName =
-                      station.name ??
-                      station.station_name ??
-                      station.stationName ??
-                      "Unnamed Station";
-
-
-                    const ward =
-                      station.ward
-                        ? ` (${station.ward})`
-                        : "";
-
-
-                    return (
-
-                      <option
-                        key={
-                          stationId
-                        }
-                        value={
-                          stationId
-                        }
-                      >
-
-                        {stationName}
-                        {ward}
-
-                      </option>
-
-                    );
-
-                  }
-                )}
-
-              </select>
-
-            </div>
-
-          </div>
-
-
-          {/* DATE */}
+          {/* FROM */}
 
           <div>
-
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 pl-1">
-
-              Observation Date
-
+            <label className="mb-1 block text-sm font-medium text-slate-600">
+              From Date
             </label>
-
 
             <div className="relative">
 
               <Calendar
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
-
 
               <input
                 type="date"
-                value={
-                  observationDate
-                }
+                value={fromDate}
                 onChange={(e) =>
-                  setObservationDate(
+                  setFromDate(
                     e.target.value
                   )
                 }
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition shadow-inner"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
               />
+
+            </div>
+          </div>
+
+          {/* TO */}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">
+              To Date
+            </label>
+
+            <div className="relative">
+
+              <Calendar
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate}
+                onChange={(e) =>
+                  setToDate(
+                    e.target.value
+                  )
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
+              />
+
+            </div>
+          </div>
+
+          {/* STATION */}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">
+              Station
+            </label>
+
+            <select
+              value={selectedStation}
+              onChange={(e) =>
+                setSelectedStation(
+                  e.target.value
+                )
+              }
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+
+              <option value="ALL">
+                All Stations
+              </option>
+
+              {stations.map(
+                (station) => {
+                  const id =
+                    station.station_id ??
+                    station.stationId ??
+                    station.id;
+
+                  const name =
+                    station.name ??
+                    station.station_name ??
+                    station.stationName ??
+                    `Station ${id}`;
+
+                  return (
+                    <option
+                      key={id}
+                      value={id}
+                    >
+                      {name}
+                    </option>
+                  );
+                }
+              )}
+
+            </select>
+          </div>
+
+          {/* WARD */}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">
+              Ward Grouping
+            </label>
+
+            <select
+              value={wardGroupBy}
+              onChange={(e) =>
+                setWardGroupBy(
+                  e.target.value
+                )
+              }
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="day">
+                Daily
+              </option>
+
+              <option value="month">
+                Monthly
+              </option>
+            </select>
+          </div>
+
+          {/* POLLUTANT */}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">
+              Pollutant
+            </label>
+
+            <select
+              value={
+                pollutantParameter
+              }
+              onChange={(e) =>
+                setPollutantParameter(
+                  e.target.value
+                )
+              }
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="ALL">
+                All Pollutants
+              </option>
+
+              <option value="pm25">
+                PM2.5
+              </option>
+
+              <option value="pm10">
+                PM10
+              </option>
+
+              <option value="no2">
+                NO2
+              </option>
+            </select>
+          </div>
+
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+
+          <button
+            onClick={fetchReports}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Search size={16} />
+
+            Generate Report
+          </button>
+
+          <button
+            onClick={resetFilters}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            <XCircle size={16} />
+
+            Reset
+          </button>
+
+        </div>
+
+      </div>
+
+      {/* ====================================================
+          ERROR
+      ==================================================== */}
+
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+
+          <div className="flex items-start gap-3">
+
+            <AlertTriangle
+              size={20}
+            />
+
+            <div>
+              <p className="font-semibold">
+                Unable to load report
+              </p>
+
+              <p className="mt-1 text-sm">
+                {error}
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ====================================================
+          LOADING
+      ==================================================== */}
+
+      {isLoading && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-700">
+
+          <div className="flex items-center gap-3">
+
+            <RefreshCw
+              size={18}
+              className="animate-spin"
+            />
+
+            <span className="text-sm font-medium">
+              Loading{" "}
+              {selectedTemplate.title}
+              ...
+            </span>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ====================================================
+          SUMMARY CARDS
+      ==================================================== */}
+
+      {reportType ===
+        "CPCB_DAILY" && (
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+
+          <SummaryCard
+            icon={Building2}
+            title="Stations"
+            value={totalStations}
+          />
+
+          <SummaryCard
+            icon={CheckCircle2}
+            title="Compliant"
+            value={
+              compliantStations
+            }
+            valueClass="text-green-600"
+          />
+
+          <SummaryCard
+            icon={AlertTriangle}
+            title="Action Required"
+            value={actionRequired}
+            valueClass="text-orange-600"
+          />
+
+          <SummaryCard
+            icon={XCircle}
+            title="No Data"
+            value={noDataStations}
+            valueClass="text-red-600"
+          />
+
+          <SummaryCard
+            icon={Activity}
+            title="Current"
+            value={currentStations}
+            valueClass="text-blue-600"
+          />
+
+          <SummaryCard
+            icon={BarChart3}
+            title="Avg AQI"
+            value={
+              averageAQI !== null
+                ? Math.round(
+                    averageAQI
+                  )
+                : "N/A"
+            }
+          />
+
+        </div>
+      )}
+
+      {/* ====================================================
+          REPORT PERIOD
+      ==================================================== */}
+
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+
+          <div className="flex items-center gap-3">
+
+            <Clock3
+              size={18}
+              className="text-slate-500"
+            />
+
+            <div>
+
+              <p className="text-xs text-slate-500">
+                Selected Report
+              </p>
+
+              <p className="font-medium text-slate-800">
+                {selectedTemplate.title}
+              </p>
 
             </div>
 
           </div>
 
+          <div className="text-sm text-slate-500">
 
-          {/* ACTION */}
+            Last updated:{" "}
 
-          <div className="flex items-end gap-2">
-
-            <button
-              type="button"
-              onClick={
-                fetchReportData
-              }
-              disabled={
-                isLoading
-              }
-              className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
-            >
-
-              {isLoading ? (
-
-                <>
-
-                  <RefreshCw
-                    size={15}
-                    className="animate-spin"
-                  />
-
-                  Loading...
-
-                </>
-
-              ) : (
-
-                <>
-
-                  <Search
-                    size={15}
-                  />
-
-                  Compile & Preview
-
-                </>
-
-              )}
-
-            </button>
-
-
-            <button
-              type="button"
-              onClick={
-                resetFilters
-              }
-              className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-2xl transition"
-            >
-
-              Reset
-
-            </button>
+            {lastUpdated
+              ? lastUpdated.toLocaleTimeString(
+                  "en-IN"
+                )
+              : "N/A"}
 
           </div>
 
@@ -3371,604 +4246,220 @@ export default function Reports() {
 
       </div>
 
-
-      {/* ======================================================
-          REPORT STATUS CARDS
-      ====================================================== */}
-
-      {!isLoading &&
-        normalizedRecords.length >
-          0 && (
-
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-7">
-
-            {/* TOTAL */}
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-
-                Stations
-
-              </p>
-
-              <p className="text-2xl font-black text-slate-900 mt-1">
-
-                {totalStations}
-
-              </p>
-
-            </div>
-
-
-            {/* CURRENT */}
-
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">
-
-                Current
-
-              </p>
-
-              <p className="text-2xl font-black text-emerald-700 mt-1">
-
-                {currentStations}
-
-              </p>
-
-            </div>
-
-
-            {/* HISTORICAL */}
-
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-amber-600">
-
-                Historical
-
-              </p>
-
-              <p className="text-2xl font-black text-amber-700 mt-1">
-
-                {historicalStations}
-
-              </p>
-
-            </div>
-
-
-            {/* COMPLIANT */}
-
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-blue-600">
-
-                Compliant
-
-              </p>
-
-              <p className="text-2xl font-black text-blue-700 mt-1">
-
-                {compliantStations}
-
-              </p>
-
-            </div>
-
-
-            {/* ACTION */}
-
-            <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-red-600">
-
-                Action Required
-
-              </p>
-
-              <p className="text-2xl font-black text-red-700 mt-1">
-
-                {actionRequired}
-
-              </p>
-
-            </div>
-
-          </div>
-
-        )}
-
-
-      {/* ======================================================
-          REPORT TABLE
-      ====================================================== */}
-
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)]">
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-
-          <div>
-
-            <div className="flex items-center gap-2">
-
-              <h2 className="text-base font-black text-slate-900">
-
-                Official Municipal Environmental Audit Table
-
-              </h2>
-
-            </div>
-
-
-            <p className="text-xs text-slate-400 mt-1">
-
-              24-hour pollutant averages for{" "}
-
-              <span className="font-bold text-slate-600">
-
-                {observationDate}
-
-              </span>
-
+      {/* ====================================================
+          EXPORT
+      ==================================================== */}
+
+      <div className="mb-6 flex flex-wrap gap-3">
+
+        <button
+          onClick={exportPDF}
+          disabled={isGenerating}
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          <Download size={17} />
+
+          Export PDF
+        </button>
+
+        <button
+          onClick={exportExcel}
+          disabled={isGenerating}
+          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          <FileSpreadsheet size={17} />
+
+          Export Excel
+        </button>
+
+        <button
+          onClick={exportCSV}
+          disabled={isGenerating}
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+        >
+          <Database size={17} />
+
+          Export CSV
+        </button>
+
+      </div>
+
+      {/* ====================================================
+          DAILY REPORT
+      ==================================================== */}
+
+      {reportType ===
+        "CPCB_DAILY" && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+          <div className="border-b border-slate-200 p-5">
+
+            <h2 className="text-lg font-semibold text-slate-800">
+              Daily CAAQM Station Audit
+            </h2>
+
+            <p className="text-sm text-slate-500">
+              Station-wise pollutant, AQI and data-quality report
             </p>
 
           </div>
-
-
-          {/* PERIOD STATUS */}
-
-          <div className="flex items-center gap-2 flex-wrap">
-
-            <span className="text-[10px] font-bold uppercase text-slate-400">
-
-              Data:
-
-            </span>
-
-
-            {currentStations >
-              0 && (
-
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
-
-                Current {currentStations}
-
-              </span>
-
-            )}
-
-
-            {historicalStations >
-              0 && (
-
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold">
-
-                Historical {historicalStations}
-
-              </span>
-
-            )}
-
-
-            {mixedStations >
-              0 && (
-
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold">
-
-                Mixed {mixedStations}
-
-              </span>
-
-            )}
-
-          </div>
-
-        </div>
-
-
-        {/* LOADING */}
-
-        {isLoading && (
-
-          <div className="py-20 flex flex-col items-center justify-center">
-
-            <RefreshCw
-              size={32}
-              className="text-blue-600 animate-spin"
-            />
-
-
-            <p className="text-sm font-black text-slate-700 mt-4">
-
-              Loading report data...
-
-            </p>
-
-
-            <p className="text-xs text-slate-400 mt-1">
-
-              Fetching 24-hour data from the backend
-
-            </p>
-
-          </div>
-
-        )}
-
-
-        {/* EMPTY */}
-
-        {!isLoading &&
-          !error &&
-          normalizedRecords.length ===
-            0 && (
-
-          <div className="py-20 flex flex-col items-center justify-center text-center">
-
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-
-              <FileText
-                size={28}
-                className="text-slate-400"
-              />
-
-            </div>
-
-
-            <h3 className="text-sm font-black text-slate-700 mt-4">
-
-              No report data found
-
-            </h3>
-
-
-            <p className="text-xs text-slate-400 mt-1 max-w-md">
-
-              There are no readings or report records available for the selected station and observation date.
-
-            </p>
-
-          </div>
-
-        )}
-
-
-        {/* TABLE */}
-
-        {!isLoading &&
-          normalizedRecords.length >
-            0 && (
 
           <div className="overflow-x-auto">
 
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[1100px] text-sm">
 
-              <thead>
+              <thead className="bg-slate-50">
 
-                <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] tracking-wider font-bold">
-
-                  <th className="pb-3 pl-2">
-
-                    Station / Ward Node
-
+                <tr>
+                  <th className="px-4 py-3 text-left">
+                    Station
                   </th>
 
-
-                  <th className="pb-3">
-
-                    PM2.5 (24h)
-
+                  <th className="px-4 py-3 text-left">
+                    Ward
                   </th>
 
-
-                  <th className="pb-3">
-
-                    PM10 (24h)
-
+                  <th className="px-4 py-3 text-right">
+                    PM2.5
                   </th>
 
-
-                  <th className="pb-3">
-
-                    NO₂ (24h)
-
+                  <th className="px-4 py-3 text-right">
+                    PM10
                   </th>
 
-
-                  <th className="pb-3">
-
-                    Calculated AQI
-
+                  <th className="px-4 py-3 text-right">
+                    NO2
                   </th>
 
+                  <th className="px-4 py-3 text-center">
+                    AQI
+                  </th>
 
-                  <th className="pb-3">
+                  <th className="px-4 py-3 text-left">
+                    Category
+                  </th>
 
+                  <th className="px-4 py-3 text-left">
                     Dominant
-
                   </th>
 
-
-                  <th className="pb-3">
-
-                    Data Status
-
+                  <th className="px-4 py-3 text-center">
+                    Availability
                   </th>
 
-
-                  <th className="pb-3">
-
-                    Completeness
-
+                  <th className="px-4 py-3 text-left">
+                    Status
                   </th>
 
-
-                  <th className="pb-3 text-right pr-2">
-
-                    Regulatory Audit
-
+                  <th className="px-4 py-3 text-left">
+                    Compliance
                   </th>
-
                 </tr>
 
               </thead>
 
-
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
 
                 {normalizedRecords.map(
-                  (
-                    row,
-                    index
-                  ) => {
+                  (row) => (
+                    <tr
+                      key={
+                        row.stationId
+                      }
+                      className="border-t border-slate-100 hover:bg-slate-50"
+                    >
 
-                    const compliant =
-                      isCompliant(
-                        row.compliance
-                      );
+                      <td className="px-4 py-3 font-medium">
+                        {row.station}
+                      </td>
 
+                      <td className="px-4 py-3">
+                        {row.ward || "N/A"}
+                      </td>
 
-                    return (
+                      <td className="px-4 py-3 text-right">
+                        {formatNumber(
+                          row.pm25
+                        )}
+                      </td>
 
-                      <tr
-                        key={`${row.stationId}-${index}`}
-                        className="hover:bg-slate-50 transition"
-                      >
+                      <td className="px-4 py-3 text-right">
+                        {formatNumber(
+                          row.pm10
+                        )}
+                      </td>
 
-                        {/* STATION */}
+                      <td className="px-4 py-3 text-right">
+                        {formatNumber(
+                          row.no2
+                        )}
+                      </td>
 
-                        <td className="py-4 pl-2">
+                      <td className="px-4 py-3 text-center">
 
-                          <div className="font-black text-slate-900">
-
-                            {row.station}
-
-                          </div>
-
-
-                          {row.ward && (
-
-                            <div className="text-[10px] text-slate-400">
-
-                              {row.ward}
-
-                            </div>
-
-                          )}
-
-
-                          <div className="text-[10px] text-slate-400 font-mono">
-
-                            ID: {row.stationId}
-
-                          </div>
-
-
-                          {row.externalStationId && (
-
-                            <div className="text-[9px] text-slate-400 font-mono">
-
-                              OpenAQ:{" "}
-
-                              {row.externalStationId}
-
-                            </div>
-
-                          )}
-
-                        </td>
-
-
-                        {/* PM2.5 */}
-
-                        <td className="py-4 font-bold text-slate-700">
-
-                          {formatPollutant(
-                            row.pm25
-                          )}
-
-                        </td>
-
-
-                        {/* PM10 */}
-
-                        <td className="py-4 font-bold text-slate-700">
-
-                          {formatPollutant(
-                            row.pm10
-                          )}
-
-                        </td>
-
-
-                        {/* NO2 */}
-
-                        <td className="py-4 font-bold text-slate-700">
-
-                          {formatPollutant(
-                            row.no2
-                          )}
-
-                        </td>
-
-
-                        {/* AQI */}
-
-                        <td className="py-4">
-
-                          <span className="text-sm font-black text-slate-900">
-
-                            {formatAQI(
-                              row.aqi
-                            )}
-
-                          </span>
-
-
-                          {row.category &&
-                            row.category !==
-                              "N/A" && (
-
-                            <span className="text-[10px] text-slate-400 ml-1">
-
-                              (
-                              {
-                                row.category
-                              }
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-bold ${getAqiClass(
+                            row.aqi
+                          )}`}
+                        >
+                          {row.aqi !==
+                          null
+                            ? Math.round(
+                                Number(
+                                  row.aqi
+                                )
                               )
+                            : "N/A"}
+                        </span>
 
-                            </span>
+                      </td>
 
-                          )}
+                      <td className="px-4 py-3">
+                        {row.category}
+                      </td>
 
-                        </td>
+                      <td className="px-4 py-3">
+                        {row.dominant}
+                      </td>
 
+                      <td className="px-4 py-3 text-center">
+                        {row.availability ??
+                          "N/A"}
+                      </td>
 
-                        {/* DOMINANT */}
+                      <td className="px-4 py-3">
 
-                        <td className="py-4 font-semibold text-blue-600">
+                        <span
+                          className={`rounded-full border px-2 py-1 text-xs ${getDataStatusClass(
+                            row.dataStatus
+                          )}`}
+                        >
+                          {row.dataStatus}
+                        </span>
 
-                          {row.dominant}
+                      </td>
 
-                        </td>
+                      <td className="px-4 py-3">
+                        <ComplianceBadge
+                          value={
+                            row.compliance
+                          }
+                        />
+                      </td>
 
+                    </tr>
+                  )
+                )}
 
-                        {/* DATA STATUS */}
-
-                        <td className="py-4">
-
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border ${getDataStatusClasses(
-                              row.dataStatus
-                            )}`}
-                          >
-
-                            {row.dataStatus}
-
-                          </span>
-
-
-                          <div className="text-[9px] text-slate-400 mt-1">
-
-                            {row.currentReadings >
-                              0 && (
-                              <>
-                                {row.currentReadings}
-                                {" "}
-                                current
-                              </>
-                            )}
-
-
-                            {row.currentReadings >
-                              0 &&
-                              row.historicalReadings >
-                                0 &&
-                              " • "}
-
-
-                            {row.historicalReadings >
-                              0 && (
-                              <>
-                                {row.historicalReadings}
-                                {" "}
-                                historical
-                              </>
-                            )}
-
-                          </div>
-
-                        </td>
-
-
-                        {/* COMPLETENESS */}
-
-                        <td className="py-4">
-
-                          <div className="font-mono font-bold text-emerald-600">
-
-                            {row.reportCompleteness ||
-                              formatAvailability(
-                                row.availability
-                              )}
-
-                          </div>
-
-
-                          <div className="text-[9px] text-slate-400 mt-1">
-
-                            {row.totalReadings}
-                            {" "}
-                            readings
-
-                          </div>
-
-                        </td>
-
-
-                        {/* COMPLIANCE */}
-
-                        <td className="py-4 text-right pr-2">
-
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
-                              compliant
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : row.compliance ===
-                                  "No Data"
-                                  ? "bg-slate-50 text-slate-500 border-slate-200"
-                                  : "bg-amber-50 text-amber-700 border-amber-200"
-                            }`}
-                          >
-
-                            {compliant ? (
-
-                              <CheckCircle2
-                                size={12}
-                              />
-
-                            ) : (
-
-                              <AlertTriangle
-                                size={12}
-                              />
-
-                            )}
-
-
-                            {row.compliance}
-
-                          </span>
-
-                        </td>
-
-                      </tr>
-
-                    );
-
-                  }
+                {!normalizedRecords.length && (
+                  <tr>
+                    <td
+                      colSpan="11"
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No station report data available.
+                    </td>
+                  </tr>
                 )}
 
               </tbody>
@@ -3977,236 +4468,1044 @@ export default function Reports() {
 
           </div>
 
-        )}
+        </section>
+      )}
 
+      {/* ====================================================
+          WARD REPORT
+      ==================================================== */}
 
-        {/* ====================================================
-            SUMMARY
-        ==================================================== */}
+      {reportType ===
+        "WARD_AQI" && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
-        {!isLoading &&
-          normalizedRecords.length >
-            0 && (
+          <div className="flex items-center justify-between border-b border-slate-200 p-5">
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                Ward-wise AQI Report
+              </h2>
 
-            {/* STATIONS */}
-
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-
-                Stations Reported
-
+              <p className="text-sm text-slate-500">
+                {wardGroupBy ===
+                "day"
+                  ? "Daily"
+                  : "Monthly"}{" "}
+                AQI aggregation by ward
               </p>
-
-
-              <p className="text-2xl font-black text-slate-900 mt-1">
-
-                {totalStations}
-
-              </p>
-
             </div>
 
-
-            {/* CURRENT */}
-
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-
-              <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">
-
-                Current Data
-
-              </p>
-
-
-              <p className="text-2xl font-black text-emerald-700 mt-1">
-
-                {currentStations}
-
-              </p>
-
+            <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm">
+              Highest AQI:{" "}
+              <strong>
+                {maxWardAQI !==
+                null
+                  ? Math.round(
+                      maxWardAQI
+                    )
+                  : "N/A"}
+              </strong>
             </div>
 
+          </div>
 
-            {/* HISTORICAL */}
+          <div className="overflow-x-auto">
 
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+            <table className="w-full min-w-[800px] text-sm">
 
-              <p className="text-[10px] uppercase tracking-wider font-bold text-amber-600">
+              <thead className="bg-slate-50">
 
-                Historical Data
+                <tr>
+                  <th className="px-4 py-3 text-left">
+                    Ward
+                  </th>
 
-              </p>
+                  <th className="px-4 py-3 text-left">
+                    Period
+                  </th>
 
+                  <th className="px-4 py-3 text-right">
+                    Average AQI
+                  </th>
 
-              <p className="text-2xl font-black text-amber-700 mt-1">
+                  <th className="px-4 py-3 text-right">
+                    Maximum AQI
+                  </th>
 
-                {historicalStations}
+                  <th className="px-4 py-3 text-right">
+                    Minimum AQI
+                  </th>
 
-              </p>
+                  <th className="px-4 py-3 text-left">
+                    Category
+                  </th>
+                </tr>
 
-            </div>
+              </thead>
 
+              <tbody>
 
-            {/* ACTION */}
+                {wardRecords.map(
+                  (row, index) => {
 
-            <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                    const average =
+                      row.averageAQI ??
+                      row.averageAqi;
 
-              <p className="text-[10px] uppercase tracking-wider font-bold text-red-600">
+                    const maximum =
+                      row.maximumAQI ??
+                      row.maximumAqi ??
+                      row.maxAQI;
 
-                Action Required
+                    const minimum =
+                      row.minimumAQI ??
+                      row.minimumAqi ??
+                      row.minAQI;
 
-              </p>
+                    return (
+                      <tr
+                        key={`${row.ward}-${row.period}-${index}`}
+                        className="border-t border-slate-100"
+                      >
 
+                        <td className="px-4 py-3 font-medium">
+                          {row.ward ??
+                            row.wardName ??
+                            "N/A"}
+                        </td>
 
-              <p className="text-2xl font-black text-red-700 mt-1">
+                        <td className="px-4 py-3">
+                          {row.period ??
+                            row.date ??
+                            row.month ??
+                            "N/A"}
+                        </td>
 
-                {actionRequired}
+                        <td className="px-4 py-3 text-right">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${getAqiClass(
+                              average
+                            )}`}
+                          >
+                            {average !==
+                            null
+                              ? Math.round(
+                                  Number(
+                                    average
+                                  )
+                                )
+                              : "N/A"}
+                          </span>
+                        </td>
 
-              </p>
+                        <td className="px-4 py-3 text-right">
+                          {maximum !=
+                          null
+                            ? Math.round(
+                                Number(
+                                  maximum
+                                )
+                              )
+                            : "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          {minimum !=
+                          null
+                            ? Math.round(
+                                Number(
+                                  minimum
+                                )
+                              )
+                            : "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.category ??
+                            getAqiCategory(
+                              average
+                            )}
+                        </td>
+
+                      </tr>
+                    );
+                  }
+                )}
+
+                {!wardRecords.length && (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No ward AQI data available.
+                    </td>
+                  </tr>
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </section>
+      )}
+
+      {/* ====================================================
+          POLLUTANT TREND
+      ==================================================== */}
+
+      {reportType ===
+        "POLLUTANT_TREND" && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+          <div className="border-b border-slate-200 p-5">
+
+            <h2 className="text-lg font-semibold text-slate-800">
+              Pollutant Trend Report
+            </h2>
+
+            <p className="text-sm text-slate-500">
+              Daily pollutant averages, minimums and maximums
+            </p>
+
+          </div>
+
+          <div className="p-5">
+
+            {pollutantRecords.length >
+              0 && (
+              <div className="mb-6">
+
+                <div className="mb-2 flex justify-between text-sm">
+
+                  <span className="text-slate-600">
+                    Maximum observed value
+                  </span>
+
+                  <strong>
+                    {formatNumber(
+                      pollutantMax
+                    )}
+                  </strong>
+
+                </div>
+
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        pollutantMax
+                          ? Math.min(
+                              100,
+                              pollutantMax
+                            )
+                          : 0
+                      )}%`,
+                    }}
+                  />
+
+                </div>
+
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+
+              <table className="w-full min-w-[750px] text-sm">
+
+                <thead className="bg-slate-50">
+
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      Date
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Parameter
+                    </th>
+
+                    <th className="px-4 py-3 text-right">
+                      Average
+                    </th>
+
+                    <th className="px-4 py-3 text-right">
+                      Minimum
+                    </th>
+
+                    <th className="px-4 py-3 text-right">
+                      Maximum
+                    </th>
+
+                    <th className="px-4 py-3 text-right">
+                      Samples
+                    </th>
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {pollutantRecords.map(
+                    (row, index) => (
+                      <tr
+                        key={`${row.date}-${row.parameter}-${index}`}
+                        className="border-t border-slate-100"
+                      >
+
+                        <td className="px-4 py-3">
+                          {formatDate(
+                            row.date
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 font-medium">
+                          {row.parameter}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          {formatNumber(
+                            row.average
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          {formatNumber(
+                            row.minimum
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          {formatNumber(
+                            row.maximum
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          {row.samples ??
+                            0}
+                        </td>
+
+                      </tr>
+                    )
+                  )}
+
+                  {!pollutantRecords.length && (
+                    <tr>
+                      <td
+                        colSpan="6"
+                        className="px-4 py-10 text-center text-slate-500"
+                      >
+                        No pollutant trend data available.
+                      </td>
+                    </tr>
+                  )}
+
+                </tbody>
+
+              </table>
 
             </div>
 
           </div>
 
-        )}
+        </section>
+      )}
 
+      {/* ====================================================
+          UPTIME
+      ==================================================== */}
 
-        {/* ====================================================
-            REPORT INFORMATION
-        ==================================================== */}
+      {reportType ===
+        "UPTIME_QAQC" && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
-        {!isLoading &&
-          normalizedRecords.length >
-            0 && (
+          <div className="border-b border-slate-200 p-5">
 
-          <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+            <h2 className="text-lg font-semibold text-slate-800">
+              Station Uptime & Data Completeness
+            </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-              <div>
-
-                <p className="text-[10px] uppercase font-bold text-slate-400">
-
-                  Report Period
-
-                </p>
-
-                <p className="text-xs font-bold text-slate-700 mt-1">
-
-                  {observationDate}
-
-                </p>
-
-                <p className="text-[10px] text-slate-400">
-
-                  00:00 – 23:59
-
-                </p>
-
-              </div>
-
-
-              <div>
-
-                <p className="text-[10px] uppercase font-bold text-slate-400">
-
-                  Data Source
-
-                </p>
-
-                <p className="text-xs font-bold text-slate-700 mt-1">
-
-                  PMC CAAQM / OpenAQ
-
-                </p>
-
-              </div>
-
-
-              <div>
-
-                <p className="text-[10px] uppercase font-bold text-slate-400">
-
-                  Report Method
-
-                </p>
-
-                <p className="text-xs font-bold text-slate-700 mt-1">
-
-                  24-hour observation average
-
-                </p>
-
-              </div>
-
-            </div>
+            <p className="text-sm text-slate-500">
+              Device health, heartbeat and reading availability
+            </p>
 
           </div>
 
-        )}
+          <div className="overflow-x-auto">
 
+            <table className="w-full min-w-[1100px] text-sm">
 
-        {/* ====================================================
-            SIGN OFF
-        ==================================================== */}
+              <thead className="bg-slate-50">
 
-        <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 text-left">
+                    Station
+                  </th>
 
-          <span>
+                  <th className="px-4 py-3 text-center">
+                    Devices
+                  </th>
 
-            PMC CAAQM System
+                  <th className="px-4 py-3 text-center">
+                    Online
+                  </th>
 
-          </span>
+                  <th className="px-4 py-3 text-center">
+                    Offline
+                  </th>
 
+                  <th className="px-4 py-3 text-center">
+                    Battery
+                  </th>
 
-          <span>
+                  <th className="px-4 py-3 text-left">
+                    Network
+                  </th>
 
-            Report generated from stored monitoring observations
+                  <th className="px-4 py-3 text-left">
+                    Last Heartbeat
+                  </th>
 
-          </span>
+                  <th className="px-4 py-3 text-center">
+                    Availability
+                  </th>
+
+                  <th className="px-4 py-3 text-center">
+                    Readings
+                  </th>
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {uptimeRecords.map(
+                  (row, index) => (
+                    <tr
+                      key={`${row.stationId}-${index}`}
+                      className="border-t border-slate-100"
+                    >
+
+                      <td className="px-4 py-3 font-medium">
+                        {row.station ??
+                          row.stationName ??
+                          "N/A"}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        {row.deviceCount ??
+                          row.device_count ??
+                          0}
+                      </td>
+
+                      <td className="px-4 py-3 text-center text-green-600">
+                        {row.onlineDevices ??
+                          row.online_devices ??
+                          0}
+                      </td>
+
+                      <td className="px-4 py-3 text-center text-red-600">
+                        {row.offlineDevices ??
+                          row.offline_devices ??
+                          0}
+                      </td>
+
+                      <td className="px-4 py-3 text-center font-medium">
+                        {row.battery !==
+                          null &&
+                        row.battery !==
+                          undefined
+                          ? `${row.battery}%`
+                          : "N/A"}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {row.networkStatus ??
+                          row.network_status ??
+                          "N/A"}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {formatDateTime(
+                          row.latestHeartbeat ??
+                            row.latest_heartbeat
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        {row.dataAvailability ??
+                          row.data_availability ??
+                          "N/A"}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        {row.totalReadings ??
+                          row.total_readings ??
+                          0}
+                      </td>
+
+                    </tr>
+                  )
+                )}
+
+                {!uptimeRecords.length && (
+                  <tr>
+                    <td
+                      colSpan="9"
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No uptime data available.
+                    </td>
+                  </tr>
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+          <div className="border-t border-slate-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+
+            <strong>Note:</strong>{" "}
+            Historical uptime requires heartbeat history.
+            The backend currently uses device status,
+            network status, last heartbeat and reading
+            availability for the available period.
+
+          </div>
+
+        </section>
+      )}
+
+      {/* ====================================================
+          ALERT SUMMARY
+      ==================================================== */}
+
+      {reportType ===
+        "ALERT_SUMMARY" && (
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+          <div className="border-b border-slate-200 p-5">
+
+            <h2 className="text-lg font-semibold text-slate-800">
+              Alert Summary Report
+            </h2>
+
+            <p className="text-sm text-slate-500">
+              Environmental alerts during the selected period
+            </p>
+
+          </div>
+
+          {/* ALERT SUMMARY CARDS */}
+
+          <div className="grid grid-cols-2 gap-4 p-5 md:grid-cols-4">
+
+            <SummaryCard
+              icon={ShieldAlert}
+              title="Total Alerts"
+              value={
+                alertSummary?.totalAlerts ??
+                alertRecords.length
+              }
+            />
+
+            <SummaryCard
+              icon={AlertTriangle}
+              title="Active"
+              value={
+                alertSummary?.activeAlerts ??
+                0
+              }
+              valueClass="text-red-600"
+            />
+
+            <SummaryCard
+              icon={CheckCircle2}
+              title="Acknowledged"
+              value={
+                alertSummary?.acknowledgedAlerts ??
+                0
+              }
+              valueClass="text-green-600"
+            />
+
+            <SummaryCard
+              icon={Activity}
+              title="Parameters"
+              value={
+                alertSummary?.byParameter
+                  ? Object.keys(
+                      alertSummary.byParameter
+                    ).length
+                  : new Set(
+                      alertRecords.map(
+                        (row) =>
+                          row.parameter
+                      )
+                    ).size
+              }
+            />
+
+          </div>
+
+          {/* ALERT TABLE */}
+
+          <div className="overflow-x-auto">
+
+            <table className="w-full min-w-[1100px] text-sm">
+
+              <thead className="bg-slate-50">
+
+                <tr>
+
+                  <th className="px-4 py-3 text-left">
+                    Station
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Severity
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Parameter
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Message
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Started
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Ended
+                  </th>
+
+                  <th className="px-4 py-3 text-left">
+                    Status
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {alertRecords.map(
+                  (row, index) => (
+                    <tr
+                      key={
+                        row.alert_id ??
+                        row.alertId ??
+                        row.id ??
+                        index
+                      }
+                      className="border-t border-slate-100 hover:bg-slate-50"
+                    >
+
+                      <td className="px-4 py-3 font-medium">
+
+                        {row.station ??
+                          stationMap[
+                            String(
+                              row.station_id ??
+                                row.stationId ??
+                                ""
+                            )
+                          ] ??
+                          `Station ${
+                            row.station_id ??
+                            row.stationId ??
+                            "N/A"
+                          }`}
+
+                      </td>
+
+                      <td className="px-4 py-3">
+
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            String(
+                              row.severity
+                            ).toLowerCase() ===
+                            "critical"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
+                          {row.severity ??
+                            "N/A"}
+                        </span>
+
+                      </td>
+
+                      <td className="px-4 py-3 font-medium">
+
+                        {row.parameter ??
+                          "N/A"}
+
+                      </td>
+
+                      <td className="max-w-[350px] px-4 py-3">
+
+                        {row.message ??
+                          row.description ??
+                          row.alert_message ??
+                          "N/A"}
+
+                      </td>
+
+                      <td className="px-4 py-3">
+
+                        {formatDateTime(
+                          row.started_time ??
+                            row.startedTime ??
+                            row.start_time
+                        )}
+
+                      </td>
+
+                      <td className="px-4 py-3">
+
+                        {formatDateTime(
+                          row.ended_time ??
+                            row.endedTime ??
+                            row.end_time
+                        )}
+
+                      </td>
+
+                      <td className="px-4 py-3">
+
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${
+                            String(
+                              row.status ??
+                                ""
+                            ).toLowerCase() ===
+                            "acknowledged"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {row.status ??
+                            "Active"}
+                        </span>
+
+                      </td>
+
+                    </tr>
+                  )
+                )}
+
+                {!alertRecords.length && (
+                  <tr>
+
+                    <td
+                      colSpan="7"
+                      className="px-4 py-10 text-center text-slate-500"
+                    >
+                      No alerts found for the selected period.
+                    </td>
+
+                  </tr>
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </section>
+      )}
+
+      {/* ====================================================
+          MAINTENANCE + CALIBRATION
+      ==================================================== */}
+
+      {reportType ===
+        "MAINTENANCE" && (
+        <div className="space-y-6">
+
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="border-b border-slate-200 p-5">
+
+              <h2 className="text-lg font-semibold text-slate-800">
+                Maintenance Report
+              </h2>
+
+            </div>
+
+            <div className="overflow-x-auto">
+
+              <table className="w-full min-w-[1000px] text-sm">
+
+                <thead className="bg-slate-50">
+
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      ID
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Station
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Device
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Service Date
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Next Service
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Type
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Status
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Remarks
+                    </th>
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {maintenanceRecords.map(
+                    (row, index) => (
+                      <tr
+                        key={
+                          row.maintenance_id ??
+                          row.id ??
+                          index
+                        }
+                        className="border-t border-slate-100"
+                      >
+
+                        <td className="px-4 py-3">
+                          {row.maintenance_id ??
+                            row.maintenanceId ??
+                            row.id ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.station ??
+                            row.stationName ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.device ??
+                            row.deviceName ??
+                            row.device_id ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDate(
+                            row.service_date ??
+                              row.serviceDate
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDate(
+                            row.next_service_date ??
+                              row.nextServiceDate
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.maintenance_type ??
+                            row.type ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.status ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.remarks ??
+                            row.notes ??
+                            "N/A"}
+                        </td>
+
+                      </tr>
+                    )
+                  )}
+
+                  {!maintenanceRecords.length && (
+                    <tr>
+                      <td
+                        colSpan="8"
+                        className="px-4 py-10 text-center text-slate-500"
+                      >
+                        No maintenance records found.
+                      </td>
+                    </tr>
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </section>
+
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="border-b border-slate-200 p-5">
+
+              <h2 className="text-lg font-semibold text-slate-800">
+                Calibration Report
+              </h2>
+
+            </div>
+
+            <div className="overflow-x-auto">
+
+              <table className="w-full min-w-[900px] text-sm">
+
+                <thead className="bg-slate-50">
+
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      ID
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Sensor
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Sensor ID
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Calibration Date
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Next Calibration
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Status
+                    </th>
+
+                    <th className="px-4 py-3 text-left">
+                      Remarks
+                    </th>
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {calibrationRecords.map(
+                    (row, index) => (
+                      <tr
+                        key={
+                          row.calibration_id ??
+                          row.id ??
+                          index
+                        }
+                        className="border-t border-slate-100"
+                      >
+
+                        <td className="px-4 py-3">
+                          {row.calibration_id ??
+                            row.calibrationId ??
+                            row.id ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.sensor ??
+                            row.sensorName ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.sensor_id ??
+                            row.sensorId ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDate(
+                            row.calibration_date ??
+                              row.calibrationDate
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDate(
+                            row.next_calibration_date ??
+                              row.nextCalibrationDate
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.status ??
+                            "N/A"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {row.remarks ??
+                            row.notes ??
+                            "N/A"}
+                        </td>
+
+                      </tr>
+                    )
+                  )}
+
+                  {!calibrationRecords.length && (
+                    <tr>
+                      <td
+                        colSpan="7"
+                        className="px-4 py-10 text-center text-slate-500"
+                      >
+                        No calibration records found.
+                      </td>
+                    </tr>
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </section>
 
         </div>
-
-      </div>
-
-
-      {/* ======================================================
-          BOTTOM ACTION
-      ====================================================== */}
-
-      <div className="mt-5 flex items-center justify-between">
-
-        <button
-          type="button"
-          onClick={
-            exportPDF
-          }
-          disabled={
-            isGenerating ||
-            isLoading ||
-            !normalizedRecords.length
-          }
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition"
-        >
-
-          <Printer
-            size={14}
-          />
-
-
-          {isGenerating
-            ? "Generating..."
-            : "Generate PDF"}
-
-        </button>
-
-      </div>
+      )}
 
     </div>
-
   );
-
 }
