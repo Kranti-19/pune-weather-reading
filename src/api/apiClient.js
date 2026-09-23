@@ -1,24 +1,52 @@
-import axios from 'axios';
+import axios from "axios";
 
-// Pull from environment or default directly to local backend for testing
+// Backend API URL
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  'http://localhost:5000';
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000";
 
+// Create Axios instance
 const API = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Automatically attach JWT token
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
+
+// Handle common API errors
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      console.error(
+        `API Error ${error.response.status}:`,
+        error.response.data
+      );
+    } else if (error.request) {
+      console.error("API Error: No response from server.");
+    } else {
+      console.error("API Error:", error.message);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default API;
