@@ -330,13 +330,13 @@ export default function Sidebar() {
 
         shrink-0
 
-        overflow-hidden
+        overflow-y-auto
       "
     >
 
       {/* =================================================
           BRAND HEADER
-      ================================================= */}
+      ================================================. */}
 
       <div
         className="
@@ -488,8 +488,6 @@ export default function Sidebar() {
 
           pt-5
           pb-3
-
-          overflow-hidden
         "
       >
 
