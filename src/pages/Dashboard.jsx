@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AirQualityCalendar from "../components/AirQualityCalendar";
+import AQITrend from "../components/AQITrend";
 import MajorPollutantGrid from "../components/MajorPollutantGrid";
 import WardPollutionLeaderboard from "../components/WardPollutionLeaderboard";
+
 
 import {
   Wind,
@@ -192,8 +193,19 @@ const POLLUTANT_INFO = {
     standard: 2,
     unit: "mg/m³",
   },
-};
 
+  nh3: {
+    name: "NH₃",
+    standard: 400,
+    unit: "µg/m³",
+  },
+
+  pb: {
+    name: "Pb",
+    standard: 1.0,
+    unit: "µg/m³",
+  },
+};
 // =====================================================
 // NORMALIZE POLLUTANT PARAMETER
 // =====================================================
@@ -828,41 +840,46 @@ export default function Dashboard() {
       stations.length
     );
 
-  const onlineStations =
-    numberValue(
-      data.onlineStations,
-      stations.filter(
-        (station) =>
-          station.online
-      ).length
-    );
+  const onlineStations = numberValue(
+  data.onlineStations,
+  stations.filter((station) => {
+    const status = String(
+      station?.status || ""
+    ).toLowerCase();
 
-  const offlineStations =
-    numberValue(
-      data.offlineStations,
-      Math.max(
-        totalStations -
-          onlineStations,
-        0
-      )
+    return (
+      status === "online" ||
+      status === "connected" ||
+      station?.online === true ||
+      Number(station?.onlineDevices) > 0
     );
+  }).length
+);
+
+const offlineStations = numberValue(
+  data.offlineStations,
+  Math.max(
+    totalStations - onlineStations,
+    0
+  )
+);
 
   // ===================================================
   // ACTIVE ALERTS
   // ===================================================
 
-  const activeAlerts =
-    alerts.filter((alert) => {
-      const status = String(
-        alert.acknowledgement ||
-          ""
-      ).toLowerCase();
+  const activeAlerts = alerts.filter((alert) => {
+  const status = String(
+    alert.acknowledgement || ""
+  ).trim().toLowerCase();
 
-      return (
-        status === "" ||
-        status === "acknowledged"
-      );
-    });
+  return (
+    status === "" ||
+    status === "active" ||
+    status === "open" ||
+    status === "pending"
+  );
+});
 
   // ===================================================
   // WEATHER
@@ -896,81 +913,32 @@ export default function Dashboard() {
   // }
   // ===================================================
 
-  const pollutantChartData =
-    pollutants
-      .map((pollutant) => {
-        const key =
-          normalizePollutantParameter(
-            pollutant
-          );
+  // ===================================================
+  // POLLUTANT CHART DATA (Guarantees all 8 pollutants show)
+  // ===================================================
 
-        const info =
-          POLLUTANT_INFO[key] ||
-          {};
+  const pollutantChartData = Object.keys(POLLUTANT_INFO).map((key) => {
+    const info = POLLUTANT_INFO[key];
 
-        const rawValue =
-          pollutant?.value;
+    // Find matching pollutant record from backend array if available
+    const matched = pollutants.find((p) => {
+      const pKey = normalizePollutantParameter(p);
+      return pKey === key || pKey === info.name.toLowerCase().replace(/[₂₃.]/g, "");
+    });
 
-        const numericValue =
-          rawValue === null ||
-          rawValue === undefined
-            ? null
-            : Number(rawValue);
+    const rawValue = matched?.value ?? data[key] ?? null;
+    const numericValue = rawValue === null || rawValue === undefined ? null : Number(rawValue);
 
-        return {
-          name:
-            pollutant?.name ||
-            info.name ||
-            String(
-              pollutant?.parameter ||
-                key
-            ).toUpperCase(),
-
-          value:
-            Number.isFinite(
-              numericValue
-            )
-              ? numericValue
-              : 0,
-
-          standard:
-            Number.isFinite(
-              Number(
-                pollutant?.standard
-              )
-            )
-              ? Number(
-                  pollutant.standard
-                )
-              : info.standard || 0,
-
-          unit:
-            pollutant?.unit ||
-            info.unit ||
-            "µg/m³",
-
-          status:
-            pollutant?.status ||
-            (numericValue !== null
-              ? "Available"
-              : "No Data"),
-
-          count:
-            Number.isFinite(
-              Number(
-                pollutant?.count
-              )
-            )
-              ? Number(
-                  pollutant.count
-                )
-              : 0,
-        };
-      })
-      .filter(
-        (pollutant) =>
-          pollutant.name
-      );
+    return {
+  name: info.name,
+  key: key,
+  value: numericValue,
+  standard: Number(matched?.standard) || info.standard,
+  unit: matched?.unit || info.unit,
+  status: matched?.status || (numericValue !== null ? "Available" : "No Data"),
+  count: Number(matched?.count) || 0,
+};
+  });
 
   // Debug
   console.log(
@@ -1198,6 +1166,8 @@ export default function Dashboard() {
 
         {/* Overall AQI */}
 
+        {/* Overall AQI */}
+
         <button
           type="button"
           onClick={() =>
@@ -1216,13 +1186,14 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl sm:text-[34px] leading-none font-black font-mono text-slate-900">
+          {/* Added flex-wrap here so long categories wrap nicely */}
+          <div className="flex flex-wrap items-baseline gap-1.5 mt-2">
+            <span className="text-3xl sm:text-[32px] leading-none font-black font-mono text-slate-900">
               {Math.round(aqi)}
             </span>
 
             <span
-              className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${getAqiClass(
+              className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-extrabold border whitespace-nowrap ${getAqiClass(
                 aqi
               )}`}
             >
@@ -1230,7 +1201,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="text-[10px] text-slate-400 mt-2 font-medium">
+          <div className="text-[10px] text-slate-400 mt-2 font-medium truncate">
             Dominant:
             <strong className="text-slate-700 font-bold">
               {" "}
@@ -1618,7 +1589,7 @@ export default function Dashboard() {
           HISTORICAL AIR QUALITY
       ================================================= */}
 
-      <AirQualityCalendar />
+      <AQITrend />
 
       {/* =================================================
           WARD POLLUTION

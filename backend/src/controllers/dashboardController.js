@@ -190,6 +190,162 @@ const getAqiLevel = (aqi) => {
     return "Severe";
 };
 
+// =====================================================
+// CPCB-STYLE AQI CALCULATION FROM CURRENT POLLUTANTS
+// =====================================================
+
+// Breakpoints used for dashboard AQI calculation.
+// Note: true CPCB AQI uses prescribed averaging periods.
+// These current readings are therefore treated as a
+// dashboard-calculated AQI, not a regulatory 24-hour AQI.
+
+const AQI_BREAKPOINTS = {
+    pm25: [
+        [0, 30, 0, 50],
+        [31, 60, 51, 100],
+        [61, 90, 101, 200],
+        [91, 120, 201, 300],
+        [121, 250, 301, 400],
+        [251, 500, 401, 500],
+    ],
+
+    pm10: [
+        [0, 50, 0, 50],
+        [51, 100, 51, 100],
+        [101, 250, 101, 200],
+        [251, 350, 201, 300],
+        [351, 430, 301, 400],
+        [431, 600, 401, 500],
+    ],
+
+    no2: [
+        [0, 40, 0, 50],
+        [41, 80, 51, 100],
+        [81, 180, 101, 200],
+        [181, 280, 201, 300],
+        [281, 400, 301, 400],
+        [401, 800, 401, 500],
+    ],
+
+    so2: [
+        [0, 40, 0, 50],
+        [41, 80, 51, 100],
+        [81, 380, 101, 200],
+        [381, 800, 201, 300],
+        [801, 1600, 301, 400],
+        [1601, 2620, 401, 500],
+    ],
+
+    o3: [
+        [0, 50, 0, 50],
+        [51, 100, 51, 100],
+        [101, 168, 101, 200],
+        [169, 208, 201, 300],
+        [209, 748, 301, 400],
+        [749, 1000, 401, 500],
+    ],
+
+    co: [
+        [0, 1, 0, 50],
+        [1.1, 2, 51, 100],
+        [2.1, 10, 101, 200],
+        [10.1, 17, 201, 300],
+        [17.1, 34, 301, 400],
+        [34.1, 50, 401, 500],
+    ],
+};
+
+
+const calculateSubIndex = (value, breakpoints) => {
+    const concentration = Number(value);
+
+    if (!Number.isFinite(concentration)) {
+        return null;
+    }
+
+    for (const [
+        concentrationLow,
+        concentrationHigh,
+        indexLow,
+        indexHigh,
+    ] of breakpoints) {
+
+        if (
+            concentration >= concentrationLow &&
+            concentration <= concentrationHigh
+        ) {
+            const index =
+                (
+                    (indexHigh - indexLow) /
+                    (concentrationHigh - concentrationLow)
+                ) *
+                    (concentration - concentrationLow) +
+                indexLow;
+
+            return Math.round(index);
+        }
+    }
+
+    return null;
+};
+
+
+const calculateStationAqi = (pollutants) => {
+
+    const subindices = {};
+
+    for (const parameter of Object.keys(AQI_BREAKPOINTS)) {
+
+        const value = pollutants[parameter];
+
+        const subIndex = calculateSubIndex(
+            value,
+            AQI_BREAKPOINTS[parameter]
+        );
+
+        if (subIndex !== null) {
+            subindices[parameter] = subIndex;
+        }
+    }
+
+    const availableParameters =
+        Object.keys(subindices);
+
+    // Need at least 3 pollutants and at least
+    // one particulate pollutant for a useful AQI.
+    const hasParticulate =
+        Number.isFinite(subindices.pm25) ||
+        Number.isFinite(subindices.pm10);
+
+    if (
+        availableParameters.length < 3 ||
+        !hasParticulate
+    ) {
+        return null;
+    }
+
+    let dominantPollutant = null;
+    let maxSubIndex = -Infinity;
+
+    for (const [
+        parameter,
+        subIndex,
+    ] of Object.entries(subindices)) {
+
+        if (subIndex > maxSubIndex) {
+            maxSubIndex = subIndex;
+            dominantPollutant = parameter;
+        }
+    }
+
+    return {
+        aqi: maxSubIndex,
+        category: getAqiCategory(maxSubIndex),
+        dominant_pollutant: dominantPollutant,
+        pollutant_subindices: subindices,
+    };
+};
+
 
 // =====================================================
 // DATE FORMAT
@@ -687,13 +843,13 @@ const getDashboard = async (req, res) => {
         // 9. AQI STATUS
         // =================================================
 
-        const aqiDataStatus =
+        let aqiDataStatus =
             getAqiDisplayStatus(
                 selectedAqiRow?.timestamp
             );
 
 
-        const aqiAgeMinutes =
+        let aqiAgeMinutes =
             selectedAqiRow?.timestamp
                 ? Number(
                       getAgeMinutes(
@@ -703,7 +859,7 @@ const getDashboard = async (req, res) => {
                 : null;
 
 
-        const category =
+        let category =
             selectedAqiRow?.category ||
             (
                 currentAqi !== null
@@ -714,7 +870,7 @@ const getDashboard = async (req, res) => {
             );
 
 
-        const dominant =
+        let dominant =
             selectedAqiRow?.dominant_pollutant ||
             "N/A";
 
@@ -833,6 +989,130 @@ const getDashboard = async (req, res) => {
                 latestReadingMap
             );
 
+            // =================================================
+// CALCULATE AQI FROM LATEST POLLUTANT READINGS
+// =================================================
+
+const calculatedAqiByStation = {};
+
+for (const station of stationRows) {
+
+    const stationId =
+        Number(station.station_id);
+
+    const stationReadings =
+        latestReadingRows.filter(
+            (row) =>
+                Number(row.station_id) ===
+                stationId
+        );
+
+    const pollutants = {};
+    let latestPollutantTimestamp = null;
+
+    for (const row of stationReadings) {
+
+        const parameter = lower(
+            row.parameter
+        );
+
+        let key = parameter;
+
+        if (
+            [
+                "pm2.5",
+                "pm25",
+                "pm2_5",
+            ].includes(parameter)
+        ) {
+            key = "pm25";
+        }
+
+        if (parameter === "pm10") {
+            key = "pm10";
+        }
+
+        if (
+            parameter === "no2" ||
+            parameter === "no₂"
+        ) {
+            key = "no2";
+        }
+
+        if (
+            parameter === "so2" ||
+            parameter === "so₂"
+        ) {
+            key = "so2";
+        }
+
+        if (
+            parameter === "o3" ||
+            parameter === "o₃"
+        ) {
+            key = "o3";
+        }
+
+        if (parameter === "co") {
+            key = "co";
+        }
+
+        const value = Number(row.value);
+
+        if (
+            !Object.prototype.hasOwnProperty.call(
+                AQI_BREAKPOINTS,
+                key
+            )
+        ) {
+            continue;
+        }
+
+        if (!Number.isFinite(value)) {
+            continue;
+        }
+
+        pollutants[key] = value;
+
+        if (
+            row.timestamp &&
+            (
+                !latestPollutantTimestamp ||
+                new Date(row.timestamp).getTime() >
+                    new Date(
+                        latestPollutantTimestamp
+                    ).getTime()
+            )
+        ) {
+            latestPollutantTimestamp =
+                row.timestamp;
+        }
+    }
+
+    const calculated =
+        calculateStationAqi(
+            pollutants
+        );
+
+    if (calculated) {
+
+        calculatedAqiByStation[
+            stationId
+        ] = {
+            ...calculated,
+
+            station_id:
+                stationId,
+
+            timestamp:
+                latestPollutantTimestamp,
+
+            data_status:
+                "Calculated",
+        };
+    }
+}
+
 
         // =================================================
         // 12. POLLUTANT SUMMARY
@@ -845,8 +1125,9 @@ const getDashboard = async (req, res) => {
             so2: 0,
             o3: 0,
             co: 0,
+            nh3: 0, // Added NH3
+            pb: 0,  // Added Pb
         };
-
 
         const pollutantCounts = {
             pm25: 0,
@@ -855,6 +1136,8 @@ const getDashboard = async (req, res) => {
             so2: 0,
             o3: 0,
             co: 0,
+            nh3: 0, // Added NH3
+            pb: 0,  // Added Pb
         };
 
 
@@ -918,6 +1201,13 @@ const getDashboard = async (req, res) => {
                 parameter === "co"
             ) {
                 key = "co";
+            }
+            if (parameter === "nh3" || parameter === "nh₃") {
+                key = "nh3";
+            }
+
+            if (parameter === "pb" || parameter === "lead") {
+                key = "pb";
             }
 
 
@@ -1019,10 +1309,23 @@ const getDashboard = async (req, res) => {
                         );
 
 
-                    const aqiRow =
+                    const storedAqiRow =
                         latestAqiByStation[
                             stationId
                         ] || null;
+
+                    const calculatedAqiRow =
+                        calculatedAqiByStation[
+                            stationId
+                        ] || null;
+
+                    // Prefer stored AQI when available.
+                    // Otherwise use calculated AQI from
+                    // the latest pollutant readings.
+                    const aqiRow =
+                        storedAqiRow ||
+                        calculatedAqiRow ||
+                        null;
 
 
                     const aqi =
@@ -1039,9 +1342,11 @@ const getDashboard = async (req, res) => {
 
 
                     const aqiStatus =
-                        getAqiDisplayStatus(
-                            aqiRow?.timestamp
-                        );
+                        aqiRow?.data_status === "Calculated"
+                            ? "Calculated"
+                            : getAqiDisplayStatus(
+                                aqiRow?.timestamp
+                            );
 
 
                     // -------------------------------------
@@ -1141,6 +1446,24 @@ const getDashboard = async (req, res) => {
                     const co =
                         getParameterValue(
                             "co"
+                        );
+
+
+                    const nh3 =
+                        getParameterValue(
+                            "nh3"
+                        ) ??
+                        getParameterValue(
+                            "nh₃"
+                        );
+
+
+                    const pb =
+                        getParameterValue(
+                            "pb"
+                        ) ??
+                        getParameterValue(
+                            "lead"
                         );
 
 
@@ -1384,6 +1707,10 @@ const getDashboard = async (req, res) => {
 
                         co,
 
+                        nh3,
+
+                        pb,
+
                         pollutants: {
                             pm25,
                             pm10,
@@ -1391,6 +1718,8 @@ const getDashboard = async (req, res) => {
                             so2,
                             o3,
                             co,
+                            nh3,
+                            pb,
                         },
 
 
@@ -1432,6 +1761,174 @@ const getDashboard = async (req, res) => {
                 }
             );
 
+            // =================================================
+// RECALCULATE OVERALL AQI USING FINAL STATION DATA
+// =================================================
+
+const finalAqiStations =
+    stationData.filter(
+        (station) =>
+            Number.isFinite(
+                Number(station.aqi)
+            )
+    );
+
+if (finalAqiStations.length > 0) {
+
+    overallAqi =
+        Math.round(
+            finalAqiStations.reduce(
+                (total, station) =>
+                    total +
+                    Number(station.aqi),
+                0
+            ) /
+            finalAqiStations.length
+        );
+} else {
+
+    overallAqi = null;
+}
+
+
+// =================================================
+// FINAL DASHBOARD AQI STATE
+// =================================================
+
+if (area) {
+
+    const selectedStation =
+        stationData.find(
+            (station) =>
+                String(station.station_id) ===
+                    String(area) ||
+                lower(station.name) ===
+                    lower(area)
+        );
+
+    if (selectedStation) {
+
+        currentAqi =
+            Number.isFinite(
+                Number(selectedStation.aqi)
+            )
+                ? Number(
+                      selectedStation.aqi
+                  )
+                : null;
+
+        selectedAqiRow =
+            latestAqiByStation[
+                Number(
+                    selectedStation.station_id
+                )
+            ] ||
+            calculatedAqiByStation[
+                Number(
+                    selectedStation.station_id
+                )
+            ] ||
+            null;
+    }
+
+} else {
+
+    currentAqi =
+        overallAqi;
+
+    // Pick the newest available AQI source
+    // for dashboard metadata.
+    const finalAqiRows =
+        stationData
+            .filter(
+                (station) =>
+                    Number.isFinite(
+                        Number(station.aqi)
+                    )
+            )
+            .sort(
+                (a, b) => {
+
+                    const aTime =
+                        a.aqiTimestamp
+                            ? new Date(
+                                  a.aqiTimestamp
+                              ).getTime()
+                            : 0;
+
+                    const bTime =
+                        b.aqiTimestamp
+                            ? new Date(
+                                  b.aqiTimestamp
+                              ).getTime()
+                            : 0;
+
+                    return bTime - aTime;
+                }
+            );
+
+    const latestStation =
+        finalAqiRows[0];
+
+    if (latestStation) {
+
+        selectedAqiRow =
+            latestAqiByStation[
+                Number(
+                    latestStation.station_id
+                )
+            ] ||
+            calculatedAqiByStation[
+                Number(
+                    latestStation.station_id
+                )
+            ] ||
+            null;
+    }
+}
+
+
+// Recalculate final status
+if (
+    selectedAqiRow?.data_status ===
+    "Calculated"
+) {
+
+    aqiDataStatus = "Calculated";
+
+} else {
+
+    aqiDataStatus =
+        getAqiDisplayStatus(
+            selectedAqiRow?.timestamp
+        );
+}
+
+
+aqiAgeMinutes =
+    selectedAqiRow?.timestamp
+        ? Number(
+              getAgeMinutes(
+                  selectedAqiRow.timestamp
+              ).toFixed(1)
+          )
+        : null;
+
+
+category =
+    selectedAqiRow?.category ||
+    (
+        currentAqi !== null
+            ? getAqiCategory(
+                  currentAqi
+              )
+            : "N/A"
+    );
+
+
+dominant =
+    selectedAqiRow?.dominant_pollutant ||
+    "N/A";
 
         // =================================================
         // 14. WARD DATA
@@ -1969,6 +2466,24 @@ const getDashboard = async (req, res) => {
                 alerts =
                     alertRows ||
                     [];
+
+                console.log("========== DASHBOARD ALERTS ==========");
+
+console.table(
+    alerts.map((alert) => ({
+        alert_id: alert.alert_id,
+        station_id: alert.station_id,
+        parameter: alert.parameter,
+        actual_value: alert.actual_value,
+        threshold: alert.threshold,
+        severity: alert.severity,
+        acknowledgement: alert.acknowledgement,
+        started_time: alert.started_time,
+        created_at: alert.created_at,
+    }))
+);
+
+console.log("======================================");    
             }
 
         } catch (

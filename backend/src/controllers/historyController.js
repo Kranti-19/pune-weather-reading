@@ -16,68 +16,104 @@ const getAqiCategory = (aqi) => {
     return "Severe";
 };
 
+
 // =====================================================
-// GET HISTORICAL AQI CALENDAR
+// GET AQI TREND
 //
-// GET /api/history/calendar?year=2026&month=9
-// GET /api/history/calendar?year=2026&month=9&stationId=1
+// GET /api/history/trend?range=7d
+// GET /api/history/trend?range=30d
+// GET /api/history/trend?from=2026-09-01&to=2026-09-23
+// GET /api/history/trend?range=7d&stationId=1
 // =====================================================
 
-const getHistoricalCalendar = async (req, res) => {
+const getAqiTrend = async (req, res) => {
     try {
-        const year = Number(req.query.year);
-        const month = Number(req.query.month);
-        const stationId = req.query.stationId;
+        const { range, from, to, stationId } = req.query;
 
         // -------------------------------------------------
-        // VALIDATION
+        // DETERMINE DATE RANGE
         // -------------------------------------------------
 
-        if (
-            !Number.isInteger(year) ||
-            year < 2000 ||
-            year > 2100
-        ) {
+        let startDate;
+        let endDate;
+
+        const now = new Date();
+
+        if (range === "7d") {
+            // Last 7 calendar days including today
+            endDate = now;
+
+            startDate = new Date(
+                now.getTime() - 6 * 24 * 60 * 60 * 1000
+            );
+        } else if (range === "30d") {
+            // Last 30 calendar days including today
+            endDate = now;
+
+            startDate = new Date(
+                now.getTime() - 29 * 24 * 60 * 60 * 1000
+            );
+        } else if (from && to) {
+            // -------------------------------------------------
+            // CUSTOM RANGE
+            // -------------------------------------------------
+
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+            if (!dateRegex.test(from) || !dateRegex.test(to)) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "Dates must be in YYYY-MM-DD format."
+                });
+            }
+
+            startDate = new Date(
+                `${from}T00:00:00+05:30`
+            );
+
+            // End date is exclusive, so add one day
+            const requestedEndDate = new Date(
+                `${to}T00:00:00+05:30`
+            );
+
+            if (requestedEndDate < startDate) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "The 'to' date must be after the 'from' date."
+                });
+            }
+
+            endDate = new Date(
+                requestedEndDate.getTime() +
+                24 * 60 * 60 * 1000
+            );
+        } else {
             return res.status(400).json({
                 status: "error",
-                message: "Valid year is required.",
+                message:
+                    "Provide range=7d, range=30d, or both from and to dates."
             });
         }
 
-        if (
-            !Number.isInteger(month) ||
-            month < 1 ||
-            month > 12
-        ) {
+        // -------------------------------------------------
+        // LIMIT CUSTOM RANGE
+        // -------------------------------------------------
+
+        const differenceInDays =
+            Math.ceil(
+                (endDate.getTime() - startDate.getTime()) /
+                (24 * 60 * 60 * 1000)
+            );
+
+        if (differenceInDays > 366) {
             return res.status(400).json({
                 status: "error",
-                message: "Month must be between 1 and 12.",
+                message: "Maximum trend range is 366 days."
             });
         }
 
         // -------------------------------------------------
-        // DATE RANGE
-        // Pune timezone = IST (+05:30)
-        // -------------------------------------------------
-
-        const startDate = new Date(
-            `${year}-${String(month).padStart(2, "0")}-01T00:00:00+05:30`
-        );
-
-        const endDate =
-            month === 12
-                ? new Date(
-                      `${year + 1}-01-01T00:00:00+05:30`
-                  )
-                : new Date(
-                      `${year}-${String(month + 1).padStart(
-                          2,
-                          "0"
-                      )}-01T00:00:00+05:30`
-                  );
-
-        // -------------------------------------------------
-        // FETCH AQI HISTORY
+        // FETCH AQI READINGS FROM SUPABASE
         // -------------------------------------------------
 
         let query = supabase
@@ -90,23 +126,38 @@ const getHistoricalCalendar = async (req, res) => {
                 category,
                 dominant_pollutant
             `)
-            .gte("timestamp", startDate.toISOString())
-            .lt("timestamp", endDate.toISOString())
+            .gte(
+                "timestamp",
+                startDate.toISOString()
+            )
+            .lt(
+                "timestamp",
+                endDate.toISOString()
+            )
             .order("timestamp", {
-                ascending: true,
+                ascending: true
             });
 
         // Optional station filter
         if (stationId) {
+            const numericStationId = Number(stationId);
+
+            if (!Number.isInteger(numericStationId)) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "stationId must be a valid number."
+                });
+            }
+
             query = query.eq(
                 "station_id",
-                Number(stationId)
+                numericStationId
             );
         }
 
         const {
             data: rows,
-            error,
+            error
         } = await query;
 
         if (error) {
@@ -114,7 +165,7 @@ const getHistoricalCalendar = async (req, res) => {
         }
 
         // -------------------------------------------------
-        // GROUP AQI BY LOCAL DATE
+        // GROUP READINGS BY IST DATE
         // -------------------------------------------------
 
         const dailyMap = {};
@@ -122,16 +173,24 @@ const getHistoricalCalendar = async (req, res) => {
         for (const row of rows || []) {
             if (!row.timestamp) continue;
 
+            const aqi = Number(row.aqi);
+
+            if (
+                !Number.isFinite(aqi) ||
+                aqi <= 0
+            ) {
+                continue;
+            }
+
             const date = new Date(row.timestamp);
 
-            // Convert timestamp to Pune/IST date
             const dateKey = new Intl.DateTimeFormat(
                 "en-CA",
                 {
                     timeZone: "Asia/Kolkata",
                     year: "numeric",
                     month: "2-digit",
-                    day: "2-digit",
+                    day: "2-digit"
                 }
             ).format(date);
 
@@ -139,37 +198,27 @@ const getHistoricalCalendar = async (req, res) => {
                 dailyMap[dateKey] = {
                     date: dateKey,
                     values: [],
-                    stations: new Set(),
-                    dominantPollutants: [],
+                    stations: new Set()
                 };
             }
 
-            const aqi = Number(row.aqi);
+            dailyMap[dateKey].values.push(aqi);
 
-            if (Number.isFinite(aqi)) {
-                dailyMap[dateKey].values.push(aqi);
-            }
-
-            if (row.station_id !== null) {
+            if (
+                row.station_id !== null &&
+                row.station_id !== undefined
+            ) {
                 dailyMap[dateKey].stations.add(
                     row.station_id
-                );
-            }
-
-            if (row.dominant_pollutant) {
-                dailyMap[
-                    dateKey
-                ].dominantPollutants.push(
-                    row.dominant_pollutant
                 );
             }
         }
 
         // -------------------------------------------------
-        // CREATE DAILY RESULTS
+        // CREATE DAILY TREND
         // -------------------------------------------------
 
-        const days = Object.values(dailyMap)
+        const data = Object.values(dailyMap)
             .map((day) => {
                 const values = day.values;
 
@@ -178,8 +227,8 @@ const getHistoricalCalendar = async (req, res) => {
                         date: day.date,
                         aqi: null,
                         category: "No Data",
-                        observationCount: 0,
-                        stationCount: day.stations.size,
+                        stationCount: 0,
+                        observationCount: 0
                     };
                 }
 
@@ -200,10 +249,10 @@ const getHistoricalCalendar = async (req, res) => {
                         getAqiCategory(
                             roundedAqi
                         ),
-                    observationCount:
-                        values.length,
                     stationCount:
                         day.stations.size,
+                    observationCount:
+                        values.length
                 };
             })
             .sort((a, b) =>
@@ -211,561 +260,48 @@ const getHistoricalCalendar = async (req, res) => {
             );
 
         // -------------------------------------------------
-        // CALENDAR SUMMARY
+        // SUMMARY
         // -------------------------------------------------
 
-        const aqiValues = days
-            .map((day) => day.aqi)
-            .filter(
-                (value) =>
-                    value !== null &&
-                    Number.isFinite(value)
-            );
+        const validDays = data.filter(
+            (day) =>
+                day.aqi !== null &&
+                Number.isFinite(day.aqi)
+        );
 
-        const monthlyAverage =
+        const aqiValues = validDays.map(
+            (day) => day.aqi
+        );
+
+        const average =
             aqiValues.length
                 ? Math.round(
-                      aqiValues.reduce(
-                          (sum, value) =>
-                              sum + value,
-                          0
-                      ) / aqiValues.length
-                  )
+                    aqiValues.reduce(
+                        (sum, value) =>
+                            sum + value,
+                        0
+                    ) / aqiValues.length
+                )
                 : null;
 
-        const highestDay =
-            days
-                .filter(
-                    (day) =>
-                        day.aqi !== null
+        const highest =
+            validDays.length
+                ? validDays.reduce(
+                    (max, day) =>
+                        day.aqi > max.aqi
+                            ? day
+                            : max
                 )
-                .sort(
-                    (a, b) =>
-                        b.aqi - a.aqi
-                )[0] || null;
+                : null;
 
-        const lowestDay =
-            days
-                .filter(
-                    (day) =>
-                        day.aqi !== null
+        const lowest =
+            validDays.length
+                ? validDays.reduce(
+                    (min, day) =>
+                        day.aqi < min.aqi
+                            ? day
+                            : min
                 )
-                .sort(
-                    (a, b) =>
-                        a.aqi - b.aqi
-                )[0] || null;
-
-        // -------------------------------------------------
-        // RESPONSE
-        // -------------------------------------------------
-
-        return res.status(200).json({
-            status: "success",
-
-            data: {
-                year,
-                month,
-
-                monthlyAverage,
-
-                highestDay,
-
-                lowestDay,
-
-                totalDaysWithData:
-                    days.length,
-
-                days,
-            },
-        });
-    } catch (error) {
-        console.error(
-            "Historical calendar error:",
-            error
-        );
-
-        return res.status(500).json({
-            status: "error",
-            message:
-                error.message ||
-                "Failed to load historical AQI data.",
-        });
-    }
-};
-
-
-
-// =====================================================
-// GET AQI FOR SPECIFIC DATE - STATION WISE
-//
-// GET /api/history/day?date=2026-09-15
-// GET /api/history/day?date=2026-09-15&stationId=1
-// =====================================================
-
-const getHistoricalDay = async (req, res) => {
-    try {
-        const { date, stationId } = req.query;
-
-        // -------------------------------------------------
-        // VALIDATION
-        // -------------------------------------------------
-
-        if (!date) {
-            return res.status(400).json({
-                status: "error",
-                message: "Date is required.",
-            });
-        }
-
-        // Validate YYYY-MM-DD
-        const dateRegex =
-            /^\d{4}-\d{2}-\d{2}$/;
-
-        if (!dateRegex.test(date)) {
-            return res.status(400).json({
-                status: "error",
-                message:
-                    "Date must be in YYYY-MM-DD format.",
-            });
-        }
-
-        // -------------------------------------------------
-        // DATE RANGE
-        // Pune timezone = Asia/Kolkata
-        // -------------------------------------------------
-
-        const startDate = new Date(
-            `${date}T00:00:00+05:30`
-        );
-
-        const nextDay = new Date(
-            startDate.getTime() +
-                24 * 60 * 60 * 1000
-        );
-
-        // -------------------------------------------------
-        // FETCH AQI DATA
-        // -------------------------------------------------
-
-        let query = supabase
-            .from("aqi_reading")
-            .select(`
-                aqi_id,
-                station_id,
-                timestamp,
-                aqi,
-                category,
-                dominant_pollutant
-            `)
-            .gte(
-                "timestamp",
-                startDate.toISOString()
-            )
-            .lt(
-                "timestamp",
-                nextDay.toISOString()
-            )
-            .order("station_id", {
-                ascending: true,
-            })
-            .order("timestamp", {
-                ascending: true,
-            });
-
-        // Optional station filter
-        if (stationId) {
-            const numericStationId =
-                Number(stationId);
-
-            if (
-                !Number.isInteger(
-                    numericStationId
-                )
-            ) {
-                return res.status(400).json({
-                    status: "error",
-                    message:
-                        "stationId must be a valid number.",
-                });
-            }
-
-            query = query.eq(
-                "station_id",
-                numericStationId
-            );
-        }
-
-        const {
-            data: rows,
-            error,
-        } = await query;
-
-        if (error) {
-            throw error;
-        }
-
-        // -------------------------------------------------
-        // FETCH STATION DETAILS
-        // -------------------------------------------------
-
-        const stationIds = [
-            ...new Set(
-                (rows || [])
-                    .map(
-                        (row) =>
-                            row.station_id
-                    )
-                    .filter(
-                        (id) =>
-                            id !== null &&
-                            id !== undefined
-                    )
-            ),
-        ];
-
-        let stationMap = {};
-
-        if (stationIds.length > 0) {
-            const {
-                data: stationRows,
-                error: stationError,
-            } = await supabase
-                .from("station")
-                .select(`
-                    station_id,
-                    name,
-                    ward,
-                    zone,
-                    status
-                `)
-                .in(
-                    "station_id",
-                    stationIds
-                );
-
-            if (stationError) {
-                throw stationError;
-            }
-
-            for (
-                const station
-                of stationRows || []
-            ) {
-                stationMap[
-                    String(
-                        station.station_id
-                    )
-                ] = station;
-            }
-        }
-
-        // -------------------------------------------------
-        // GROUP BY STATION
-        // -------------------------------------------------
-
-        const stationMapData = {};
-
-        for (
-            const row
-            of rows || []
-        ) {
-
-            if (
-                row.station_id === null ||
-                row.station_id === undefined
-            ) {
-                continue;
-            }
-
-            const key =
-                String(
-                    row.station_id
-                );
-
-            if (
-                !stationMapData[key]
-            ) {
-                stationMapData[key] = {
-                    stationId:
-                        row.station_id,
-
-                    values: [],
-
-                    dominantPollutants: [],
-
-                    latestTimestamp:
-                        null,
-                };
-            }
-
-            const aqi =
-                Number(row.aqi);
-
-            if (
-                Number.isFinite(aqi)
-            ) {
-                stationMapData[
-                    key
-                ].values.push(aqi);
-            }
-
-            if (
-                row.dominant_pollutant
-            ) {
-                stationMapData[
-                    key
-                ].dominantPollutants.push(
-                    row.dominant_pollutant
-                );
-            }
-
-            if (
-                row.timestamp
-            ) {
-                const currentTimestamp =
-                    new Date(
-                        row.timestamp
-                    );
-
-                const previousTimestamp =
-                    stationMapData[key]
-                        .latestTimestamp
-                        ? new Date(
-                              stationMapData[
-                                  key
-                              ]
-                                  .latestTimestamp
-                          )
-                        : null;
-
-                if (
-                    !previousTimestamp ||
-                    currentTimestamp >
-                        previousTimestamp
-                ) {
-                    stationMapData[
-                        key
-                    ].latestTimestamp =
-                        row.timestamp;
-                }
-            }
-        }
-
-        // -------------------------------------------------
-        // FIND MOST COMMON DOMINANT POLLUTANT
-        // -------------------------------------------------
-
-        const getDominantPollutant =
-            (pollutants) => {
-
-                if (
-                    !pollutants ||
-                    !pollutants.length
-                ) {
-                    return null;
-                }
-
-                const counts = {};
-
-                pollutants.forEach(
-                    (pollutant) => {
-                        const key =
-                            String(
-                                pollutant
-                            );
-
-                        counts[key] =
-                            (counts[key] ||
-                                0) + 1;
-                    }
-                );
-
-                return Object.entries(
-                    counts
-                ).sort(
-                    (a, b) =>
-                        b[1] - a[1]
-                )[0][0];
-            };
-
-        // -------------------------------------------------
-        // CREATE STATION-WISE RESULT
-        // -------------------------------------------------
-
-        const stations =
-            Object.values(
-                stationMapData
-            )
-                .map(
-                    (stationData) => {
-
-                        const values =
-                            stationData.values;
-
-                        const station =
-                            stationMap[
-                                String(
-                                    stationData.stationId
-                                )
-                            ] || {};
-
-                        if (
-                            !values.length
-                        ) {
-                            return {
-                                stationId:
-                                    stationData.stationId,
-
-                                station:
-                                    station.name ||
-                                    "Unknown Station",
-
-                                ward:
-                                    station.ward ||
-                                    null,
-
-                                zone:
-                                    station.zone ||
-                                    null,
-
-                                status:
-                                    station.status ||
-                                    null,
-
-                                aqi: null,
-
-                                category:
-                                    "No Data",
-
-                                dominant:
-                                    getDominantPollutant(
-                                        stationData
-                                            .dominantPollutants
-                                    ),
-
-                                observationCount:
-                                    0,
-
-                                latestTimestamp:
-                                    stationData
-                                        .latestTimestamp,
-                            };
-                        }
-
-                        const averageAqi =
-                            values.reduce(
-                                (
-                                    sum,
-                                    value
-                                ) =>
-                                    sum +
-                                    value,
-                                0
-                            ) /
-                            values.length;
-
-                        const roundedAqi =
-                            Math.round(
-                                averageAqi
-                            );
-
-                        return {
-                            stationId:
-                                stationData.stationId,
-
-                            station:
-                                station.name ||
-                                "Unknown Station",
-
-                            ward:
-                                station.ward ||
-                                null,
-
-                            zone:
-                                station.zone ||
-                                null,
-
-                            status:
-                                station.status ||
-                                null,
-
-                            aqi:
-                                roundedAqi,
-
-                            category:
-                                getAqiCategory(
-                                    roundedAqi
-                                ),
-
-                            dominant:
-                                getDominantPollutant(
-                                    stationData
-                                        .dominantPollutants
-                                ),
-
-                            observationCount:
-                                values.length,
-
-                            latestTimestamp:
-                                stationData
-                                    .latestTimestamp,
-                        };
-                    }
-                )
-                .sort(
-                    (a, b) => {
-
-                        if (
-                            a.aqi === null
-                        ) {
-                            return 1;
-                        }
-
-                        if (
-                            b.aqi === null
-                        ) {
-                            return -1;
-                        }
-
-                        return (
-                            b.aqi -
-                            a.aqi
-                        );
-                    }
-                );
-
-        // -------------------------------------------------
-        // DAILY OVERALL AQI
-        // -------------------------------------------------
-
-        const allValues =
-            stations
-                .map(
-                    (station) =>
-                        station.aqi
-                )
-                .filter(
-                    (value) =>
-                        value !== null &&
-                        Number.isFinite(
-                            value
-                        )
-                );
-
-        const overallAqi =
-            allValues.length
-                ? Math.round(
-                      allValues.reduce(
-                          (
-                              sum,
-                              value
-                          ) =>
-                              sum +
-                              value,
-                          0
-                      ) /
-                          allValues.length
-                  )
                 : null;
 
         // -------------------------------------------------
@@ -776,42 +312,52 @@ const getHistoricalDay = async (req, res) => {
             status: "success",
 
             data: {
-                date,
+                range:
+                    range ||
+                    "custom",
 
-                overallAqi,
+                from:
+                    data.length
+                        ? data[0].date
+                        : from || null,
 
-                overallCategory:
-                    overallAqi !== null
-                        ? getAqiCategory(
-                              overallAqi
-                          )
-                        : "No Data",
+                to:
+                    data.length
+                        ? data[data.length - 1].date
+                        : to || null,
 
-                totalStations:
-                    stations.length,
+                trend: data,
 
-                stations,
-            },
+                summary: {
+                    average,
+                    highest,
+                    lowest,
+                    daysWithData:
+                        validDays.length
+                }
+            }
         });
 
     } catch (error) {
-
         console.error(
-            "Historical day AQI error:",
+            "AQI trend error:",
             error
         );
 
         return res.status(500).json({
             status: "error",
-
             message:
                 error.message ||
-                "Failed to load station-wise AQI.",
+                "Failed to load AQI trend."
         });
     }
 };
+
+
+// =====================================================
+// EXPORTS
+// =====================================================
 
 module.exports = {
-    getHistoricalCalendar,
-    getHistoricalDay
+    getAqiTrend
 };

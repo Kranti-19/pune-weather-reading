@@ -62,20 +62,26 @@ function MapBounds({ stations }) {
 ========================================================= */
 
 const createMarkerIcon = (aqi, isOffline) => {
-  const numericAqi = Number(aqi) || 0;
+  const numericAqi = Number(aqi);
+  const hasAqi =
+    Number.isFinite(numericAqi) && numericAqi > 0;
 
-  const statusTheme = getCPCBStatus(numericAqi);
+  const displayAqi = hasAqi
+    ? Math.round(numericAqi)
+    : "N/A";
+
+  const statusTheme = hasAqi
+    ? getCPCBStatus(numericAqi)
+    : null;
 
   const bgColor = isOffline
     ? "#64748B"
-    : statusTheme?.hex || "#64748B";
-
-  /*
-   * Dark text for Moderate AQI.
-   * White text for other categories.
-   */
+    : hasAqi
+    ? statusTheme?.hex || "#64748B"
+    : "#94A3B8";
 
   const textColor =
+    hasAqi &&
     numericAqi > 100 &&
     numericAqi <= 200
       ? "#1e293b"
@@ -97,13 +103,13 @@ const createMarkerIcon = (aqi, isOffline) => {
           align-items: center;
           justify-content: center;
           color: ${textColor};
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 800;
           font-family: monospace;
           box-sizing: border-box;
         "
       >
-        ${numericAqi}
+        ${displayAqi}
       </div>
     `,
 
@@ -223,10 +229,12 @@ export default function PuneMap({
               );
 
               // Fallback so map pins never show 0
-              const rawAqi =
-                Number(station?.aqi) || 0;
-              const aqi =
-                rawAqi > 0 ? rawAqi : 65;
+              const rawAqi = Number(station?.aqi);
+
+              const hasAqi =
+                Number.isFinite(rawAqi) && rawAqi > 0;
+
+              const aqi = hasAqi ? rawAqi : null;
 
               const isOffline =
                 station?.status ===
@@ -341,14 +349,13 @@ export default function PuneMap({
                           </div>
 
                           <div className="text-xl font-black text-slate-900 font-mono">
-                            {aqi}
+                            {aqi !== null ? Math.round(aqi) : "N/A"}
                           </div>
 
                           <div className="text-[10px] text-slate-400">
                             Dominant:{" "}
                             <strong>
-                              {station?.dominant ||
-                                "pm10"}
+                              {station?.dominant || "N/A"}
                             </strong>
                           </div>
                         </div>
