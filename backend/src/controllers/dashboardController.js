@@ -2218,20 +2218,18 @@ dominant =
         try {
 
             const {
-                data: weatherRows,
-                error: weatherError,
-            } = await supabase
-                .from(
-                    "weather_readings"
-                )
-                .select("*")
-                .order(
-                    "timestamp",
-                    {
-                        ascending: false,
-                    }
-                )
-                .limit(20);
+    data: alertRows,
+    error: alertError,
+} = await supabase
+    .from("alert")
+    .select("*")
+    .order(
+        "started_time",
+        {
+            ascending: false,
+        }
+    )
+    .limit(20);
 
 
             if (
@@ -2451,7 +2449,7 @@ dominant =
                 .from("alert")
                 .select("*")
                 .order(
-                    "created_at",
+                    "started_time",
                     {
                         ascending: false,
                     }

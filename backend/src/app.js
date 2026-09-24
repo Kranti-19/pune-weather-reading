@@ -72,6 +72,10 @@ app.use("/api/devices", deviceRoutes);
 const sensorRoutes = require("./routes/sensorRoutes");
 app.use("/api/sensors", sensorRoutes);
 
+// Settings Routes
+const settingsRoutes = require("./routes/settingsRoutes");
+app.use("/api/settings", settingsRoutes);
+
 // Weather API
 const weatherRoutes = require("./routes/weatherRoutes");
 app.use("/api/weather", weatherRoutes);
@@ -86,13 +90,9 @@ app.use("/api/air-quality/openaq", openaqRoutes);
 const openaqLocationRoutes = require("./routes/openaqLocationRoutes");
 app.use("/api/air-quality/openaq", openaqLocationRoutes);
 
-
-//History Calender 
+// History
 const historyRoutes = require("./routes/historyRoutes");
-app.use(
-    "/api/history",
-    historyRoutes
-);
+app.use("/api/history", historyRoutes);
 
 // Root Route
 app.get("/", (req, res) => {

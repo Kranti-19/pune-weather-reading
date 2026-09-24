@@ -194,6 +194,145 @@ const round = (value, digits = 1) => {
 };
 
 // ============================================================
+// CPCB-STYLE AQI CALCULATION FROM POLLUTANT READINGS
+// ============================================================
+
+const AQI_BREAKPOINTS = {
+  pm25: [
+    [0, 30, 0, 50],
+    [31, 60, 51, 100],
+    [61, 90, 101, 200],
+    [91, 120, 201, 300],
+    [121, 250, 301, 400],
+    [251, 500, 401, 500],
+  ],
+
+  pm10: [
+    [0, 50, 0, 50],
+    [51, 100, 51, 100],
+    [101, 250, 101, 200],
+    [251, 350, 201, 300],
+    [351, 430, 301, 400],
+    [431, 600, 401, 500],
+  ],
+
+  no2: [
+    [0, 40, 0, 50],
+    [41, 80, 51, 100],
+    [81, 180, 101, 200],
+    [181, 280, 201, 300],
+    [281, 400, 301, 400],
+    [401, 800, 401, 500],
+  ],
+
+  so2: [
+    [0, 40, 0, 50],
+    [41, 80, 51, 100],
+    [81, 380, 101, 200],
+    [381, 800, 201, 300],
+    [801, 1600, 301, 400],
+    [1601, 2620, 401, 500],
+  ],
+
+  o3: [
+    [0, 50, 0, 50],
+    [51, 100, 51, 100],
+    [101, 168, 101, 200],
+    [169, 208, 201, 300],
+    [209, 748, 301, 400],
+    [749, 1000, 401, 500],
+  ],
+
+  co: [
+    [0, 1, 0, 50],
+    [1.1, 2, 51, 100],
+    [2.1, 10, 101, 200],
+    [10.1, 17, 201, 300],
+    [17.1, 34, 301, 400],
+    [34.1, 50, 401, 500],
+  ],
+};
+
+const calculateSubIndex = (value, breakpoints) => {
+  const concentration = Number(value);
+
+  if (!Number.isFinite(concentration)) {
+    return null;
+  }
+
+  for (const [
+    concentrationLow,
+    concentrationHigh,
+    indexLow,
+    indexHigh,
+  ] of breakpoints) {
+    if (
+      concentration >= concentrationLow &&
+      concentration <= concentrationHigh
+    ) {
+      const index =
+        ((indexHigh - indexLow) /
+          (concentrationHigh - concentrationLow)) *
+          (concentration - concentrationLow) +
+        indexLow;
+
+      return Math.round(index);
+    }
+  }
+
+  return null;
+};
+
+const calculateStationAqi = (pollutants) => {
+  const subindices = {};
+
+  for (const parameter of Object.keys(AQI_BREAKPOINTS)) {
+    const subIndex = calculateSubIndex(
+      pollutants[parameter],
+      AQI_BREAKPOINTS[parameter]
+    );
+
+    if (subIndex !== null) {
+      subindices[parameter] = subIndex;
+    }
+  }
+
+  const availableParameters =
+    Object.keys(subindices);
+
+  const hasParticulate =
+    Number.isFinite(subindices.pm25) ||
+    Number.isFinite(subindices.pm10);
+
+  if (
+    availableParameters.length < 3 ||
+    !hasParticulate
+  ) {
+    return null;
+  }
+
+  let dominantPollutant = null;
+  let maxSubIndex = -Infinity;
+
+  for (const [
+    parameter,
+    subIndex,
+  ] of Object.entries(subindices)) {
+    if (subIndex > maxSubIndex) {
+      maxSubIndex = subIndex;
+      dominantPollutant = parameter;
+    }
+  }
+
+  return {
+    aqi: maxSubIndex,
+    category: getAqiCategory(maxSubIndex),
+    dominantPollutant,
+    subindices,
+  };
+};
+
+// ============================================================
 // PERIOD START
 // ============================================================
 
@@ -249,110 +388,232 @@ const getBucketKey = (date, period) => {
 // TELEMETRY
 // ============================================================
 
-const getTelemetry = (
-  aqiRows,
-  readingRows
-) => {
+const getTelemetry = (aqiRows, readingRows) => {
+  // ============================================================
+  // HISTORICAL TELEMETRY
+  // Builds chart data from the actual `reading` table.
+  //
+  // 24 Hours -> 3-hour buckets
+  // 7 Days    -> 1 point per day
+  // 30 Days   -> 1 point per day
+  // ============================================================
+
+  const now = new Date();
+
+  // ------------------------------------------------------------
+  // CPCB-style AQI breakpoints used for chart estimation
+  // ------------------------------------------------------------
+
+  const AQI_BREAKPOINTS = {
+    pm25: [
+      [0, 30, 0, 50],
+      [31, 60, 51, 100],
+      [61, 90, 101, 200],
+      [91, 120, 201, 300],
+      [121, 250, 301, 400],
+      [251, 500, 401, 500],
+    ],
+
+    pm10: [
+      [0, 50, 0, 50],
+      [51, 100, 51, 100],
+      [101, 250, 101, 200],
+      [251, 350, 201, 300],
+      [351, 430, 301, 400],
+      [431, 600, 401, 500],
+    ],
+  };
+
+  const calculateSubIndex = (value, breakpoints) => {
+    const concentration = Number(value);
+
+    if (!Number.isFinite(concentration)) {
+      return null;
+    }
+
+    for (const [
+      concentrationLow,
+      concentrationHigh,
+      indexLow,
+      indexHigh,
+    ] of breakpoints) {
+      if (
+        concentration >= concentrationLow &&
+        concentration <= concentrationHigh
+      ) {
+        return Math.round(
+          ((indexHigh - indexLow) /
+            (concentrationHigh - concentrationLow)) *
+            (concentration - concentrationLow) +
+            indexLow
+        );
+      }
+    }
+
+    return null;
+  };
+
+  const calculateChartAqi = (pm25, pm10) => {
+    const pm25Index = calculateSubIndex(
+      pm25,
+      AQI_BREAKPOINTS.pm25
+    );
+
+    const pm10Index = calculateSubIndex(
+      pm10,
+      AQI_BREAKPOINTS.pm10
+    );
+
+    const indexes = [
+      pm25Index,
+      pm10Index,
+    ].filter(Number.isFinite);
+
+    if (!indexes.length) {
+      return null;
+    }
+
+    return Math.max(...indexes);
+  };
+
+  // ------------------------------------------------------------
+  // Normalize parameter names
+  // ------------------------------------------------------------
+
+  const normalizeParameter = (parameter) => {
+    const value = String(parameter || "")
+      .trim()
+      .toLowerCase();
+
+    if (
+      value === "pm25" ||
+      value === "pm2.5" ||
+      value === "pm2_5" ||
+      value === "pm₂.₅"
+    ) {
+      return "pm25";
+    }
+
+    if (
+      value === "pm10" ||
+      value === "pm₁₀"
+    ) {
+      return "pm10";
+    }
+
+    return null;
+  };
+
+  // ------------------------------------------------------------
+  // Average helper
+  // ------------------------------------------------------------
+
+  const average = (values) => {
+    const valid = values
+      .map(Number)
+      .filter(Number.isFinite);
+
+    if (!valid.length) {
+      return null;
+    }
+
+    return (
+      valid.reduce(
+        (sum, value) => sum + value,
+        0
+      ) / valid.length
+    );
+  };
+
+  // ------------------------------------------------------------
+  // Get bucket key
+  // ------------------------------------------------------------
+
+  const getBucket = (timestamp, period) => {
+    const date = new Date(timestamp);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    if (period === "24 Hours") {
+      // 3-hour buckets
+      const bucketHour =
+        Math.floor(date.getHours() / 3) * 3;
+
+      const bucket = new Date(date);
+
+      bucket.setHours(
+        bucketHour,
+        0,
+        0,
+        0
+      );
+
+      return bucket;
+    }
+
+    // 7 Days and 30 Days:
+    // one bucket per calendar day
+    const bucket = new Date(date);
+
+    bucket.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    return bucket;
+  };
+
+  // ------------------------------------------------------------
+  // Build one period
+  // ------------------------------------------------------------
+
   const buildPeriod = (
     period,
     hours
   ) => {
-    const start =
-      getPeriodStart(hours);
-
-    const aqi = aqiRows.filter(
-      (row) =>
-        row.timestamp &&
-        new Date(row.timestamp) >=
-          start
+    const start = new Date(
+      now.getTime() -
+        hours * 60 * 60 * 1000
     );
-
-    const readings =
-      readingRows.filter(
-        (row) =>
-          row.timestamp &&
-          new Date(row.timestamp) >=
-            start
-      );
 
     const buckets = {};
 
-    const ensureBucket = (
-      key,
-      timestamp
-    ) => {
-      if (!buckets[key]) {
-        buckets[key] = {
-          key,
-          timestamp,
-          aqi: [],
-          pm25: [],
-          pm10: [],
-        };
+    // ==========================================================
+    // 1. POLLUTANT READINGS
+    // ==========================================================
+
+    readingRows.forEach((row) => {
+      if (!row.timestamp) {
+        return;
       }
 
-      return buckets[key];
-    };
-
-    // -----------------------------
-    // AQI
-    // -----------------------------
-
-    aqi.forEach((row) => {
-      const key =
-        getBucketKey(
-          row.timestamp,
-          period
-        );
-
-      const bucket =
-        ensureBucket(
-          key,
-          row.timestamp
-        );
-
-      const value =
-        Number(row.aqi);
-
-      if (Number.isFinite(value)) {
-        bucket.aqi.push(value);
-      }
-    });
-
-    // -----------------------------
-    // PM2.5 / PM10
-    // -----------------------------
-
-    readings.forEach((row) => {
-      const original =
-        String(
-          row.parameter || ""
-        ).trim();
-
-      const display =
-        DISPLAY_NAME[original] ||
-        DISPLAY_NAME[
-          original.toUpperCase()
-        ];
+      const timestamp =
+        new Date(row.timestamp);
 
       if (
-        display !== "PM2.5" &&
-        display !== "PM10"
+        Number.isNaN(
+          timestamp.getTime()
+        )
       ) {
         return;
       }
 
-      const key =
-        getBucketKey(
-          row.timestamp,
-          period
+      if (timestamp < start) {
+        return;
+      }
+
+      const parameter =
+        normalizeParameter(
+          row.parameter
         );
 
-      const bucket =
-        ensureBucket(
-          key,
-          row.timestamp
-        );
+      if (!parameter) {
+        return;
+      }
 
       const value =
         Number(row.value);
@@ -361,39 +622,156 @@ const getTelemetry = (
         return;
       }
 
-      if (display === "PM2.5") {
-        bucket.pm25.push(value);
+      const bucketDate =
+        getBucket(
+          timestamp,
+          period
+        );
+
+      if (!bucketDate) {
+        return;
       }
 
-      if (display === "PM10") {
-        bucket.pm10.push(value);
+      const key =
+        bucketDate.toISOString();
+
+      if (!buckets[key]) {
+        buckets[key] = {
+          timestamp:
+            bucketDate,
+          pm25: [],
+          pm10: [],
+          aqi: [],
+        };
+      }
+
+      if (parameter === "pm25") {
+        buckets[key].pm25.push(value);
+      }
+
+      if (parameter === "pm10") {
+        buckets[key].pm10.push(value);
       }
     });
+
+    // ==========================================================
+    // 2. EXISTING AQI READINGS
+    //
+    // Use stored AQI when it exists, but do NOT depend on it.
+    // ==========================================================
+
+    aqiRows.forEach((row) => {
+      if (!row.timestamp) {
+        return;
+      }
+
+      const timestamp =
+        new Date(row.timestamp);
+
+      if (
+        Number.isNaN(
+          timestamp.getTime()
+        )
+      ) {
+        return;
+      }
+
+      if (timestamp < start) {
+        return;
+      }
+
+      const value =
+        Number(row.aqi);
+
+      if (!Number.isFinite(value)) {
+        return;
+      }
+
+      const bucketDate =
+        getBucket(
+          timestamp,
+          period
+        );
+
+      if (!bucketDate) {
+        return;
+      }
+
+      const key =
+        bucketDate.toISOString();
+
+      if (!buckets[key]) {
+        buckets[key] = {
+          timestamp:
+            bucketDate,
+          pm25: [],
+          pm10: [],
+          aqi: [],
+        };
+      }
+
+      buckets[key].aqi.push(value);
+    });
+
+    // ==========================================================
+    // 3. CONVERT BUCKETS INTO CHART DATA
+    // ==========================================================
 
     return Object.values(buckets)
       .sort(
         (a, b) =>
-          new Date(a.timestamp) -
-          new Date(b.timestamp)
+          a.timestamp.getTime() -
+          b.timestamp.getTime()
       )
-      .map((bucket) => ({
-        time: bucket.key,
+      .map((bucket) => {
+        const pm25 =
+          average(bucket.pm25);
 
-        aqi: round(
-          average(bucket.aqi),
-          1
-        ),
+        const pm10 =
+          average(bucket.pm10);
 
-        pm25: round(
-          average(bucket.pm25),
-          1
-        ),
+        // Prefer actual stored AQI.
+        let aqi =
+          average(bucket.aqi);
 
-        pm10: round(
-          average(bucket.pm10),
-          1
-        ),
-      }))
+        // If no stored AQI exists,
+        // calculate it from PM2.5 / PM10.
+        if (
+          aqi === null
+        ) {
+          aqi =
+            calculateChartAqi(
+              pm25,
+              pm10
+            );
+        }
+
+        return {
+          time:
+            bucket.timestamp.toISOString(),
+
+          aqi:
+            aqi === null
+              ? null
+              : Number(
+                  aqi.toFixed(1)
+                ),
+
+          pm25:
+            pm25 === null
+              ? null
+              : Number(
+                  pm25.toFixed(1)
+                ),
+
+          pm10:
+            pm10 === null
+              ? null
+              : Number(
+                  pm10.toFixed(1)
+                ),
+        };
+      })
       .filter(
         (row) =>
           row.aqi !== null ||
@@ -401,6 +779,10 @@ const getTelemetry = (
           row.pm10 !== null
       );
   };
+
+  // ============================================================
+  // RETURN ALL PERIODS
+  // ============================================================
 
   return {
     "24 Hours":
@@ -688,28 +1070,172 @@ const getAnalytics = async (
     // 9. LAST 24 HOURS AQI
     // ========================================================
 
-    const last24 =
-      getPeriodStart(24);
+    // ========================================================
+// 9. MEAN CURRENT AQI
+// ========================================================
 
-    const last24Aqi =
-      aqiList
-        .filter(
-          (row) =>
-            row.timestamp &&
-            new Date(
-              row.timestamp
-            ) >= last24
-        )
-        .map(
-          (row) =>
-            Number(row.aqi)
-        )
-        .filter(
-          Number.isFinite
-        );
+// First try recent stored AQI records.
+const last24 =
+  getPeriodStart(24);
 
-    const mean24hAqi =
-      average(last24Aqi);
+const recentStoredAqi =
+  aqiList
+    .filter((row) => {
+      if (!row.timestamp) {
+        return false;
+      }
+
+      return (
+        new Date(row.timestamp) >= last24 &&
+        Number.isFinite(Number(row.aqi))
+      );
+    })
+    .map((row) => Number(row.aqi));
+
+// If recent AQI records exist, use them.
+let mean24hAqi =
+  average(recentStoredAqi);
+
+// Otherwise calculate AQI from
+// the latest pollutant readings.
+if (mean24hAqi === null) {
+  const latestReadingMap = {};
+
+  for (const row of readingList) {
+    if (!row.timestamp) {
+      continue;
+    }
+
+    const stationId =
+      String(row.station_id);
+
+    const parameter =
+      String(row.parameter || "")
+        .trim()
+        .toLowerCase();
+
+    let key = parameter;
+
+    if (
+      [
+        "pm2.5",
+        "pm25",
+        "pm2_5",
+      ].includes(parameter)
+    ) {
+      key = "pm25";
+    }
+
+    if (parameter === "pm10") {
+      key = "pm10";
+    }
+
+    if (
+      parameter === "no2" ||
+      parameter === "no₂"
+    ) {
+      key = "no2";
+    }
+
+    if (
+      parameter === "so2" ||
+      parameter === "so₂"
+    ) {
+      key = "so2";
+    }
+
+    if (
+      parameter === "o3" ||
+      parameter === "o₃"
+    ) {
+      key = "o3";
+    }
+
+    if (parameter === "co") {
+      key = "co";
+    }
+
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        AQI_BREAKPOINTS,
+        key
+      )
+    ) {
+      continue;
+    }
+
+    const value =
+      Number(row.value);
+
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+
+    const mapKey =
+      `${stationId}_${key}`;
+
+    if (
+      !latestReadingMap[mapKey] ||
+      new Date(row.timestamp).getTime() >
+        new Date(
+          latestReadingMap[mapKey].timestamp
+        ).getTime()
+    ) {
+      latestReadingMap[mapKey] = {
+        ...row,
+        aqiParameter: key,
+      };
+    }
+  }
+
+  const latestReadings =
+    Object.values(latestReadingMap);
+
+  const calculatedStationAqis = {};
+
+  for (const row of latestReadings) {
+    const stationId =
+      String(row.station_id);
+
+    if (
+      !calculatedStationAqis[stationId]
+    ) {
+      calculatedStationAqis[stationId] = {};
+    }
+
+    calculatedStationAqis[
+      stationId
+    ][row.aqiParameter] =
+      Number(row.value);
+  }
+
+  const calculatedAqiValues = [];
+
+  for (const pollutants of Object.values(
+    calculatedStationAqis
+  )) {
+    const calculated =
+      calculateStationAqi(
+        pollutants
+      );
+
+    if (
+      calculated &&
+      Number.isFinite(
+        calculated.aqi
+      )
+    ) {
+      calculatedAqiValues.push(
+        calculated.aqi
+      );
+    }
+  }
+
+  mean24hAqi =
+    average(
+      calculatedAqiValues
+    );
+}
 
     // ========================================================
     // 10. PREVIOUS 24 HOURS
@@ -801,12 +1327,14 @@ const getAnalytics = async (
               .toLowerCase();
 
           return (
-            flag === "" ||
-            flag === "valid" ||
-            flag === "good" ||
-            flag === "verified" ||
-            flag === "pass"
-          );
+  flag === "" ||
+  flag === "valid" ||
+  flag === "good" ||
+  flag === "verified" ||
+  flag === "pass" ||
+  flag === "openaq" ||
+  flag === "simulated"
+);
         }
       ).length;
 

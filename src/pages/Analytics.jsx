@@ -247,7 +247,7 @@ export default function Analytics() {
         <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-[0_8px_25px_rgba(15,23,42,0.05)] flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Mean 24h AQI
+              Mean Current AQI
             </span>
 
             <div className="w-9 h-9 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -270,7 +270,7 @@ export default function Analytics() {
           </div>
 
           <div className="text-[11px] text-slate-500 font-medium">
-            Average AQI from actual database observations
+            Average AQI from current database observations
           </div>
 
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
