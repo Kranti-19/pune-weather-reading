@@ -102,6 +102,196 @@ const randomValue = (min, max, decimals = 2) => {
     );
 };
 
+// =========================================================
+// AQI CALCULATION
+// Same CPCB-style breakpoint logic used by dashboard
+// =========================================================
+
+const AQI_BREAKPOINTS = {
+    pm25: [
+        [0, 30, 0, 50],
+        [31, 60, 51, 100],
+        [61, 90, 101, 200],
+        [91, 120, 201, 300],
+        [121, 250, 301, 400],
+        [251, 500, 401, 500],
+    ],
+
+    pm10: [
+        [0, 50, 0, 50],
+        [51, 100, 51, 100],
+        [101, 250, 101, 200],
+        [251, 350, 201, 300],
+        [351, 430, 301, 400],
+        [431, 600, 401, 500],
+    ],
+
+    no2: [
+        [0, 40, 0, 50],
+        [41, 80, 51, 100],
+        [81, 180, 101, 200],
+        [181, 280, 201, 300],
+        [281, 400, 301, 400],
+        [401, 800, 401, 500],
+    ],
+
+    so2: [
+        [0, 40, 0, 50],
+        [41, 80, 51, 100],
+        [81, 380, 101, 200],
+        [381, 800, 201, 300],
+        [801, 1600, 301, 400],
+        [1601, 2620, 401, 500],
+    ],
+
+    o3: [
+        [0, 50, 0, 50],
+        [51, 100, 51, 100],
+        [101, 168, 101, 200],
+        [169, 208, 201, 300],
+        [209, 748, 301, 400],
+        [749, 1000, 401, 500],
+    ],
+
+    co: [
+        [0, 1, 0, 50],
+        [1.1, 2, 51, 100],
+        [2.1, 10, 101, 200],
+        [10.1, 17, 201, 300],
+        [17.1, 34, 301, 400],
+        [34.1, 50, 401, 500],
+    ],
+};
+
+
+// ---------------------------------------------------------
+// AQI CATEGORY
+// ---------------------------------------------------------
+
+const getAqiCategory = (aqi) => {
+
+    if (!Number.isFinite(Number(aqi))) {
+        return "Unavailable";
+    }
+
+    const value = Number(aqi);
+
+    if (value <= 50) return "Good";
+    if (value <= 100) return "Satisfactory";
+    if (value <= 200) return "Moderate";
+    if (value <= 300) return "Poor";
+    if (value <= 400) return "Very Poor";
+
+    return "Severe";
+};
+
+
+// ---------------------------------------------------------
+// CALCULATE SUB-INDEX
+// ---------------------------------------------------------
+
+const calculateSubIndex = (value, breakpoints) => {
+
+    const concentration = Number(value);
+
+    if (!Number.isFinite(concentration)) {
+        return null;
+    }
+
+    for (const [
+        concentrationLow,
+        concentrationHigh,
+        indexLow,
+        indexHigh,
+    ] of breakpoints) {
+
+        if (
+            concentration >= concentrationLow &&
+            concentration <= concentrationHigh
+        ) {
+
+            const index =
+                (
+                    (indexHigh - indexLow) /
+                    (concentrationHigh - concentrationLow)
+                ) *
+                    (concentration - concentrationLow) +
+                indexLow;
+
+            return Math.round(index);
+        }
+    }
+
+    return null;
+};
+
+
+// ---------------------------------------------------------
+// CALCULATE STATION AQI
+// ---------------------------------------------------------
+
+const calculateStationAqi = (pollutants) => {
+
+    const subindices = {};
+
+    for (const parameter of Object.keys(AQI_BREAKPOINTS)) {
+
+        const value = pollutants[parameter];
+
+        const subIndex = calculateSubIndex(
+            value,
+            AQI_BREAKPOINTS[parameter]
+        );
+
+        if (subIndex !== null) {
+            subindices[parameter] = subIndex;
+        }
+    }
+
+    const availableParameters =
+        Object.keys(subindices);
+
+    const hasParticulate =
+        Number.isFinite(subindices.pm25) ||
+        Number.isFinite(subindices.pm10);
+
+    // Same rule as dashboard
+    if (
+        availableParameters.length < 3 ||
+        !hasParticulate
+    ) {
+        return null;
+    }
+
+    let dominantPollutant = null;
+    let maxSubIndex = -Infinity;
+
+    for (const [
+        parameter,
+        subIndex,
+    ] of Object.entries(subindices)) {
+
+        if (subIndex > maxSubIndex) {
+
+            maxSubIndex = subIndex;
+            dominantPollutant = parameter;
+        }
+    }
+
+    return {
+        aqi: maxSubIndex,
+
+        category:
+            getAqiCategory(maxSubIndex),
+
+        dominant_pollutant:
+            dominantPollutant,
+
+        pollutant_subindices:
+            subindices,
+    };
+};
+
 
 // =========================================================
 // GET SIMULATED DEVICES
@@ -339,6 +529,10 @@ const simulateDeviceHeartbeat = async () => {
 // GENERATE POLLUTANT READINGS
 // =========================================================
 
+// =========================================================
+// GENERATE POLLUTANT + AQI READINGS
+// =========================================================
+
 const generatePollutantReadings = async () => {
 
     try {
@@ -377,13 +571,9 @@ const generatePollutantReadings = async () => {
 
         // -----------------------------------------------------
         // FIND ONE SENSOR PER STATION
-        //
-        // Device 3 and Device 5 both belong to Station 3.
-        // We therefore keep only the first sensor for a station.
         // -----------------------------------------------------
 
         const stationSensorMap = new Map();
-
 
         for (const sensor of sensors) {
 
@@ -434,35 +624,42 @@ const generatePollutantReadings = async () => {
 
 
         // -----------------------------------------------------
-        // GENERATE READINGS
+        // TIMESTAMP
         // -----------------------------------------------------
 
         const timestamp =
             new Date().toISOString();
 
+
         const readings = [];
 
 
-        for (
-            const [
-                stationId,
-                stationInfo
-            ]
-            of stationSensorMap
-        ) {
+        // Keep pollutants grouped by station
+        // so we can calculate AQI after generation.
+        const stationPollutants = {};
+
+
+        // -----------------------------------------------------
+        // GENERATE READINGS
+        // -----------------------------------------------------
+
+        for (const [
+            stationId,
+            stationInfo
+        ] of stationSensorMap) {
 
             const sensor =
                 stationInfo.sensor;
+
+
+            stationPollutants[stationId] = {};
 
 
             // ---------------------------------------------
             // Generate all pollutants
             // ---------------------------------------------
 
-            for (
-                const pollutant
-                of POLLUTANTS
-            ) {
+            for (const pollutant of POLLUTANTS) {
 
                 const value =
                     randomValue(
@@ -472,32 +669,86 @@ const generatePollutantReadings = async () => {
                     );
 
 
+                // Save for AQI calculation
+                const parameter =
+                    pollutant.parameter
+                        .toLowerCase()
+                        .trim();
+
+
+                if (
+                    parameter === "pm2.5" ||
+                    parameter === "pm25"
+                ) {
+
+                    stationPollutants[stationId].pm25 =
+                        value;
+
+                } else if (
+                    parameter === "pm10"
+                ) {
+
+                    stationPollutants[stationId].pm10 =
+                        value;
+
+                } else if (
+                    parameter === "no2"
+                ) {
+
+                    stationPollutants[stationId].no2 =
+                        value;
+
+                } else if (
+                    parameter === "so2"
+                ) {
+
+                    stationPollutants[stationId].so2 =
+                        value;
+
+                } else if (
+                    parameter === "o3"
+                ) {
+
+                    stationPollutants[stationId].o3 =
+                        value;
+
+                } else if (
+                    parameter === "co"
+                ) {
+
+                    stationPollutants[stationId].co =
+                        value;
+                }
+
+
+                // -----------------------------------------
+                // READING TABLE RECORD
+                // -----------------------------------------
+
                 readings.push({
 
-    station_id:
-        stationId,
+                    station_id:
+                        stationId,
 
-    sensor_id:
-        sensor.sensor_id,
+                    sensor_id:
+                        sensor.sensor_id,
 
-    timestamp,
+                    timestamp,
 
-    parameter:
-        pollutant.parameter,
+                    parameter:
+                        pollutant.parameter,
 
-    value,
+                    value,
 
-    unit:
-        pollutant.unit,
+                    unit:
+                        pollutant.unit,
 
-    // Required by the reading table
-    quality_flag:
-        "Simulated",
+                    quality_flag:
+                        "Simulated",
 
-    // Current simulated measurement
-    data_status:
-        "Current",
-});
+                    data_status:
+                        "Current",
+                });
             }
         }
 
@@ -517,19 +768,19 @@ const generatePollutantReadings = async () => {
 
 
         const {
-            data,
-            error,
+            data: insertedReadings,
+            error: readingError,
         } = await supabase
             .from("reading")
             .insert(readings)
             .select();
 
 
-        if (error) {
+        if (readingError) {
 
             console.error(
                 "Reading simulator insert error:",
-                error
+                readingError
             );
 
             return;
@@ -537,8 +788,114 @@ const generatePollutantReadings = async () => {
 
 
         console.log(
-            `Reading simulator: inserted ${data?.length || readings.length} pollutant readings.`
+            `Reading simulator: inserted ${
+                insertedReadings?.length ||
+                readings.length
+            } pollutant readings.`
         );
+
+
+        // =====================================================
+        // CREATE AQI RECORDS
+        // =====================================================
+
+        const aqiReadings = [];
+
+
+        for (const [
+            stationId,
+            pollutants
+        ] of Object.entries(
+            stationPollutants
+        )) {
+
+            const calculated =
+                calculateStationAqi(
+                    pollutants
+                );
+
+
+            if (!calculated) {
+
+                console.log(
+                    `AQI calculation skipped for station ${stationId}`
+                );
+
+                continue;
+            }
+
+
+            aqiReadings.push({
+
+                timestamp,
+
+                station_id:
+                    Number(stationId),
+
+                aqi:
+                    calculated.aqi,
+
+                category:
+                    calculated.category,
+
+                dominant_pollutant:
+                    calculated.dominant_pollutant,
+
+                data_status:
+                    "Current",
+
+                pollutant_subindices:
+                    calculated.pollutant_subindices,
+            });
+
+
+            console.log(
+                `Simulated AQI → Station ${stationId}: ` +
+                `${calculated.aqi} ` +
+                `(${calculated.category}) ` +
+                `| Dominant: ${calculated.dominant_pollutant}`
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // INSERT AQI RECORDS
+        // -----------------------------------------------------
+
+        if (aqiReadings.length > 0) {
+
+            const {
+                data: insertedAqi,
+                error: aqiError,
+            } = await supabase
+                .from("aqi_reading")
+                .insert(aqiReadings)
+                .select();
+
+
+            if (aqiError) {
+
+                console.error(
+                    "AQI simulator insert error:",
+                    aqiError
+                );
+
+            } else {
+
+                console.log(
+                    `AQI simulator: inserted ${
+                        insertedAqi?.length ||
+                        aqiReadings.length
+                    } AQI records.`
+                );
+            }
+
+        } else {
+
+            console.log(
+                "AQI simulator: no valid AQI records generated."
+            );
+        }
 
 
         // -----------------------------------------------------
@@ -546,16 +903,21 @@ const generatePollutantReadings = async () => {
         // -----------------------------------------------------
 
         console.log(
-            `Stations updated: ${stationSensorMap.size}`
+            `Stations updated: ${
+                stationSensorMap.size
+            }`
         );
 
         console.log(
-            `Pollutants per station: ${POLLUTANTS.length}`
+            `Pollutants per station: ${
+                POLLUTANTS.length
+            }`
         );
 
         console.log(
             `Timestamp: ${timestamp}`
         );
+
 
     } catch (error) {
 

@@ -372,46 +372,7 @@ function TooltipShell({ label, children }) {
   );
 }
 
-// =====================================================
-// TREND TOOLTIP
-// =====================================================
 
-const TrendTooltip = ({
-  active,
-  payload,
-  label,
-}) => {
-  if (
-    !active ||
-    !payload ||
-    !payload.length
-  ) {
-    return null;
-  }
-
-  return (
-    <TooltipShell label={label}>
-      {payload.map((item) => (
-        <div
-          key={item.dataKey}
-          className="flex items-center justify-between gap-4 text-[11px] mb-1 last:mb-0"
-        >
-          <span className="text-slate-400 font-medium">
-            {item.dataKey === "aqi"
-              ? "AQI"
-              : item.dataKey === "pm25"
-              ? "PM2.5"
-              : "PM10"}
-          </span>
-
-          <strong className="text-white font-mono font-black">
-            {item.value ?? "—"}
-          </strong>
-        </div>
-      ))}
-    </TooltipShell>
-  );
-};
 
 // =====================================================
 // AQI BAR TOOLTIP
@@ -625,8 +586,11 @@ export default function Dashboard() {
   const [error, setError] =
     useState("");
 
-  const [range, setRange] =
-    useState("24h");
+  const [range, setRange] = useState("7d");
+
+const [historyTrend, setHistoryTrend] = useState([]);
+const [historyLoading, setHistoryLoading] = useState(false);
+const [historyError, setHistoryError] = useState("");
 
   // ===================================================
   // PUNE WEATHER
@@ -753,6 +717,65 @@ export default function Dashboard() {
     setRefreshing(false);
   }
 };
+
+// ===================================================
+// HISTORICAL AQI TREND
+// ===================================================
+
+const fetchHistoryTrend = async (selectedRange) => {
+  try {
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    const response = await API.get("/history/trend", {
+      params: {
+        range: selectedRange,
+      },
+    });
+
+    console.log("========== HISTORY AQI TREND ==========");
+    console.log("Range:", selectedRange);
+    console.log("History response:", response.data);
+    console.log(
+      "🔥 TREND DATES:",
+      response.data?.data?.trend?.map(item => ({
+        date: item.date,
+        aqi: item.aqi
+      }))
+    );
+    console.log("=======================================");
+
+    if (response?.data?.status !== "success") {
+      throw new Error(
+        response?.data?.message ||
+          "Unable to load historical AQI."
+      );
+    }
+
+    const trend =
+      Array.isArray(response?.data?.data?.trend)
+        ? response.data.data.trend
+        : [];
+
+    setHistoryTrend(trend);
+  } catch (err) {
+    console.error(
+      "Historical AQI trend error:",
+      err
+    );
+
+    setHistoryTrend([]);
+
+    setHistoryError(
+      err?.response?.data?.message ||
+        err?.message ||
+        "Unable to load historical AQI."
+    );
+  } finally {
+    setHistoryLoading(false);
+  }
+};
+
   // ===================================================
   // AUTO REFRESH DASHBOARD
   // ===================================================
@@ -769,6 +792,14 @@ export default function Dashboard() {
     return () =>
       clearInterval(interval);
   }, [range]);
+
+  // ===================================================
+// LOAD HISTORICAL AQI TREND
+// ===================================================
+
+useEffect(() => {
+  fetchHistoryTrend(range);
+}, [range]);
 
   // ===================================================
   // AUTO REFRESH WEATHER
@@ -977,37 +1008,138 @@ const offlineStations = numberValue(
   // TREND DATA
   // ===================================================
 
-  const trendData =
-    useMemo(
-      () =>
-        trends.map(
-          (item) => ({
-            ...item,
+  // ===================================================
+// HISTORICAL AQI CHART DATA
+// ===================================================
 
-            aqi:
-              item.aqi === null
-                ? null
-                : numberValue(
-                    item.aqi
-                  ),
+const trendData = useMemo(() => {
+  return historyTrend.map((item) => ({
+    ...item,
 
-            pm25:
-              item.pm25 === null
-                ? null
-                : numberValue(
-                    item.pm25
-                  ),
+    // Chart expects "time"
+    time: item.date,
 
-            pm10:
-              item.pm10 === null
-                ? null
-                : numberValue(
-                    item.pm10
-                  ),
-          })
-        ),
-      [trends]
-    );
+    // Historical API gives daily AQI
+    aqi:
+      item.aqi === null ||
+      item.aqi === undefined
+        ? null
+        : numberValue(item.aqi),
+  }));
+}, [historyTrend]);
+
+// =====================================================
+// OBSERVATION CHART DATA
+// Creates a continuous date range and keeps missing
+// dates as null so the chart shows a gap.
+// =====================================================
+
+const observationChartData = useMemo(() => {
+  if (!trendData || trendData.length === 0) {
+    return [];
+  }
+
+  const dataMap = new Map(
+    trendData.map((item) => [
+      item.time,
+      item.aqi !== null &&
+      item.aqi !== undefined &&
+      Number.isFinite(Number(item.aqi))
+        ? Number(item.aqi)
+        : null,
+    ])
+  );
+
+  const dates = trendData
+    .map((item) => item.time)
+    .filter(Boolean)
+    .sort();
+
+  if (dates.length === 0) {
+    return [];
+  }
+
+  const start = new Date(
+    `${dates[0]}T00:00:00`
+  );
+
+  const end = new Date(
+    `${dates[dates.length - 1]}T00:00:00`
+  );
+
+  const result = [];
+
+  for (
+    let current = new Date(start);
+    current <= end;
+    current.setDate(current.getDate() + 1)
+  ) {
+    const year = current.getFullYear();
+
+    const month = String(
+      current.getMonth() + 1
+    ).padStart(2, "0");
+
+    const day = String(
+      current.getDate()
+    ).padStart(2, "0");
+
+    const dateString =
+      `${year}-${month}-${day}`;
+
+    result.push({
+      time: dateString,
+      aqi: dataMap.has(dateString)
+        ? dataMap.get(dateString)
+        : null,
+    });
+  }
+
+  return result;
+}, [trendData]);
+
+
+// =====================================================
+// TREND TOOLTIP
+// =====================================================
+
+const TrendTooltip = ({
+  active,
+  payload,
+  label,
+}) => {
+  if (
+    !active ||
+    !payload ||
+    !payload.length
+  ) {
+    return null;
+  }
+
+  return (
+    <TooltipShell label={label}>
+      {payload.map((item) => (
+        <div
+          key={item.dataKey}
+          className="flex items-center justify-between gap-4 text-[11px] mb-1 last:mb-0"
+        >
+          <span className="text-slate-400 font-medium">
+            {item.dataKey === "aqi"
+              ? "AQI"
+              : item.dataKey === "pm25"
+              ? "PM2.5"
+              : "PM10"}
+          </span>
+
+          <strong className="text-white font-mono font-black">
+            {item.value ?? "—"}
+          </strong>
+        </div>
+      ))}
+    </TooltipShell>
+  );
+};
+    
 
   const trendAccent =
     getChartColor(aqi);
@@ -1591,6 +1723,8 @@ const offlineStations = numberValue(
 
       <AQITrend />
 
+      <div className="mt-5 p-1"></div>
+
       {/* =================================================
           WARD POLLUTION
       ================================================= */}
@@ -1626,7 +1760,6 @@ const offlineStations = numberValue(
 
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
               {[
-                ["24h", "24 Hours"],
                 ["7d", "7 Days"],
                 ["30d", "30 Days"],
               ].map((item) => (
@@ -1648,15 +1781,35 @@ const offlineStations = numberValue(
           </div>
 
           <div className="h-[240px]">
-            {trendData.length === 0 ? (
-              <EmptyChart />
-            ) : (
+            {historyLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <RefreshCw
+                    size={15}
+                    className="animate-spin text-blue-500"
+                  />
+                  Loading AQI history...
+                </div>
+              </div>
+            ) : historyError ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <p className="text-xs font-bold text-red-500">
+                  Unable to load AQI history
+                </p>
+
+          <p className="text-[10px] text-slate-400 mt-1">
+            {historyError}
+          </p>
+        </div>
+      ) : trendData.length === 0 ? (
+        <EmptyChart />
+      ) : (
               <ResponsiveContainer
                 width="100%"
                 height="100%"
               >
                 <AreaChart
-                  data={trendData}
+  data={observationChartData}
                   margin={{
                     top: 10,
                     right: 10,
@@ -1703,6 +1856,15 @@ const offlineStations = numberValue(
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
+                    tickFormatter={(value) => {
+                      const parts = String(value).split("-");
+
+                      if (parts.length !== 3) {
+                        return value;
+                      }
+
+                      return `${parts[2]}/${parts[1]}`;
+                    }}
                   />
 
                   <YAxis
@@ -1745,17 +1907,22 @@ const offlineStations = numberValue(
                   <Area
                     type="monotone"
                     dataKey="aqi"
-                    stroke={
-                      trendAccent
-                    }
+                    stroke={trendAccent}
                     strokeWidth={2.5}
                     fill="url(#aqiFill)"
-                    activeDot={{
+                    dot={{
                       r: 4,
+                      fill: "#ffffff",
+                      stroke: trendAccent,
+                      strokeWidth: 2,
+                    }}
+                    activeDot={{
+                      r: 5,
                       strokeWidth: 2,
                       stroke: "#fff",
+                      fill: trendAccent,
                     }}
-                    connectNulls
+                    connectNulls={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>

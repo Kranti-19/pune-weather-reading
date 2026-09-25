@@ -99,9 +99,14 @@ const register = async (req, res) => {
 };
 
 //Login
+// Login
 const login = async (req, res) => {
     try {
         let { userId, password } = req.body;
+
+        console.log("\n========== LOGIN ATTEMPT ==========");
+        console.log("PMC User ID:", userId);
+        console.log("Password received:", password ? "YES" : "NO");
 
         // Check required fields
         if (!userId || !password) {
@@ -113,26 +118,68 @@ const login = async (req, res) => {
 
         userId = userId.trim();
 
-        // Find the user's profile using PMC User ID
-        const { data: profile, error: profileError } =
-            await supabase
-                .from("profiles")
-                .select("user_id, full_name, pmc_user_id")
-                .eq("pmc_user_id", userId)
-                .single();
+        // =====================================================
+        // STEP 1: FIND PMC PROFILE
+        // =====================================================
 
-        if (profileError || !profile) {
+        const {
+            data: profile,
+            error: profileError
+        } = await supabase
+            .from("profiles")
+            .select("user_id, full_name, pmc_user_id")
+            .eq("pmc_user_id", userId)
+            .maybeSingle();
+
+        console.log("STEP 1 - Profile:", profile);
+        console.log("STEP 1 - Profile error:", profileError);
+
+        if (profileError) {
+            console.error("PROFILE QUERY ERROR:", profileError);
+
+            return res.status(500).json({
+                status: "error",
+                message: "Unable to check PMC account"
+            });
+        }
+
+        if (!profile) {
+            console.log("❌ NO PROFILE FOUND FOR:", userId);
+
             return res.status(401).json({
                 status: "error",
                 message: "Invalid PMC User ID or password"
             });
         }
 
-        // Get email from Supabase Auth user
-        const { data: authUser, error: authError } =
-            await supabase.auth.admin.getUserById(profile.user_id);
+        console.log("✅ PROFILE FOUND");
+        console.log("Supabase Auth User ID:", profile.user_id);
 
-        if (authError || !authUser.user) {
+        // =====================================================
+        // STEP 2: FIND SUPABASE AUTH USER
+        // =====================================================
+
+        const {
+            data: authUser,
+            error: authError
+        } = await supabase.auth.admin.getUserById(profile.user_id);
+
+        console.log(
+            "STEP 2 - Auth user:",
+            authUser?.user
+                ? {
+                    id: authUser.user.id,
+                    email: authUser.user.email,
+                    emailConfirmed: authUser.user.email_confirmed_at
+                }
+                : null
+        );
+
+        console.log("STEP 2 - Auth error:", authError);
+
+        if (authError || !authUser?.user) {
+            console.error("❌ AUTH USER NOT FOUND");
+
             return res.status(401).json({
                 status: "error",
                 message: "Unable to find user account"
@@ -141,22 +188,53 @@ const login = async (req, res) => {
 
         const email = authUser.user.email;
 
-        // Login using email + password internally
-        const { data, error } =
-            await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
+        console.log("✅ AUTH USER FOUND");
+        console.log("Email:", email);
+
+        // =====================================================
+        // STEP 3: SIGN IN WITH EMAIL + PASSWORD
+        // =====================================================
+
+        const {
+            data,
+            error
+        } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        console.log(
+            "STEP 3 - Sign in result:",
+            data?.user
+                ? {
+                    id: data.user.id,
+                    email: data.user.email
+                }
+                : null
+        );
+
+        console.log("STEP 3 - Sign in error:", error);
 
         if (error) {
+            console.error(
+                "❌ SUPABASE LOGIN FAILED:",
+                error.message
+            );
+
             return res.status(401).json({
                 status: "error",
-                message: "Invalid PMC User ID or password"
+                message: error.message
             });
         }
 
-        // Successful login
-        res.status(200).json({
+        // =====================================================
+        // SUCCESS
+        // =====================================================
+
+        console.log("✅ LOGIN SUCCESSFUL");
+        console.log("====================================\n");
+
+        return res.status(200).json({
             status: "success",
             message: "Login successful",
 
@@ -172,9 +250,9 @@ const login = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Login error:", error);
+        console.error("🔥 LOGIN SERVER ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             status: "error",
             message: "Server error"
         });

@@ -21,6 +21,7 @@ import AddMonitoringSite from "./pages/AddMonitoringSite";
 import AdminAlertConfiguration from "./pages/AdminAlertConfiguration";
 
 import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -65,9 +66,11 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            <Layout>
-              <Dashboard />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <Dashboard />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 

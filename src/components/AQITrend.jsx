@@ -79,6 +79,21 @@ const CustomTooltip = ({ active, payload, label }) => {
   }
 
   const aqi = payload[0]?.value;
+
+  if (aqi === null || aqi === undefined) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
+        <p className="mb-1 text-xs font-semibold text-slate-500">
+          {label}
+        </p>
+
+        <p className="text-sm font-semibold text-slate-400">
+          No AQI data available
+        </p>
+      </div>
+    );
+  }
+
   const category = getAqiCategory(aqi);
 
   return (
@@ -311,20 +326,61 @@ export default function AQITrend() {
   // =====================================================
 
   const chartData = useMemo(() => {
-    return trendData
-      .filter(
-        (item) =>
-          item.aqi !== null &&
-          Number.isFinite(
-            Number(item.aqi)
-          )
-      )
-      .map((item) => ({
-        date: formatDate(item.date),
-        fullDate: item.date,
-        aqi: Number(item.aqi),
-      }));
-  }, [trendData]);
+  if (!trendData.length) return [];
+
+  // Convert API data into a quick lookup by date
+  const dataByDate = new Map(
+    trendData.map((item) => [
+      item.date,
+      item.aqi !== null &&
+      Number.isFinite(Number(item.aqi))
+        ? Number(item.aqi)
+        : null,
+    ])
+  );
+
+  // Find first and last available dates
+  const dates = trendData
+    .map((item) => item.date)
+    .filter(Boolean)
+    .sort();
+
+  if (!dates.length) return [];
+
+  const startDate = new Date(`${dates[0]}T00:00:00`);
+  const endDate = new Date(
+    `${dates[dates.length - 1]}T00:00:00`
+  );
+
+  const result = [];
+
+  // Generate every calendar day
+  for (
+    let current = new Date(startDate);
+    current <= endDate;
+    current.setDate(current.getDate() + 1)
+  ) {
+    const year = current.getFullYear();
+    const month = String(
+      current.getMonth() + 1
+    ).padStart(2, "0");
+    const day = String(
+      current.getDate()
+    ).padStart(2, "0");
+
+    const dateString = `${year}-${month}-${day}`;
+
+    result.push({
+      date: formatDate(dateString),
+      fullDate: dateString,
+      aqi: dataByDate.has(dateString)
+        ? dataByDate.get(dateString)
+        : null,
+    });
+  }
+
+  return result;
+}, [trendData]);
 
   const yAxisDomain = useMemo(() => {
   if (!chartData.length) {

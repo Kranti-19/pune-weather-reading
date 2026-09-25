@@ -28,35 +28,39 @@ const getAqiCategory = (aqi) => {
 
 const getAqiTrend = async (req, res) => {
     try {
+        
+
         const { range, from, to, stationId } = req.query;
+
+        let startDate;
+        let endDate;
+
+        // Current time
+        const now = new Date();
 
         // -------------------------------------------------
         // DETERMINE DATE RANGE
         // -------------------------------------------------
 
-        let startDate;
-        let endDate;
-
-        const now = new Date();
-
         if (range === "7d") {
-            // Last 7 calendar days including today
-            endDate = now;
+            // Include today + previous 6 calendar days
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            startDate.setDate(startDate.getDate() - 6);
 
-            startDate = new Date(
-                now.getTime() - 6 * 24 * 60 * 60 * 1000
-            );
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+
         } else if (range === "30d") {
-            // Last 30 calendar days including today
-            endDate = now;
+            // Include today + previous 29 calendar days
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            startDate.setDate(startDate.getDate() - 29);
 
-            startDate = new Date(
-                now.getTime() - 29 * 24 * 60 * 60 * 1000
-            );
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+
         } else if (from && to) {
-            // -------------------------------------------------
-            // CUSTOM RANGE
-            // -------------------------------------------------
 
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -67,26 +71,18 @@ const getAqiTrend = async (req, res) => {
                 });
             }
 
-            startDate = new Date(
-                `${from}T00:00:00+05:30`
-            );
+            // Treat custom dates as IST calendar dates
+            startDate = new Date(`${from}T00:00:00+05:30`);
 
-            // End date is exclusive, so add one day
-            const requestedEndDate = new Date(
-                `${to}T00:00:00+05:30`
-            );
+            endDate = new Date(`${to}T23:59:59.999+05:30`);
 
-            if (requestedEndDate < startDate) {
+            if (endDate < startDate) {
                 return res.status(400).json({
                     status: "error",
                     message: "The 'to' date must be after the 'from' date."
                 });
             }
 
-            endDate = new Date(
-                requestedEndDate.getTime() +
-                24 * 60 * 60 * 1000
-            );
         } else {
             return res.status(400).json({
                 status: "error",
@@ -96,93 +92,152 @@ const getAqiTrend = async (req, res) => {
         }
 
         // -------------------------------------------------
-        // LIMIT CUSTOM RANGE
+        // DEBUG DATE RANGE
         // -------------------------------------------------
 
-        const differenceInDays =
-            Math.ceil(
-                (endDate.getTime() - startDate.getTime()) /
-                (24 * 60 * 60 * 1000)
-            );
+        console.log("========================================");
+        console.log("AQI TREND REQUEST");
+        console.log("range:", range);
+        console.log("from:", from);
+        console.log("to:", to);
+        console.log("startDate:", startDate.toISOString());
+        console.log("endDate:", endDate.toISOString());
+        console.log("stationId:", stationId);
+        console.log("========================================");
 
-        if (differenceInDays > 366) {
+ // -------------------------------------------------
+// FETCH AQI READINGS FROM SUPABASE
+// -------------------------------------------------
+
+const PAGE_SIZE = 1000;
+
+let rows = [];
+
+for (let fromIndex = 0; ; fromIndex += PAGE_SIZE) {
+
+    let query = supabase
+        .from("aqi_reading")
+        .select(`
+            aqi_id,
+            station_id,
+            timestamp,
+            aqi,
+            category,
+            dominant_pollutant
+        `)
+        .gte(
+            "timestamp",
+            startDate.toISOString()
+        )
+        .lte(
+            "timestamp",
+            endDate.toISOString()
+        )
+        .order("timestamp", {
+            ascending: true
+        })
+        .order("aqi_id", {
+            ascending: true
+        })
+        .range(
+            fromIndex,
+            fromIndex + PAGE_SIZE - 1
+        );
+
+    // Optional station filter
+    if (stationId) {
+
+        const numericStationId =
+            Number(stationId);
+
+        if (!Number.isInteger(numericStationId)) {
             return res.status(400).json({
                 status: "error",
-                message: "Maximum trend range is 366 days."
+                message:
+                    "stationId must be a valid number."
             });
         }
 
+        query = query.eq(
+            "station_id",
+            numericStationId
+        );
+    }
+
+    const {
+        data: batchRows,
+        error
+    } = await query;
+
+    if (error) {
+        throw error;
+    }
+
+    const currentRows =
+        batchRows || [];
+
+    rows.push(
+        ...currentRows
+    );
+
+    console.log(
+        `AQI TREND PAGE ${
+            fromIndex / PAGE_SIZE + 1
+        }: ${currentRows.length} rows`
+    );
+
+    // Last page
+    if (
+        currentRows.length <
+        PAGE_SIZE
+    ) {
+        break;
+    }
+}
+
+console.log(
+    "========================================"
+);
+
+console.log(
+    "TOTAL AQI TREND ROWS:",
+    rows.length
+);
+
+if (rows.length > 0) {
+
+    console.log(
+        "FIRST AQI ROW:",
+        rows[0]
+    );
+
+    console.log(
+        "LAST AQI ROW:",
+        rows[rows.length - 1]
+    );
+}
+
+console.log(
+    "========================================"
+);
+
         // -------------------------------------------------
-        // FETCH AQI READINGS FROM SUPABASE
-        // -------------------------------------------------
-
-        let query = supabase
-            .from("aqi_reading")
-            .select(`
-                aqi_id,
-                station_id,
-                timestamp,
-                aqi,
-                category,
-                dominant_pollutant
-            `)
-            .gte(
-                "timestamp",
-                startDate.toISOString()
-            )
-            .lt(
-                "timestamp",
-                endDate.toISOString()
-            )
-            .order("timestamp", {
-                ascending: true
-            });
-
-        // Optional station filter
-        if (stationId) {
-            const numericStationId = Number(stationId);
-
-            if (!Number.isInteger(numericStationId)) {
-                return res.status(400).json({
-                    status: "error",
-                    message: "stationId must be a valid number."
-                });
-            }
-
-            query = query.eq(
-                "station_id",
-                numericStationId
-            );
-        }
-
-        const {
-            data: rows,
-            error
-        } = await query;
-
-        if (error) {
-            throw error;
-        }
-
-        // -------------------------------------------------
-        // GROUP READINGS BY IST DATE
+        // GROUP BY IST DATE
         // -------------------------------------------------
 
         const dailyMap = {};
 
         for (const row of rows || []) {
-            if (!row.timestamp) continue;
 
-            const aqi = Number(row.aqi);
-
-            if (
-                !Number.isFinite(aqi) ||
-                aqi <= 0
-            ) {
+            if (!row.timestamp) {
                 continue;
             }
 
-            const date = new Date(row.timestamp);
+            const aqi = Number(row.aqi);
+
+            if (!Number.isFinite(aqi) || aqi <= 0) {
+                continue;
+            }
 
             const dateKey = new Intl.DateTimeFormat(
                 "en-CA",
@@ -192,7 +247,7 @@ const getAqiTrend = async (req, res) => {
                     month: "2-digit",
                     day: "2-digit"
                 }
-            ).format(date);
+            ).format(new Date(row.timestamp));
 
             if (!dailyMap[dateKey]) {
                 dailyMap[dateKey] = {
@@ -209,7 +264,7 @@ const getAqiTrend = async (req, res) => {
                 row.station_id !== undefined
             ) {
                 dailyMap[dateKey].stations.add(
-                    row.station_id
+                    Number(row.station_id)
                 );
             }
         }
@@ -220,24 +275,12 @@ const getAqiTrend = async (req, res) => {
 
         const data = Object.values(dailyMap)
             .map((day) => {
-                const values = day.values;
-
-                if (!values.length) {
-                    return {
-                        date: day.date,
-                        aqi: null,
-                        category: "No Data",
-                        stationCount: 0,
-                        observationCount: 0
-                    };
-                }
 
                 const averageAqi =
-                    values.reduce(
-                        (sum, value) =>
-                            sum + value,
+                    day.values.reduce(
+                        (sum, value) => sum + value,
                         0
-                    ) / values.length;
+                    ) / day.values.length;
 
                 const roundedAqi =
                     Math.round(averageAqi);
@@ -245,14 +288,9 @@ const getAqiTrend = async (req, res) => {
                 return {
                     date: day.date,
                     aqi: roundedAqi,
-                    category:
-                        getAqiCategory(
-                            roundedAqi
-                        ),
-                    stationCount:
-                        day.stations.size,
-                    observationCount:
-                        values.length
+                    category: getAqiCategory(roundedAqi),
+                    stationCount: day.stations.size,
+                    observationCount: day.values.length
                 };
             })
             .sort((a, b) =>
@@ -263,15 +301,8 @@ const getAqiTrend = async (req, res) => {
         // SUMMARY
         // -------------------------------------------------
 
-        const validDays = data.filter(
-            (day) =>
-                day.aqi !== null &&
-                Number.isFinite(day.aqi)
-        );
-
-        const aqiValues = validDays.map(
-            (day) => day.aqi
-        );
+        const aqiValues =
+            data.map(day => day.aqi);
 
         const average =
             aqiValues.length
@@ -285,8 +316,8 @@ const getAqiTrend = async (req, res) => {
                 : null;
 
         const highest =
-            validDays.length
-                ? validDays.reduce(
+            data.length
+                ? data.reduce(
                     (max, day) =>
                         day.aqi > max.aqi
                             ? day
@@ -295,8 +326,8 @@ const getAqiTrend = async (req, res) => {
                 : null;
 
         const lowest =
-            validDays.length
-                ? validDays.reduce(
+            data.length
+                ? data.reduce(
                     (min, day) =>
                         day.aqi < min.aqi
                             ? day
@@ -304,17 +335,11 @@ const getAqiTrend = async (req, res) => {
                 )
                 : null;
 
-        // -------------------------------------------------
-        // RESPONSE
-        // -------------------------------------------------
-
         return res.status(200).json({
             status: "success",
 
             data: {
-                range:
-                    range ||
-                    "custom",
+                range: range || "custom",
 
                 from:
                     data.length
@@ -332,13 +357,13 @@ const getAqiTrend = async (req, res) => {
                     average,
                     highest,
                     lowest,
-                    daysWithData:
-                        validDays.length
+                    daysWithData: data.length
                 }
             }
         });
 
     } catch (error) {
+
         console.error(
             "AQI trend error:",
             error
@@ -352,7 +377,6 @@ const getAqiTrend = async (req, res) => {
         });
     }
 };
-
 
 // =====================================================
 // EXPORTS
