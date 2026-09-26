@@ -3,6 +3,20 @@ const cors = require("cors");
 
 const app = express();
 
+// Prevent browser/proxy caching for live API data
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+
+  next();
+});
+
 // Dynamic CORS configuration
 const allowedOrigins = [
   "http://localhost:5173",
