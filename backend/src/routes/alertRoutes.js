@@ -1,12 +1,13 @@
 const express = require("express");
 
 const {
-  getAlerts,
-  acknowledgeAlert,
-  resolveAlert,
-  evaluateAlertRules,
-  getAlertConfigurations,
-  updateAlertConfiguration,
+    getAlerts,
+    acknowledgeAlert,
+    resolveAlert,
+    evaluateAlertRules,
+    evaluateAlerts, // ADD THIS
+    getAlertConfigurations,
+    updateAlertConfiguration,
 } = require("../controllers/alertController");
 
 const router = express.Router();

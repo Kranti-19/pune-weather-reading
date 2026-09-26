@@ -1,6 +1,7 @@
 // controllers/openaqController.js
 
 const supabase = require("../config/supabase");
+const { evaluateAlerts } = require("./alertController");
 
 const OPENAQ_BASE_URL = "https://api.openaq.org/v3";
 
@@ -15,15 +16,13 @@ const MAX_DATA_AGE_MINUTES = 60;
 // ======================================================
 // In-Memory Calendar Cache
 // ======================================================
-//
-// Caches calendar responses for 5 minutes to avoid
-// hammering OpenAQ API on every page load/refresh.
-//
-// Key: "YYYY-M"   Value: { data, expiresAt }
-// ======================================================
 
-const CALENDAR_CACHE_TTL_PAST_MS  = 24 * 60 * 60 * 1000; // 24 h  — past months (data immutable)
-const CALENDAR_CACHE_TTL_CURRENT_MS =      10 * 60 * 1000; // 10 min — current month (data still arriving)
+const CALENDAR_CACHE_TTL_PAST_MS =
+  24 * 60 * 60 * 1000;
+
+const CALENDAR_CACHE_TTL_CURRENT_MS =
+  10 * 60 * 1000;
+
 const calendarCache = {};
 
 const DAY_CACHE_TTL_MS =
@@ -64,21 +63,31 @@ function setCachedHistoricalDay(
 
 function isCurrentMonth(year, month) {
   const now = new Date();
+
   return (
-    year  === now.getFullYear() &&
-    month === now.getMonth() + 1   // month is 1-based in this context
+    year === now.getFullYear() &&
+    month === now.getMonth() + 1
   );
 }
 
-function getCachedCalendar(year, month) {
-  const key = `${year}-${month}`;
-  const entry = calendarCache[key];
+function getCachedCalendar(
+  year,
+  month
+) {
+  const key =
+    `${year}-${month}`;
+
+  const entry =
+    calendarCache[key];
 
   if (!entry) {
     return null;
   }
 
-  if (Date.now() > entry.expiresAt) {
+  if (
+    Date.now() >
+    entry.expiresAt
+  ) {
     delete calendarCache[key];
     return null;
   }
@@ -86,30 +95,32 @@ function getCachedCalendar(year, month) {
   return entry.data;
 }
 
-function setCachedCalendar(year, month, data) {
-  const key = `${year}-${month}`;
-  const ttl = isCurrentMonth(year, month)
-    ? CALENDAR_CACHE_TTL_CURRENT_MS
-    : CALENDAR_CACHE_TTL_PAST_MS;
+function setCachedCalendar(
+  year,
+  month,
+  data
+) {
+  const key =
+    `${year}-${month}`;
+
+  const ttl =
+    isCurrentMonth(year, month)
+      ? CALENDAR_CACHE_TTL_CURRENT_MS
+      : CALENDAR_CACHE_TTL_PAST_MS;
 
   calendarCache[key] = {
     data,
-    expiresAt: Date.now() + ttl,
+    expiresAt:
+      Date.now() + ttl,
   };
 }
 
-
-
 // ======================================================
 // OpenAQ API Request
 // ======================================================
 
-// ======================================================
-// OpenAQ API Request
-// ======================================================
-
-// Keep requests spaced out so we do not hit OpenAQ 429.
-const OPENAQ_MIN_REQUEST_INTERVAL_MS = 1200;
+const OPENAQ_MIN_REQUEST_INTERVAL_MS =
+  1200;
 
 let lastOpenAQRequestTime = 0;
 
@@ -118,11 +129,13 @@ let openAQRateLimitedUntil = 0;
 async function waitForOpenAQSlot() {
   const now = Date.now();
 
-  // If OpenAQ recently rate-limited us, wait until
-  // the rate-limit window has reset.
-  if (openAQRateLimitedUntil > now) {
+  if (
+    openAQRateLimitedUntil >
+    now
+  ) {
     const waitMs =
-      openAQRateLimitedUntil - now;
+      openAQRateLimitedUntil -
+      now;
 
     console.warn(
       `OpenAQ rate limit active. Waiting ${Math.ceil(
@@ -130,33 +143,43 @@ async function waitForOpenAQSlot() {
       )} seconds...`
     );
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, waitMs)
+    await new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          waitMs
+        )
     );
   }
 
-  const currentTime = Date.now();
+  const currentTime =
+    Date.now();
 
   const elapsed =
-    currentTime - lastOpenAQRequestTime;
+    currentTime -
+    lastOpenAQRequestTime;
 
   if (
     elapsed <
     OPENAQ_MIN_REQUEST_INTERVAL_MS
   ) {
-    await new Promise((resolve) =>
-      setTimeout(
-        resolve,
-        OPENAQ_MIN_REQUEST_INTERVAL_MS -
-          elapsed
-      )
+    await new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          OPENAQ_MIN_REQUEST_INTERVAL_MS -
+            elapsed
+        )
     );
   }
 
-  lastOpenAQRequestTime = Date.now();
+  lastOpenAQRequestTime =
+    Date.now();
 }
 
-async function openaqRequest(endpoint) {
+async function openaqRequest(
+  endpoint
+) {
   const apiKey =
     process.env.OPENAQ_API_KEY;
 
@@ -168,22 +191,29 @@ async function openaqRequest(endpoint) {
 
   await waitForOpenAQSlot();
 
-  const response = await fetch(
-    `${OPENAQ_BASE_URL}${endpoint}`,
-    {
-      method: "GET",
-      headers: {
-        "X-API-Key": apiKey,
-        Accept: "application/json",
-      },
-    }
-  );
+  const response =
+    await fetch(
+      `${OPENAQ_BASE_URL}${endpoint}`,
+      {
+        method: "GET",
 
-  // ----------------------------------------------------
+        headers: {
+          "X-API-Key":
+            apiKey,
+
+          Accept:
+            "application/json",
+        },
+      }
+    );
+
+  // ====================================================
   // Handle rate limiting
-  // ----------------------------------------------------
+  // ====================================================
 
-  if (response.status === 429) {
+  if (
+    response.status === 429
+  ) {
     const resetHeader =
       response.headers.get(
         "x-ratelimit-reset"
@@ -194,21 +224,27 @@ async function openaqRequest(endpoint) {
         "retry-after"
       );
 
-    let waitSeconds = Number(
-      retryAfterHeader
-    );
+    let waitSeconds =
+      Number(
+        retryAfterHeader
+      );
 
     if (
-      !Number.isFinite(waitSeconds) ||
+      !Number.isFinite(
+        waitSeconds
+      ) ||
       waitSeconds <= 0
     ) {
-      waitSeconds = Number(
-        resetHeader
-      );
+      waitSeconds =
+        Number(
+          resetHeader
+        );
     }
 
     if (
-      !Number.isFinite(waitSeconds) ||
+      !Number.isFinite(
+        waitSeconds
+      ) ||
       waitSeconds <= 0
     ) {
       waitSeconds = 60;
@@ -243,10 +279,13 @@ async function openaqRequest(endpoint) {
 // Get OpenAQ Location Sensors
 // ======================================================
 
-async function getOpenAQSensors(locationId) {
-  const data = await openaqRequest(
-    `/locations/${locationId}/sensors`
-  );
+async function getOpenAQSensors(
+  locationId
+) {
+  const data =
+    await openaqRequest(
+      `/locations/${locationId}/sensors`
+    );
 
   return data.results || [];
 }
@@ -255,15 +294,18 @@ async function getOpenAQSensors(locationId) {
 // Normalize OpenAQ Parameter Name
 // ======================================================
 
-function normalizeParameterName(name) {
+function normalizeParameterName(
+  name
+) {
   if (!name) {
     return null;
   }
 
-  const value = String(name)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "");
+  const value =
+    String(name)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
 
   const mapping = {
     pm25: "pm25",
@@ -290,14 +332,19 @@ function normalizeParameterName(name) {
     carbonmonoxide: "co",
   };
 
-  return mapping[value] || null;
+  return (
+    mapping[value] ||
+    null
+  );
 }
 
 // ======================================================
 // Build Dynamic Sensor Map
 // ======================================================
 
-function buildSensorMap(sensors) {
+function buildSensorMap(
+  sensors
+) {
   const sensorMap = {
     pm25: [],
     pm10: [],
@@ -307,7 +354,9 @@ function buildSensorMap(sensors) {
     co: [],
   };
 
-  for (const sensor of sensors) {
+  for (
+    const sensor of sensors
+  ) {
     const sensorId =
       sensor.id ??
       sensor.sensorId ??
@@ -324,13 +373,19 @@ function buildSensorMap(sensors) {
       null;
 
     const parameter =
-      normalizeParameterName(parameterName);
+      normalizeParameterName(
+        parameterName
+      );
 
     if (!parameter) {
       continue;
     }
 
-    sensorMap[parameter].push(Number(sensorId));
+    sensorMap[
+      parameter
+    ].push(
+      Number(sensorId)
+    );
   }
 
   return sensorMap;
@@ -340,10 +395,13 @@ function buildSensorMap(sensors) {
 // Get Latest Measurements
 // ======================================================
 
-async function getOpenAQLatest(locationId) {
-  const data = await openaqRequest(
-    `/locations/${locationId}/latest?limit=100`
-  );
+async function getOpenAQLatest(
+  locationId
+) {
+  const data =
+    await openaqRequest(
+      `/locations/${locationId}/latest?limit=100`
+    );
 
   return data.results || [];
 }
@@ -356,41 +414,54 @@ function findLatestResultForSensors(
   results,
   sensorIds
 ) {
-  if (!sensorIds || sensorIds.length === 0) {
+  if (
+    !sensorIds ||
+    sensorIds.length === 0
+  ) {
     return null;
   }
 
-  const matchingResults = results.filter((item) => {
-    const itemSensorId =
-      item.sensorsId ??
-      item.sensorId ??
-      item.sensor_id;
+  const matchingResults =
+    results.filter(
+      (item) => {
+        const itemSensorId =
+          item.sensorsId ??
+          item.sensorId ??
+          item.sensor_id;
 
-    return sensorIds.some(
-      (id) =>
-        Number(id) === Number(itemSensorId)
+        return sensorIds.some(
+          (id) =>
+            Number(id) ===
+            Number(itemSensorId)
+        );
+      }
     );
-  });
 
-  if (matchingResults.length === 0) {
+  if (
+    matchingResults.length === 0
+  ) {
     return null;
   }
 
-  matchingResults.sort((a, b) => {
-    const dateA = new Date(
-      a.datetime?.utc ||
-        a.datetime?.local ||
-        0
-    ).getTime();
+  matchingResults.sort(
+    (a, b) => {
+      const dateA =
+        new Date(
+          a.datetime?.utc ||
+          a.datetime?.local ||
+          0
+        ).getTime();
 
-    const dateB = new Date(
-      b.datetime?.utc ||
-        b.datetime?.local ||
-        0
-    ).getTime();
+      const dateB =
+        new Date(
+          b.datetime?.utc ||
+          b.datetime?.local ||
+          0
+        ).getTime();
 
-    return dateB - dateA;
-  });
+      return dateB - dateA;
+    }
+  );
 
   return matchingResults[0];
 }
@@ -399,18 +470,30 @@ function findLatestResultForSensors(
 // Extract Pollutants Dynamically
 // ======================================================
 
-function extractPollutants(results, sensorMap) {
+function extractPollutants(
+  results,
+  sensorMap
+) {
   const pollutants = {};
 
-  for (const parameter of Object.keys(sensorMap)) {
+  for (
+    const parameter of Object.keys(
+      sensorMap
+    )
+  ) {
     const result =
       findLatestResultForSensors(
         results,
-        sensorMap[parameter]
+        sensorMap[
+          parameter
+        ]
       );
 
     if (!result) {
-      pollutants[parameter] = null;
+      pollutants[
+        parameter
+      ] = null;
+
       continue;
     }
 
@@ -420,13 +503,17 @@ function extractPollutants(results, sensorMap) {
       result.sensor_id ??
       null;
 
-    pollutants[parameter] = {
+    pollutants[
+      parameter
+    ] = {
       sensorId,
 
       value:
         result.value !== null &&
         result.value !== undefined
-          ? Number(result.value)
+          ? Number(
+              result.value
+            )
           : null,
 
       unit:
@@ -434,8 +521,6 @@ function extractPollutants(results, sensorMap) {
         result.parameter?.units ||
         null,
 
-      // IMPORTANT:
-      // Preserve the actual OpenAQ timestamp
       datetime:
         result.datetime?.utc ||
         result.datetime?.local ||
@@ -450,24 +535,19 @@ function extractPollutants(results, sensorMap) {
 // PPB -> micrograms/m3 Conversion
 // ======================================================
 
-function ppbToUgM3(parameter, value) {
+function ppbToUgM3(
+  parameter,
+  value
+) {
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
     return null;
   }
-
-  /*
-   * Approximate conversion at standard
-   * temperature and pressure.
-   *
-   * NO2 : 1 ppb ≈ 1.8819 µg/m³
-   * SO2 : 1 ppb ≈ 2.6197 µg/m³
-   * O3  : 1 ppb ≈ 1.9628 µg/m³
-   * CO  : 1 ppb ≈ 1.1450 µg/m³
-   */
 
   const factors = {
     no2: 1.8819,
@@ -476,7 +556,9 @@ function ppbToUgM3(parameter, value) {
     co: 1.1450,
   };
 
-  if (!factors[parameter]) {
+  if (
+    !factors[parameter]
+  ) {
     return Number(value);
   }
 
@@ -490,38 +572,60 @@ function ppbToUgM3(parameter, value) {
 // Normalize Pollutant Values
 // ======================================================
 
-function normalizePollutants(raw) {
+function normalizePollutants(
+  raw
+) {
   const normalized = {};
 
-  for (const [parameter, data] of Object.entries(raw)) {
+  for (
+    const [
+      parameter,
+      data,
+    ] of Object.entries(raw)
+  ) {
     if (!data) {
-      normalized[parameter] = null;
+      normalized[
+        parameter
+      ] = null;
+
       continue;
     }
 
-    let value = Number(data.value);
+    let value =
+      Number(data.value);
 
-    if (Number.isNaN(value)) {
-      normalized[parameter] = null;
+    if (
+      Number.isNaN(value)
+    ) {
+      normalized[
+        parameter
+      ] = null;
+
       continue;
     }
 
-    const unit = String(
-      data.unit || ""
-    )
-      .toLowerCase()
-      .trim();
+    const unit =
+      String(
+        data.unit || ""
+      )
+        .toLowerCase()
+        .trim();
 
-    // Convert gases reported in ppb.
-    if (unit === "ppb") {
-      value = ppbToUgM3(
-        parameter,
-        value
-      );
+    if (
+      unit === "ppb"
+    ) {
+      value =
+        ppbToUgM3(
+          parameter,
+          value
+        );
     }
 
-    normalized[parameter] =
-      Number(value.toFixed(3));
+    normalized[
+      parameter
+    ] = Number(
+      value.toFixed(3)
+    );
   }
 
   return normalized;
@@ -589,19 +693,24 @@ function calculateSubIndex(
   if (
     concentration === null ||
     concentration === undefined ||
-    Number.isNaN(Number(concentration))
+    Number.isNaN(
+      Number(concentration)
+    )
   ) {
     return null;
   }
 
-  const value = Number(concentration);
+  const value =
+    Number(concentration);
 
-  for (const [
-    cLow,
-    cHigh,
-    iLow,
-    iHigh,
-  ] of breakpoints) {
+  for (
+    const [
+      cLow,
+      cHigh,
+      iLow,
+      iHigh,
+    ] of breakpoints
+  ) {
     if (
       value >= cLow &&
       value <= cHigh
@@ -612,11 +721,12 @@ function calculateSubIndex(
           (value - cLow) +
         iLow;
 
-      return Math.round(index);
+      return Math.round(
+        index
+      );
     }
   }
 
-  // Above highest breakpoint.
   if (
     value >
     breakpoints[
@@ -633,39 +743,57 @@ function calculateSubIndex(
 // Calculate Overall AQI
 // ======================================================
 
-function calculateAQI(pollutants) {
+function calculateAQI(
+  pollutants
+) {
   const subIndexes = {};
 
-  for (const parameter of Object.keys(
-    BREAKPOINTS
-  )) {
-    subIndexes[parameter] =
+  for (
+    const parameter of Object.keys(
+      BREAKPOINTS
+    )
+  ) {
+    subIndexes[
+      parameter
+    ] =
       calculateSubIndex(
-        pollutants[parameter],
-        BREAKPOINTS[parameter]
+        pollutants[
+          parameter
+        ],
+        BREAKPOINTS[
+          parameter
+        ]
       );
   }
 
-  const validIndexes = Object.entries(
-    subIndexes
-  ).filter(
-    ([, value]) => value !== null
-  );
+  const validIndexes =
+    Object.entries(
+      subIndexes
+    ).filter(
+      ([, value]) =>
+        value !== null
+    );
 
-  if (validIndexes.length === 0) {
+  if (
+    validIndexes.length ===
+    0
+  ) {
     return {
       aqi: null,
-      dominantPollutant: null,
+      dominantPollutant:
+        null,
       subIndexes,
     };
   }
 
   validIndexes.sort(
-    (a, b) => b[1] - a[1]
+    (a, b) =>
+      b[1] - a[1]
   );
 
   return {
-    aqi: validIndexes[0][1],
+    aqi:
+      validIndexes[0][1],
 
     dominantPollutant:
       validIndexes[0][0],
@@ -678,7 +806,9 @@ function calculateAQI(pollutants) {
 // AQI Category
 // ======================================================
 
-function getAQICategory(aqi) {
+function getAQICategory(
+  aqi
+) {
   if (
     aqi === null ||
     aqi === undefined
@@ -713,34 +843,40 @@ function getAQICategory(aqi) {
 // Find Latest Timestamp
 // ======================================================
 
-function getLatestTimestamp(raw) {
-  const dates = Object.values(raw)
-    .filter(
-      (item) =>
-        item &&
-        item.datetime
-    )
-    .map(
-      (item) =>
-        new Date(item.datetime)
-    )
-    .filter(
-      (date) =>
-        !Number.isNaN(
-          date.getTime()
-        )
-    );
+function getLatestTimestamp(
+  raw
+) {
+  const dates =
+    Object.values(raw)
+      .filter(
+        (item) =>
+          item &&
+          item.datetime
+      )
+      .map(
+        (item) =>
+          new Date(
+            item.datetime
+          )
+      )
+      .filter(
+        (date) =>
+          !Number.isNaN(
+            date.getTime()
+          )
+      );
 
-  // IMPORTANT:
-  // Never use NOW() as a fallback.
-  if (dates.length === 0) {
+  if (
+    dates.length === 0
+  ) {
     return null;
   }
 
   return new Date(
     Math.max(
-      ...dates.map((date) =>
-        date.getTime()
+      ...dates.map(
+        (date) =>
+          date.getTime()
       )
     )
   );
@@ -750,7 +886,9 @@ function getLatestTimestamp(raw) {
 // Check Data Freshness
 // ======================================================
 
-function checkDataFreshness(timestamp) {
+function checkDataFreshness(
+  timestamp
+) {
   if (!timestamp) {
     return {
       fresh: false,
@@ -761,9 +899,15 @@ function checkDataFreshness(timestamp) {
   }
 
   const timestampMs =
-    new Date(timestamp).getTime();
+    new Date(
+      timestamp
+    ).getTime();
 
-  if (Number.isNaN(timestampMs)) {
+  if (
+    Number.isNaN(
+      timestampMs
+    )
+  ) {
     return {
       fresh: false,
       ageMinutes: null,
@@ -772,19 +916,24 @@ function checkDataFreshness(timestamp) {
     };
   }
 
-  const now = Date.now();
+  const now =
+    Date.now();
 
   const ageMinutes =
     (now - timestampMs) /
     (1000 * 60);
 
-  if (ageMinutes < 0) {
+  if (
+    ageMinutes < 0
+  ) {
     return {
       fresh: false,
 
       ageMinutes:
         Number(
-          ageMinutes.toFixed(2)
+          ageMinutes.toFixed(
+            2
+          )
         ),
 
       message:
@@ -801,7 +950,9 @@ function checkDataFreshness(timestamp) {
 
       ageMinutes:
         Number(
-          ageMinutes.toFixed(2)
+          ageMinutes.toFixed(
+            2
+          )
         ),
 
       message:
@@ -816,7 +967,9 @@ function checkDataFreshness(timestamp) {
 
     ageMinutes:
       Number(
-        ageMinutes.toFixed(2)
+        ageMinutes.toFixed(
+          2
+        )
       ),
 
     message:
@@ -836,11 +989,14 @@ async function saveReadings(
 ) {
   const rows = [];
 
-  for (const [
-    parameter,
-    value,
-  ] of Object.entries(pollutants)) {
-
+  for (
+    const [
+      parameter,
+      value,
+    ] of Object.entries(
+      pollutants
+    )
+  ) {
     if (
       value === null ||
       value === undefined
@@ -848,12 +1004,10 @@ async function saveReadings(
       continue;
     }
 
-    // --------------------------------------------------
-    // Get the ACTUAL timestamp for this pollutant
-    // --------------------------------------------------
-
     const rawData =
-      rawPollutants[parameter];
+      rawPollutants[
+        parameter
+      ];
 
     if (
       !rawData ||
@@ -891,11 +1045,15 @@ async function saveReadings(
     // --------------------------------------------------
 
     const {
-      data: existingReading,
-      error: existingError,
+      data:
+        existingReading,
+      error:
+        existingError,
     } = await supabase
       .from("reading")
-      .select("reading_id")
+      .select(
+        "reading_id"
+      )
       .eq(
         "station_id",
         stationId
@@ -920,7 +1078,8 @@ async function saveReadings(
 
     if (
       existingReading &&
-      existingReading.length > 0
+      existingReading.length >
+        0
     ) {
       console.log(
         `Duplicate skipped → Station ${stationId} | ${parameter} | ${timestampISO}`
@@ -929,33 +1088,34 @@ async function saveReadings(
       continue;
     }
 
-    // --------------------------------------------------
-    // Prepare new reading
-    // --------------------------------------------------
-
     rows.push({
-      station_id: stationId,
+      station_id:
+        stationId,
 
-      // OpenAQ sensor IDs are external.
-      sensor_id: null,
+      sensor_id:
+        null,
 
-      // IMPORTANT:
-      // Actual OpenAQ observation timestamp.
-      timestamp: timestampISO,
+      timestamp:
+        timestampISO,
 
       parameter,
 
       value,
 
-      unit: "µg/m³",
+      unit:
+        "µg/m³",
 
-      quality_flag: "OpenAQ",
+      quality_flag:
+        "OpenAQ",
 
-      data_status: dataStatus,
+      data_status:
+        dataStatus,
     });
   }
 
-  if (rows.length === 0) {
+  if (
+    rows.length === 0
+  ) {
     return [];
   }
 
@@ -978,7 +1138,10 @@ async function saveReadings(
 // MAIN OpenAQ SYNC
 // ======================================================
 
-async function syncOpenAQ(req, res) {
+async function syncOpenAQ(
+  req,
+  res
+) {
   try {
     console.log(
       "======================================"
@@ -993,15 +1156,19 @@ async function syncOpenAQ(req, res) {
     // --------------------------------------------------
 
     const stationId =
-      Number(req.params.stationId);
+      Number(
+        req.params.stationId
+      );
 
     if (!stationId) {
-      return res.status(400).json({
-        success: false,
+      return res
+        .status(400)
+        .json({
+          success: false,
 
-        message:
-          "Invalid station ID",
-      });
+          message:
+            "Invalid station ID",
+        });
     }
 
     // --------------------------------------------------
@@ -1010,7 +1177,8 @@ async function syncOpenAQ(req, res) {
 
     const {
       data: station,
-      error: stationError,
+      error:
+        stationError,
     } = await supabase
       .from("station")
       .select("*")
@@ -1024,12 +1192,14 @@ async function syncOpenAQ(req, res) {
       stationError ||
       !station
     ) {
-      return res.status(404).json({
-        success: false,
+      return res
+        .status(404)
+        .json({
+          success: false,
 
-        message:
-          "Station not found",
-      });
+          message:
+            "Station not found",
+        });
     }
 
     console.log(
@@ -1049,17 +1219,20 @@ async function syncOpenAQ(req, res) {
 
     if (
       String(
-        station.external_source || ""
+        station.external_source ||
+          ""
       ).toUpperCase() !==
         "OPENAQ" ||
       !station.external_station_id
     ) {
-      return res.status(400).json({
-        success: false,
+      return res
+        .status(400)
+        .json({
+          success: false,
 
-        message:
-          "Station is not mapped to OpenAQ",
-      });
+          message:
+            "Station is not mapped to OpenAQ",
+        });
     }
 
     const locationId =
@@ -1087,12 +1260,14 @@ async function syncOpenAQ(req, res) {
       !sensors ||
       sensors.length === 0
     ) {
-      return res.status(404).json({
-        success: false,
+      return res
+        .status(404)
+        .json({
+          success: false,
 
-        message:
-          "No OpenAQ sensors found for this location",
-      });
+          message:
+            "No OpenAQ sensors found for this location",
+        });
     }
 
     console.log(
@@ -1104,7 +1279,9 @@ async function syncOpenAQ(req, res) {
     // --------------------------------------------------
 
     const sensorMap =
-      buildSensorMap(sensors);
+      buildSensorMap(
+        sensors
+      );
 
     console.log(
       "Dynamic OpenAQ sensor map:"
@@ -1131,12 +1308,14 @@ async function syncOpenAQ(req, res) {
       !results ||
       results.length === 0
     ) {
-      return res.status(404).json({
-        success: false,
+      return res
+        .status(404)
+        .json({
+          success: false,
 
-        message:
-          "No OpenAQ measurements found",
-      });
+          message:
+            "No OpenAQ measurements found",
+        });
     }
 
     console.log(
@@ -1163,7 +1342,9 @@ async function syncOpenAQ(req, res) {
     // --------------------------------------------------
 
     const pollutants =
-      normalizePollutants(raw);
+      normalizePollutants(
+        raw
+      );
 
     console.log(
       "Normalized pollutants:",
@@ -1204,17 +1385,19 @@ async function syncOpenAQ(req, res) {
     // --------------------------------------------------
 
     const timestamp =
-      getLatestTimestamp(raw);
+      getLatestTimestamp(
+        raw
+      );
 
-    // IMPORTANT:
-    // Never create a fake timestamp.
     if (!timestamp) {
-      return res.status(502).json({
-        success: false,
+      return res
+        .status(502)
+        .json({
+          success: false,
 
-        message:
-          "OpenAQ measurements were returned, but no valid measurement timestamp was found",
-      });
+          message:
+            "OpenAQ measurements were returned, but no valid measurement timestamp was found",
+        });
     }
 
     console.log(
@@ -1236,24 +1419,14 @@ async function syncOpenAQ(req, res) {
       freshness
     );
 
-    /*
-     * IMPORTANT:
-     *
-     * Fresh data:
-     *     data_status = Current
-     *
-     * Stale data:
-     *     data_status = Historical
-     *
-     * We do not modify the actual measurement timestamp.
-     */
-
     const dataStatus =
       freshness.fresh
         ? "Current"
         : "Historical";
 
-    if (!freshness.fresh) {
+    if (
+      !freshness.fresh
+    ) {
       console.log(
         `OpenAQ data is stale for station ${stationId}`
       );
@@ -1272,10 +1445,13 @@ async function syncOpenAQ(req, res) {
 
     const {
       data: existingAQI,
-      error: duplicateError,
+      error:
+        duplicateError,
     } = await supabase
       .from("aqi_reading")
-      .select("aqi_id")
+      .select(
+        "aqi_id"
+      )
       .eq(
         "station_id",
         stationId
@@ -1304,9 +1480,6 @@ async function syncOpenAQ(req, res) {
 
       // ------------------------------------------------
       // Save any missing pollutant readings.
-      //
-      // IMPORTANT:
-      // Each pollutant uses its OWN OpenAQ timestamp.
       // ------------------------------------------------
 
       const insertedReadings =
@@ -1320,6 +1493,44 @@ async function syncOpenAQ(req, res) {
       console.log(
         `Added ${insertedReadings.length} new readings`
       );
+
+      // ==================================================
+      // AUTOMATIC ALERT EVALUATION
+      // ==================================================
+
+      let alertEvaluation =
+        null;
+
+      if (
+        insertedReadings &&
+        insertedReadings.length >
+          0
+      ) {
+        try {
+          console.log(
+            "New pollutant readings detected. Starting automatic alert evaluation..."
+          );
+
+          alertEvaluation =
+            await evaluateAlerts();
+
+          console.log(
+            "Automatic alert evaluation completed:",
+            alertEvaluation
+          );
+        } catch (
+          alertError
+        ) {
+          console.error(
+            "Automatic alert evaluation failed:",
+            alertError
+          );
+        }
+      } else {
+        console.log(
+          "No new pollutant readings. Alert evaluation skipped."
+        );
+      }
 
       console.log(
         "OpenAQ synchronization completed."
@@ -1368,8 +1579,11 @@ async function syncOpenAQ(req, res) {
 
         insertedReadings,
 
+        alertEvaluation,
+
         message:
-          insertedReadings.length > 0
+          insertedReadings.length >
+          0
             ? "AQI already existed; missing OpenAQ pollutant readings were added"
             : "OpenAQ observation already exists",
       });
@@ -1384,15 +1598,15 @@ async function syncOpenAQ(req, res) {
     );
 
     const {
-      data: aqiReading,
-      error: aqiError,
+      data:
+        aqiReading,
+      error:
+        aqiError,
     } = await supabase
       .from("aqi_reading")
       .insert({
-        // IMPORTANT:
-        // AQI uses the latest actual
-        // OpenAQ observation timestamp.
-        timestamp: timestampISO,
+        timestamp:
+          timestampISO,
 
         station_id:
           stationId,
@@ -1438,6 +1652,45 @@ async function syncOpenAQ(req, res) {
     console.log(
       `Inserted ${readings.length} pollutant readings`
     );
+
+    // ==================================================
+    // AUTOMATIC ALERT EVALUATION
+    // ==================================================
+
+    let alertEvaluation =
+      null;
+
+    if (
+      readings &&
+      readings.length > 0
+    ) {
+      try {
+        console.log(
+          "New pollutant readings detected. Starting automatic alert evaluation..."
+        );
+
+        alertEvaluation =
+          await evaluateAlerts();
+
+        console.log(
+          "Automatic alert evaluation completed:",
+          alertEvaluation
+        );
+      } catch (
+        alertError
+      ) {
+        // Alert failure should NOT make
+        // OpenAQ synchronization fail.
+        console.error(
+          "Automatic alert evaluation failed:",
+          alertError
+        );
+      }
+    } else {
+      console.log(
+        "No new pollutant readings. Alert evaluation skipped."
+      );
+    }
 
     console.log(
       "OpenAQ synchronization completed."
@@ -1488,6 +1741,8 @@ async function syncOpenAQ(req, res) {
       aqiReading,
 
       readings,
+
+      alertEvaluation,
     });
 
   } catch (error) {
@@ -1499,18 +1754,22 @@ async function syncOpenAQ(req, res) {
       "OpenAQ synchronization error:"
     );
 
-    console.error(error);
+    console.error(
+      error
+    );
 
     console.error(
       "======================================"
     );
 
-    return res.status(500).json({
-      success: false,
+    return res
+      .status(500)
+      .json({
+        success: false,
 
-      message:
-        error.message,
-    });
+        message:
+          error.message,
+      });
   }
 }
 
@@ -1518,7 +1777,10 @@ async function syncOpenAQ(req, res) {
 // Match Existing PMC Stations -> OpenAQ Locations
 // ======================================================
 
-async function matchStations(req, res) {
+async function matchStations(
+  req,
+  res
+) {
   try {
     console.log(
       "======================================"
@@ -1530,7 +1792,8 @@ async function matchStations(req, res) {
 
     const {
       data: stations,
-      error: stationError,
+      error:
+        stationError,
     } = await supabase
       .from("station")
       .select(`
@@ -1571,7 +1834,9 @@ async function matchStations(req, res) {
 
     const results = [];
 
-    for (const station of stations) {
+    for (
+      const station of stations
+    ) {
       try {
         console.log(
           `Matching station ${station.station_id}: ${station.name}`
@@ -1588,8 +1853,12 @@ async function matchStations(req, res) {
           );
 
         if (
-          !Number.isFinite(latitude) ||
-          !Number.isFinite(longitude)
+          !Number.isFinite(
+            latitude
+          ) ||
+          !Number.isFinite(
+            longitude
+          )
         ) {
           results.push({
             station_id:
@@ -1638,10 +1907,6 @@ async function matchStations(req, res) {
           continue;
         }
 
-        // ------------------------------------------------
-        // Prefer monitoring stations
-        // ------------------------------------------------
-
         const monitoringStations =
           locations.filter(
             (location) =>
@@ -1657,14 +1922,12 @@ async function matchStations(req, res) {
             ? monitoringStations
             : locations;
 
-        // ------------------------------------------------
-        // Find nearest location
-        // ------------------------------------------------
-
         let nearest =
           candidates[0];
 
-        for (const location of candidates) {
+        for (
+          const location of candidates
+        ) {
           if (
             location.distance !==
               undefined &&
@@ -1677,14 +1940,17 @@ async function matchStations(req, res) {
                 nearest.distance
               )
           ) {
-            nearest = location;
+            nearest =
+              location;
           }
         }
 
         const externalStationId =
           nearest.id;
 
-        if (!externalStationId) {
+        if (
+          !externalStationId
+        ) {
           results.push({
             station_id:
               station.station_id,
@@ -1701,13 +1967,11 @@ async function matchStations(req, res) {
           continue;
         }
 
-        // ------------------------------------------------
-        // Update PMC station
-        // ------------------------------------------------
-
         const {
-          data: updatedStation,
-          error: updateError,
+          data:
+            updatedStation,
+          error:
+            updateError,
         } = await supabase
           .from("station")
           .update({
@@ -1753,10 +2017,6 @@ async function matchStations(req, res) {
           openaq_location_id:
             nearest.id,
 
-          /*
-           * OpenAQ returns distance in meters.
-           * Convert to kilometers.
-           */
           distance_km:
             nearest.distance !==
             undefined
@@ -1774,7 +2034,9 @@ async function matchStations(req, res) {
           `Matched ${station.name} → ${nearest.name} (${nearest.id})`
         );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           `Failed to match station ${station.station_id}:`,
           error.message
@@ -1797,7 +2059,8 @@ async function matchStations(req, res) {
 
     const matchedCount =
       results.filter(
-        (item) => item.matched
+        (item) =>
+          item.matched
       ).length;
 
     console.log(
@@ -1823,39 +2086,28 @@ async function matchStations(req, res) {
       results,
     });
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "OpenAQ station matching error:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
+    return res
+      .status(500)
+      .json({
+        success: false,
 
-      message:
-        error.message,
-    });
+        message:
+          error.message,
+      });
   }
 }
-
-
 
 // ======================================================
 // HISTORICAL OPENAQ DAILY DATA
 // ======================================================
-//
-// Fetch daily historical OpenAQ data for a date range,
-// calculate CPCB-style AQI, and store it in:
-//
-//   aqi_reading
-//   reading
-//
-// ======================================================
-
-
-// ------------------------------------------------------
-// Get OpenAQ daily data for one sensor
-// ------------------------------------------------------
 
 async function getOpenAQDailySensorData(
   sensorId,
@@ -1869,17 +2121,16 @@ async function getOpenAQDailySensorData(
     `&limit=1000`;
 
   const data =
-    await openaqRequest(endpoint);
+    await openaqRequest(
+      endpoint
+    );
 
   return data.results || [];
 }
 
-
-// ------------------------------------------------------
-// Extract OpenAQ daily value
-// ------------------------------------------------------
-
-function extractDailyValue(item) {
+function extractDailyValue(
+  item
+) {
   if (!item) {
     return null;
   }
@@ -1893,7 +2144,9 @@ function extractDailyValue(item) {
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
     return null;
   }
@@ -1901,12 +2154,9 @@ function extractDailyValue(item) {
   return Number(value);
 }
 
-
-// ------------------------------------------------------
-// Get date from OpenAQ daily period
-// ------------------------------------------------------
-
-function getOpenAQDailyDate(item) {
+function getOpenAQDailyDate(
+  item
+) {
   const localDateTime =
     item.period?.datetimeFrom?.local ||
     item.datetimeFrom?.local ||
@@ -1917,21 +2167,10 @@ function getOpenAQDailyDate(item) {
     return null;
   }
 
-  // Example:
-  // 2026-09-15T00:00:00+05:30
-  //
-  // We only need:
-  // 2026-09-15
-
   return String(
     localDateTime
   ).slice(0, 10);
 }
-
-
-// ------------------------------------------------------
-// Normalize historical daily pollutant value
-// ------------------------------------------------------
 
 function normalizeHistoricalValue(
   parameter,
@@ -1941,7 +2180,9 @@ function normalizeHistoricalValue(
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
     return null;
   }
@@ -1954,9 +2195,9 @@ function normalizeHistoricalValue(
       .toLowerCase()
       .trim();
 
-  // Convert gas values reported in ppb
   if (
-    normalizedUnit === "ppb"
+    normalizedUnit ===
+    "ppb"
   ) {
     normalized =
       ppbToUgM3(
@@ -1969,11 +2210,6 @@ function normalizeHistoricalValue(
     normalized.toFixed(3)
   );
 }
-
-
-// ------------------------------------------------------
-// Insert historical pollutant reading
-// ------------------------------------------------------
 
 async function insertHistoricalReading(
   stationId,
@@ -1988,30 +2224,21 @@ async function insertHistoricalReading(
     return null;
   }
 
-  /*
-   * Store the daily observation using
-   * midnight UTC representation of the
-   * historical calendar date.
-   *
-   * The calendar itself uses the date
-   * returned by OpenAQ, so timezone
-   * conversion cannot move it to another
-   * calendar day.
-   */
-
   const timestamp =
     new Date(
       `${date}T23:59:59.000Z`
     ).toISOString();
 
-  // Check duplicate
   const {
     data: existing,
-    error: existingError,
+    error:
+      existingError,
   } =
     await supabase
       .from("reading")
-      .select("reading_id")
+      .select(
+        "reading_id"
+      )
       .eq(
         "station_id",
         stationId
@@ -2043,7 +2270,7 @@ async function insertHistoricalReading(
 
   const {
     data,
-    error
+    error,
   } =
     await supabase
       .from("reading")
@@ -2079,11 +2306,6 @@ async function insertHistoricalReading(
   return data;
 }
 
-
-// ------------------------------------------------------
-// Insert historical AQI
-// ------------------------------------------------------
-
 async function insertHistoricalAQI(
   stationId,
   date,
@@ -2094,14 +2316,16 @@ async function insertHistoricalAQI(
       `${date}T23:59:59.000Z`
     ).toISOString();
 
-  // Check duplicate
   const {
     data: existing,
-    error: existingError
+    error:
+      existingError,
   } =
     await supabase
       .from("aqi_reading")
-      .select("aqi_id")
+      .select(
+        "aqi_id"
+      )
       .eq(
         "station_id",
         stationId
@@ -2122,7 +2346,8 @@ async function insertHistoricalAQI(
   ) {
     return {
       duplicate: true,
-      data: existing[0]
+      data:
+        existing[0],
     };
   }
 
@@ -2133,7 +2358,7 @@ async function insertHistoricalAQI(
 
   const {
     data,
-    error
+    error,
   } =
     await supabase
       .from("aqi_reading")
@@ -2166,40 +2391,13 @@ async function insertHistoricalAQI(
 
   return {
     duplicate: false,
-    data
+    data,
   };
 }
-
-
 
 // ======================================================
 // HISTORICAL OPENAQ AQI - READ ONLY
 // ======================================================
-//
-// IMPORTANT:
-// This section DOES NOT INSERT anything into Supabase.
-//
-// Flow:
-//
-// React Calendar
-//      ↓
-// Node.js
-//      ↓
-// OpenAQ historical /days API
-//      ↓
-// Calculate AQI in memory
-//      ↓
-// Return JSON
-//
-// Supabase is used ONLY to read PMC station information
-// and the OpenAQ location ID mapping.
-//
-// ======================================================
-
-
-// ------------------------------------------------------
-// Get OpenAQ daily data for one sensor
-// ------------------------------------------------------
 
 async function getHistoricalSensorDays(
   sensorId,
@@ -2213,17 +2411,16 @@ async function getHistoricalSensorDays(
     `&limit=1000`;
 
   const data =
-    await openaqRequest(endpoint);
+    await openaqRequest(
+      endpoint
+    );
 
   return data.results || [];
 }
 
-
-// ------------------------------------------------------
-// Extract daily value
-// ------------------------------------------------------
-
-function getHistoricalDailyValue(item) {
+function getHistoricalDailyValue(
+  item
+) {
   if (!item) {
     return null;
   }
@@ -2237,7 +2434,9 @@ function getHistoricalDailyValue(item) {
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
     return null;
   }
@@ -2245,12 +2444,9 @@ function getHistoricalDailyValue(item) {
   return Number(value);
 }
 
-
-// ------------------------------------------------------
-// Get OpenAQ local date
-// ------------------------------------------------------
-
-function getHistoricalDate(item) {
+function getHistoricalDate(
+  item
+) {
   const localDate =
     item?.period?.datetimeFrom?.local ||
     item?.datetimeFrom?.local ||
@@ -2261,13 +2457,10 @@ function getHistoricalDate(item) {
     return null;
   }
 
-  return String(localDate).substring(0, 10);
+  return String(
+    localDate
+  ).substring(0, 10);
 }
-
-
-// ------------------------------------------------------
-// Normalize pollutant value
-// ------------------------------------------------------
 
 function normalizeHistoricalPollutant(
   parameter,
@@ -2277,7 +2470,9 @@ function normalizeHistoricalPollutant(
   if (
     value === null ||
     value === undefined ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
     return null;
   }
@@ -2290,9 +2485,10 @@ function normalizeHistoricalPollutant(
       .trim()
       .toLowerCase();
 
-  // Convert gas values from ppb
-  // to µg/m³ using existing helper.
-  if (normalizedUnit === "ppb") {
+  if (
+    normalizedUnit ===
+    "ppb"
+  ) {
     normalized =
       ppbToUgM3(
         parameter,
@@ -2300,8 +2496,10 @@ function normalizeHistoricalPollutant(
       );
   }
 
-  // Some APIs can report ppm.
-  if (normalizedUnit === "ppm") {
+  if (
+    normalizedUnit ===
+    "ppm"
+  ) {
     normalized =
       ppbToUgM3(
         parameter,
@@ -2322,11 +2520,6 @@ function normalizeHistoricalPollutant(
   );
 }
 
-
-// ------------------------------------------------------
-// Get OpenAQ sensors for a station
-// ------------------------------------------------------
-
 async function getHistoricalStationSensors(
   locationId
 ) {
@@ -2337,12 +2530,6 @@ async function getHistoricalStationSensors(
 
   return sensors || [];
 }
-
-
-// ------------------------------------------------------
-// Collect historical pollutant data
-// for one PMC station
-// ------------------------------------------------------
 
 async function collectHistoricalStationData(
   station,
@@ -2362,18 +2549,10 @@ async function collectHistoricalStationData(
     };
   }
 
-  // ----------------------------------------------
-  // Get sensors
-  // ----------------------------------------------
-
   const sensors =
     await getHistoricalStationSensors(
       locationId
     );
-
-  // ----------------------------------------------
-  // Group OpenAQ sensors by pollutant
-  // ----------------------------------------------
 
   const sensorsByParameter = {
     pm25: [],
@@ -2384,7 +2563,9 @@ async function collectHistoricalStationData(
     co: [],
   };
 
-  for (const sensor of sensors) {
+  for (
+    const sensor of sensors
+  ) {
     const sensorId =
       sensor.id ??
       sensor.sensorId ??
@@ -2430,137 +2611,200 @@ async function collectHistoricalStationData(
     });
   }
 
-  // ----------------------------------------------
-  // OpenAQ datetime range
-  // ----------------------------------------------
-
   const openAQFrom =
     `${from}T00:00:00+05:30`;
 
   const openAQTo =
     `${to}T23:59:59+05:30`;
 
-  // ----------------------------------------------
-  // Temporary in-memory data
-  //
-  // Example:
-  //
-  // {
-  //   "2026-09-01": {
-  //      pm25: 32,
-  //      pm10: 64
-  //   }
-  // }
-  // ----------------------------------------------
-
   const days = {};
 
-  // ----------------------------------------------
-  // Fetch all pollutant sensors IN PARALLEL
-  // (both parameters and individual sensors)
-  // ----------------------------------------------
-
-  const parameters = Object.keys(sensorsByParameter).filter(
-    (parameter) => sensorsByParameter[parameter].length > 0
-  );
+  const parameters =
+    Object.keys(
+      sensorsByParameter
+    ).filter(
+      (parameter) =>
+        sensorsByParameter[
+          parameter
+        ].length > 0
+    );
 
   await Promise.all(
-    parameters.map(async (parameter) => {
-      const parameterSensors = sensorsByParameter[parameter];
+    parameters.map(
+      async (
+        parameter
+      ) => {
+        const parameterSensors =
+          sensorsByParameter[
+            parameter
+          ];
 
-      // Fetch all sensors for this parameter concurrently
-      const sensorResultsList = await Promise.all(
-        parameterSensors.map(async (sensorInfo) => {
-          try {
-            const results = await getHistoricalSensorDays(
-              sensorInfo.sensorId,
-              openAQFrom,
-              openAQTo
-            );
-            return { sensorInfo, results };
-          } catch (sensorError) {
-            console.error(
-              `Historical OpenAQ sensor ${sensorInfo.sensorId} failed:`,
-              sensorError.message
-            );
-            return { sensorInfo, results: [] };
-          }
-        })
-      );
+        const sensorResultsList =
+          await Promise.all(
+            parameterSensors.map(
+              async (
+                sensorInfo
+              ) => {
+                try {
+                  const results =
+                    await getHistoricalSensorDays(
+                      sensorInfo.sensorId,
+                      openAQFrom,
+                      openAQTo
+                    );
 
-      // If multiple sensors measure the same pollutant,
-      // combine their daily values by averaging.
-      const dailyValues = {};
+                  return {
+                    sensorInfo,
+                    results,
+                  };
+                } catch (
+                  sensorError
+                ) {
+                  console.error(
+                    `Historical OpenAQ sensor ${sensorInfo.sensorId} failed:`,
+                    sensorError.message
+                  );
 
-      for (const { sensorInfo, results } of sensorResultsList) {
-        for (const item of results) {
-          const date = getHistoricalDate(item);
-          const rawValue = getHistoricalDailyValue(item);
-
-          if (!date || rawValue === null) {
-            continue;
-          }
-
-          const value = normalizeHistoricalPollutant(
-            parameter,
-            rawValue,
-            item.parameter?.units || sensorInfo.unit
+                  return {
+                    sensorInfo,
+                    results: [],
+                  };
+                }
+              }
+            )
           );
 
-          if (value === null) {
+        const dailyValues =
+          {};
+
+        for (
+          const {
+            sensorInfo,
+            results,
+          } of sensorResultsList
+        ) {
+          for (
+            const item of results
+          ) {
+            const date =
+              getHistoricalDate(
+                item
+              );
+
+            const rawValue =
+              getHistoricalDailyValue(
+                item
+              );
+
+            if (
+              !date ||
+              rawValue === null
+            ) {
+              continue;
+            }
+
+            const value =
+              normalizeHistoricalPollutant(
+                parameter,
+                rawValue,
+                item.parameter?.units ||
+                  sensorInfo.unit
+              );
+
+            if (
+              value === null
+            ) {
+              continue;
+            }
+
+            if (
+              !dailyValues[
+                date
+              ]
+            ) {
+              dailyValues[
+                date
+              ] = [];
+            }
+
+            dailyValues[
+              date
+            ].push(value);
+          }
+        }
+
+        for (
+          const date of Object.keys(
+            dailyValues
+          )
+        ) {
+          const values =
+            dailyValues[
+              date
+            ];
+
+          if (
+            !values ||
+            values.length === 0
+          ) {
             continue;
           }
 
-          if (!dailyValues[date]) {
-            dailyValues[date] = [];
+          const average =
+            values.reduce(
+              (
+                sum,
+                value
+              ) =>
+                sum +
+                Number(
+                  value
+                ),
+              0
+            ) /
+            values.length;
+
+          if (!days[date]) {
+            days[date] = {};
           }
 
-          dailyValues[date].push(value);
+          days[date][
+            parameter
+          ] =
+            Number(
+              average.toFixed(
+                3
+              )
+            );
         }
       }
-
-      // Average same-parameter sensors per date
-      for (const date of Object.keys(dailyValues)) {
-        const values = dailyValues[date];
-
-        if (!values || values.length === 0) {
-          continue;
-        }
-
-        const average =
-          values.reduce((sum, value) => sum + Number(value), 0) /
-          values.length;
-
-        if (!days[date]) {
-          days[date] = {};
-        }
-
-        days[date][parameter] = Number(average.toFixed(3));
-      }
-    })
+    )
   );
 
-  // ----------------------------------------------
-  // Strictly filter to requested date range.
-  // OpenAQ sometimes returns old sensor readings
-  // (e.g. 2019, 2022) even with date filters — 
-  // remove any date outside [from, to].
-  // ----------------------------------------------
-
-  for (const date of Object.keys(days)) {
-    if (date < from || date > to) {
-      delete days[date];
+  for (
+    const date of Object.keys(
+      days
+    )
+  ) {
+    if (
+      date < from ||
+      date > to
+    ) {
+      delete days[
+        date
+      ];
     }
   }
 
   return {
     station,
     days,
-    datesFound: Object.keys(days).length,
+    datesFound:
+      Object.keys(
+        days
+      ).length,
   };
 }
-
-
 
 async function getHistoricalOpenAQCalendar(
   req,
@@ -2568,34 +2812,42 @@ async function getHistoricalOpenAQCalendar(
 ) {
   try {
     const year =
-      Number(req.query.year);
+      Number(
+        req.query.year
+      );
 
     const month =
-      Number(req.query.month);
-
-    // ----------------------------------------------
-    // Validate year/month
-    // ----------------------------------------------
+      Number(
+        req.query.month
+      );
 
     if (
-      !Number.isInteger(year) ||
-      !Number.isInteger(month) ||
+      !Number.isInteger(
+        year
+      ) ||
+      !Number.isInteger(
+        month
+      ) ||
       month < 1 ||
       month > 12
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "year and month are required"
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+
+          message:
+            "year and month are required",
+        });
     }
 
-    // ----------------------------------------------
-    // First and last day
-    // ----------------------------------------------
-
     const firstDay =
-      `${year}-${String(month).padStart(2, "0")}-01`;
+      `${year}-${String(
+        month
+      ).padStart(
+        2,
+        "0"
+      )}-01`;
 
     const lastDayNumber =
       new Date(
@@ -2605,261 +2857,741 @@ async function getHistoricalOpenAQCalendar(
       ).getDate();
 
     const lastDay =
-      `${year}-${String(month).padStart(2, "0")}-${String(lastDayNumber).padStart(2, "0")}`;
+      `${year}-${String(
+        month
+      ).padStart(
+        2,
+        "0"
+      )}-${String(
+        lastDayNumber
+      ).padStart(
+        2,
+        "0"
+      )}`;
 
-    // ----------------------------------------------
-    // Check in-memory cache first
-    // (skip with ?nocache=1 e.g. from Refresh button)
-    // ----------------------------------------------
+    const noCache =
+      req.query.nocache ===
+      "1";
 
-    const noCache = req.query.nocache === "1";
-    const cached = noCache ? null : getCachedCalendar(year, month);
+    const cached =
+      noCache
+        ? null
+        : getCachedCalendar(
+            year,
+            month
+          );
 
     if (cached) {
-      console.log(`Calendar cache HIT for ${year}-${month}`);
-      return res.json(cached);
+      console.log(
+        `Calendar cache HIT for ${year}-${month}`
+      );
+
+      return res.json(
+        cached
+      );
     }
 
-    console.log(`Calendar: building from local aqi_reading for ${year}-${month}`);
+    console.log(
+      `Calendar: building from local aqi_reading for ${year}-${month}`
+    );
 
-    // ============================================================
-    // STEP 1 — LOCAL DATA (PRIMARY SOURCE)
-    // ============================================================
-    //
-    // Query aqi_reading for the full requested month.
-    // This is your own PMC sensor data — real-time, instant,
-    // no external API needed.
-    // ============================================================
+    const nowUtcMs =
+      Date.now();
 
-    const nowUtcMs  = Date.now();
-    const nowIstMs  = nowUtcMs + (5.5 * 60 * 60 * 1000);
-    const todayIst  = new Date(nowIstMs).toISOString().slice(0, 10);
+    const nowIstMs =
+      nowUtcMs +
+      5.5 *
+        60 *
+        60 *
+        1000;
 
-    const monthStartUTC = `${firstDay}T00:00:00Z`;
+    const todayIst =
+      new Date(
+        nowIstMs
+      )
+        .toISOString()
+        .slice(
+          0,
+          10
+        );
+
+    const monthStartUTC =
+      `${firstDay}T00:00:00Z`;
 
     const {
-      data: localRows,
-      error: localError,
+      data:
+        localRows,
+      error:
+        localError,
     } = await supabase
-      .from("aqi_reading")
-      .select("station_id, aqi, dominant_pollutant, timestamp, category")
-      .not("aqi", "is", null)
-      .gte("timestamp", monthStartUTC)
-      .order("timestamp", { ascending: false })
+      .from(
+        "aqi_reading"
+      )
+      .select(
+        "station_id, aqi, dominant_pollutant, timestamp, category"
+      )
+      .not(
+        "aqi",
+        "is",
+        null
+      )
+      .gte(
+        "timestamp",
+        monthStartUTC
+      )
+      .order(
+        "timestamp",
+        {
+          ascending:
+            false,
+        }
+      )
       .limit(10000);
 
-    // Group local rows by IST date
-    const localByDate = {};
+    const localByDate =
+      {};
 
-    if (!localError && localRows && localRows.length > 0) {
-      for (const row of localRows) {
-        if (!row.timestamp || row.aqi == null) continue;
-        const utcMs = new Date(row.timestamp).getTime();
-        if (isNaN(utcMs)) continue;
-        const istMs  = utcMs + (5.5 * 60 * 60 * 1000);
-        const istDate = new Date(istMs).toISOString().slice(0, 10);
+    if (
+      !localError &&
+      localRows &&
+      localRows.length > 0
+    ) {
+      for (
+        const row of localRows
+      ) {
+        if (
+          !row.timestamp ||
+          row.aqi == null
+        ) {
+          continue;
+        }
 
-        // Only include dates within this month
-        if (istDate < firstDay || istDate > lastDay) continue;
+        const utcMs =
+          new Date(
+            row.timestamp
+          ).getTime();
 
-        if (!localByDate[istDate]) localByDate[istDate] = [];
-        const aqiNum = Number(row.aqi);
-        if (Number.isFinite(aqiNum) && aqiNum > 0) {
-          localByDate[istDate].push({
-            aqi: aqiNum,
-            dominant: row.dominant_pollutant || null,
-            category: row.category || null,
+        if (
+          isNaN(utcMs)
+        ) {
+          continue;
+        }
+
+        const istMs =
+          utcMs +
+          5.5 *
+            60 *
+            60 *
+            1000;
+
+        const istDate =
+          new Date(
+            istMs
+          )
+            .toISOString()
+            .slice(
+              0,
+              10
+            );
+
+        if (
+          istDate <
+            firstDay ||
+          istDate >
+            lastDay
+        ) {
+          continue;
+        }
+
+        if (
+          !localByDate[
+            istDate
+          ]
+        ) {
+          localByDate[
+            istDate
+          ] = [];
+        }
+
+        const aqiNum =
+          Number(
+            row.aqi
+          );
+
+        if (
+          Number.isFinite(
+            aqiNum
+          ) &&
+          aqiNum > 0
+        ) {
+          localByDate[
+            istDate
+          ].push({
+            aqi:
+              aqiNum,
+
+            dominant:
+              row.dominant_pollutant ||
+              null,
+
+            category:
+              row.category ||
+              null,
           });
         }
       }
     }
 
-    // Also fetch the very latest rows (no date filter) to capture
-    // today's readings that might not yet be in the month range.
-    if (!localByDate[todayIst]) {
-      const { data: latestRows } = await supabase
-        .from("aqi_reading")
-        .select("station_id, aqi, dominant_pollutant, timestamp, category")
-        .not("aqi", "is", null)
-        .order("timestamp", { ascending: false })
+    if (
+      !localByDate[
+        todayIst
+      ]
+    ) {
+      const {
+        data:
+          latestRows,
+      } = await supabase
+        .from(
+          "aqi_reading"
+        )
+        .select(
+          "station_id, aqi, dominant_pollutant, timestamp, category"
+        )
+        .not(
+          "aqi",
+          "is",
+          null
+        )
+        .order(
+          "timestamp",
+          {
+            ascending:
+              false,
+          }
+        )
         .limit(200);
 
       if (latestRows) {
-        for (const row of latestRows) {
-          if (!row.timestamp || row.aqi == null) continue;
-          const utcMs = new Date(row.timestamp).getTime();
-          if (isNaN(utcMs)) continue;
-          const istMs  = utcMs + (5.5 * 60 * 60 * 1000);
-          const istDate = new Date(istMs).toISOString().slice(0, 10);
-          if (istDate !== todayIst) continue;
-          if (!localByDate[istDate]) localByDate[istDate] = [];
-          const aqiNum = Number(row.aqi);
-          if (Number.isFinite(aqiNum) && aqiNum > 0) {
-            localByDate[istDate].push({
-              aqi: aqiNum,
-              dominant: row.dominant_pollutant || null,
-              category: row.category || null,
+        for (
+          const row of latestRows
+        ) {
+          if (
+            !row.timestamp ||
+            row.aqi == null
+          ) {
+            continue;
+          }
+
+          const utcMs =
+            new Date(
+              row.timestamp
+            ).getTime();
+
+          if (
+            isNaN(utcMs)
+          ) {
+            continue;
+          }
+
+          const istMs =
+            utcMs +
+            5.5 *
+              60 *
+              60 *
+              1000;
+
+          const istDate =
+            new Date(
+              istMs
+            )
+              .toISOString()
+              .slice(
+                0,
+                10
+              );
+
+          if (
+            istDate !==
+            todayIst
+          ) {
+            continue;
+          }
+
+          if (
+            !localByDate[
+              istDate
+            ]
+          ) {
+            localByDate[
+              istDate
+            ] = [];
+          }
+
+          const aqiNum =
+            Number(
+              row.aqi
+            );
+
+          if (
+            Number.isFinite(
+              aqiNum
+            ) &&
+            aqiNum > 0
+          ) {
+            localByDate[
+              istDate
+            ].push({
+              aqi:
+                aqiNum,
+
+              dominant:
+                row.dominant_pollutant ||
+                null,
+
+              category:
+                row.category ||
+                null,
             });
           }
         }
       }
     }
 
-    // Build the initial days array from local data
-    const localDates = new Set(Object.keys(localByDate));
+    const localDates =
+      new Set(
+        Object.keys(
+          localByDate
+        )
+      );
 
-    let days = Object.entries(localByDate)
-      .map(([date, entries]) => {
-        if (!entries.length) return null;
-        const avgAqi = Math.round(
-          entries.reduce((s, e) => s + e.aqi, 0) / entries.length
+    let days =
+      Object.entries(
+        localByDate
+      )
+        .map(
+          ([
+            date,
+            entries,
+          ]) => {
+            if (
+              !entries.length
+            ) {
+              return null;
+            }
+
+            const avgAqi =
+              Math.round(
+                entries.reduce(
+                  (
+                    s,
+                    e
+                  ) =>
+                    s +
+                    e.aqi,
+                  0
+                ) /
+                  entries.length
+              );
+
+            if (
+              avgAqi <= 0
+            ) {
+              return null;
+            }
+
+            return {
+              date,
+
+              aqi:
+                avgAqi,
+
+              category:
+                entries[0]
+                  .category ||
+                getAQICategory(
+                  avgAqi
+                ),
+
+              dominant:
+                entries.find(
+                  (e) =>
+                    e.dominant
+                )?.dominant ||
+                null,
+
+              stationCount:
+                0,
+
+              source:
+                "local",
+
+              isInProgress:
+                date ===
+                todayIst,
+            };
+          }
+        )
+        .filter(
+          Boolean
         );
-        if (avgAqi <= 0) return null;
-        return {
-          date,
-          aqi: avgAqi,
-          category: entries[0].category || getAQICategory(avgAqi),
-          dominant: entries.find((e) => e.dominant)?.dominant || null,
-          stationCount: 0,
-          source: "local",
-          isInProgress: date === todayIst,
-        };
-      })
-      .filter(Boolean);
 
-    console.log(`Local data: ${days.length} date(s) found for ${year}-${month}`);
+    console.log(
+      `Local data: ${days.length} date(s) found for ${year}-${month}`
+    );
 
-    // ============================================================
-    // STEP 2 — OPENAQ FALLBACK (for dates with no local data)
-    // ============================================================
-    //
-    // Identify which dates in the month have NO local reading.
-    // For those (typically dates before the system started), we
-    // attempt a fast OpenAQ fetch with a 30-second timeout.
-    // ============================================================
+    const missingDates =
+      new Set();
 
-    const missingDates = new Set();
-    for (let d = 1; d <= lastDayNumber; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dateStr <= todayIst && !localDates.has(dateStr)) {
-        missingDates.add(dateStr);
+    for (
+      let d = 1;
+      d <= lastDayNumber;
+      d++
+    ) {
+      const dateStr =
+        `${year}-${String(
+          month
+        ).padStart(
+          2,
+          "0"
+        )}-${String(
+          d
+        ).padStart(
+          2,
+          "0"
+        )}`;
+
+      if (
+        dateStr <=
+          todayIst &&
+        !localDates.has(
+          dateStr
+        )
+      ) {
+        missingDates.add(
+          dateStr
+        );
       }
     }
 
-    if (missingDates.size > 0) {
+    if (
+      missingDates.size >
+      0
+    ) {
       console.log(
         `OpenAQ gap-fill: ${missingDates.size} date(s) missing from local data, trying OpenAQ...`
       );
 
       try {
         const {
-          data: stations,
-          error: stationError,
+          data:
+            stations,
+          error:
+            stationError,
         } = await supabase
-          .from("station")
-          .select("station_id, name, ward, zone, status, external_source, external_station_id")
-          .eq("external_source", "OPENAQ")
-          .not("external_station_id", "is", null)
-          .order("station_id", { ascending: true });
+          .from(
+            "station"
+          )
+          .select(
+            "station_id, name, ward, zone, status, external_source, external_station_id"
+          )
+          .eq(
+            "external_source",
+            "OPENAQ"
+          )
+          .not(
+            "external_station_id",
+            "is",
+            null
+          )
+          .order(
+            "station_id",
+            {
+              ascending:
+                true,
+            }
+          );
 
-        if (!stationError && stations && stations.length > 0) {
+        if (
+          !stationError &&
+          stations &&
+          stations.length >
+            0
+        ) {
+          const stationFetchPromise =
+            Promise.all(
+              stations.map(
+                async (
+                  station
+                ) => {
+                  try {
+                    return await collectHistoricalStationData(
+                      station,
+                      firstDay,
+                      lastDay
+                    );
+                  } catch (
+                    err
+                  ) {
+                    console.error(
+                      `OpenAQ gap-fill failed for ${station.name}:`,
+                      err.message
+                    );
 
-          const stationFetchPromise = Promise.all(
-            stations.map(async (station) => {
-              try {
-                return await collectHistoricalStationData(station, firstDay, lastDay);
-              } catch (err) {
-                console.error(`OpenAQ gap-fill failed for ${station.name}:`, err.message);
-                return { station, days: {}, datesFound: 0 };
+                    return {
+                      station,
+                      days: {},
+                      datesFound:
+                        0,
+                    };
+                  }
+                }
+              )
+            );
+
+          const timeoutPromise =
+            new Promise(
+              (
+                resolve
+              ) => {
+                setTimeout(
+                  () => {
+                    console.warn(
+                      "OpenAQ gap-fill timed out (30s)"
+                    );
+
+                    resolve(
+                      []
+                    );
+                  },
+                  30000
+                );
               }
-            })
-          );
+            );
 
-          const timeoutPromise = new Promise((resolve) =>
-            setTimeout(() => {
-              console.warn("OpenAQ gap-fill timed out (30s)");
-              resolve([]);
-            }, 30_000)
-          );
+          const stationResults =
+            await Promise.race(
+              [
+                stationFetchPromise,
+                timeoutPromise,
+              ]
+            );
 
-          const stationResults = await Promise.race([stationFetchPromise, timeoutPromise]);
+          const dateMap =
+            {};
 
-          // Build dateMap for OpenAQ results
-          const dateMap = {};
-          for (const stationResult of stationResults) {
-            if (!stationResult?.days) continue;
-            for (const [date, pollutants] of Object.entries(stationResult.days)) {
-              if (!missingDates.has(date)) continue; // only fill gaps
-              if (!dateMap[date]) dateMap[date] = [];
-              const aqiResult = calculateAQI(pollutants);
-              if (aqiResult.aqi == null) continue;
-              dateMap[date].push({
-                aqi: Number(aqiResult.aqi),
-                category: getAQICategory(aqiResult.aqi),
-                dominant: aqiResult.dominantPollutant,
+          for (
+            const stationResult of stationResults
+          ) {
+            if (
+              !stationResult?.days
+            ) {
+              continue;
+            }
+
+            for (
+              const [
+                date,
+                pollutants,
+              ] of Object.entries(
+                stationResult.days
+              )
+            ) {
+              if (
+                !missingDates.has(
+                  date
+                )
+              ) {
+                continue;
+              }
+
+              if (
+                !dateMap[
+                  date
+                ]
+              ) {
+                dateMap[
+                  date
+                ] = [];
+              }
+
+              const aqiResult =
+                calculateAQI(
+                  pollutants
+                );
+
+              if (
+                aqiResult.aqi ==
+                null
+              ) {
+                continue;
+              }
+
+              dateMap[
+                date
+              ].push({
+                aqi:
+                  Number(
+                    aqiResult.aqi
+                  ),
+
+                category:
+                  getAQICategory(
+                    aqiResult.aqi
+                  ),
+
+                dominant:
+                  aqiResult.dominantPollutant,
               });
             }
           }
 
-          const openaqCount = Object.keys(dateMap).length;
-          for (const [date, entries] of Object.entries(dateMap)) {
-            if (!entries.length) continue;
-            const avgAqi = Math.round(
-              entries.reduce((s, e) => s + e.aqi, 0) / entries.length
-            );
-            if (avgAqi <= 0) continue;
+          const openaqCount =
+            Object.keys(
+              dateMap
+            ).length;
+
+          for (
+            const [
+              date,
+              entries,
+            ] of Object.entries(
+              dateMap
+            )
+          ) {
+            if (
+              !entries.length
+            ) {
+              continue;
+            }
+
+            const avgAqi =
+              Math.round(
+                entries.reduce(
+                  (
+                    s,
+                    e
+                  ) =>
+                    s +
+                    e.aqi,
+                  0
+                ) /
+                  entries.length
+              );
+
+            if (
+              avgAqi <= 0
+            ) {
+              continue;
+            }
+
             days.push({
               date,
-              aqi: avgAqi,
-              category: entries[0].category || getAQICategory(avgAqi),
-              dominant: entries.find((e) => e.dominant)?.dominant || null,
-              stationCount: stations.length,
-              source: "openaq",
+
+              aqi:
+                avgAqi,
+
+              category:
+                entries[0]
+                  .category ||
+                getAQICategory(
+                  avgAqi
+                ),
+
+              dominant:
+                entries.find(
+                  (e) =>
+                    e.dominant
+                )?.dominant ||
+                null,
+
+              stationCount:
+                stations.length,
+
+              source:
+                "openaq",
             });
           }
 
-          console.log(`OpenAQ gap-fill: added ${openaqCount} date(s)`);
+          console.log(
+            `OpenAQ gap-fill: added ${openaqCount} date(s)`
+          );
         }
-      } catch (openaqError) {
-        console.warn("OpenAQ gap-fill error:", openaqError.message);
-        // Non-fatal: local data is still returned
+      } catch (
+        openaqError
+      ) {
+        console.warn(
+          "OpenAQ gap-fill error:",
+          openaqError.message
+        );
       }
     }
 
-    // Sort by date
-    days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    days.sort(
+      (
+        a,
+        b
+      ) =>
+        a.date <
+        b.date
+          ? -1
+          : a.date >
+            b.date
+          ? 1
+          : 0
+    );
 
     const responseBody = {
-      success: true,
+      success:
+        true,
+
       year,
+
       month,
+
       days,
-      stationCount: days.length > 0 ? 1 : 0,
-      source: "local+openaq",
-      databaseWrite: false,
+
+      stationCount:
+        days.length >
+        0
+          ? 1
+          : 0,
+
+      source:
+        "local+openaq",
+
+      databaseWrite:
+        false,
     };
 
-    setCachedCalendar(year, month, responseBody);
+    setCachedCalendar(
+      year,
+      month,
+      responseBody
+    );
 
-        return res.json(responseBody);
+    return res.json(
+      responseBody
+    );
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "Historical OpenAQ calendar error:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
+    return res
+      .status(500)
+      .json({
+        success: false,
 
-      message:
-        error.message ||
-        "Unable to load historical OpenAQ calendar data",
-    });
+        message:
+          error.message ||
+          "Unable to load historical OpenAQ calendar data",
+      });
   }
 }
-
-
 
 async function getHistoricalOpenAQDay(
   req,
@@ -2868,44 +3600,47 @@ async function getHistoricalOpenAQDay(
   try {
     const date =
       String(
-        req.query.date || ""
+        req.query.date ||
+          ""
       ).trim();
-
-    // ----------------------------------------------
-    // Validate date
-    // ----------------------------------------------
 
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(
         date
       )
     ) {
-      return res.status(400).json({
-        success: false,
+      return res
+        .status(400)
+        .json({
+          success: false,
 
-        message:
-          "date must use YYYY-MM-DD format",
-      });
+          message:
+            "date must use YYYY-MM-DD format",
+        });
     }
 
     // --------------------------------------------------
-// Historical day cache
-// --------------------------------------------------
+    // Historical day cache
+    // --------------------------------------------------
 
-const cachedDay =
-  getCachedHistoricalDay(date);
+    const cachedDay =
+      getCachedHistoricalDay(
+        date
+      );
 
-if (cachedDay) {
-  console.log(
-    `Historical day cache HIT: ${date}`
-  );
+    if (cachedDay) {
+      console.log(
+        `Historical day cache HIT: ${date}`
+      );
 
-  return res.json(cachedDay);
-}
+      return res.json(
+        cachedDay
+      );
+    }
 
-console.log(
-  `Historical day cache MISS: ${date}`
-);
+    console.log(
+      `Historical day cache MISS: ${date}`
+    );
 
     // ----------------------------------------------
     // Get stations
@@ -2913,10 +3648,13 @@ console.log(
 
     const {
       data: stations,
-      error: stationError,
+      error:
+        stationError,
     } =
       await supabase
-        .from("station")
+        .from(
+          "station"
+        )
         .select(`
           station_id,
           name,
@@ -2938,7 +3676,8 @@ console.log(
         .order(
           "station_id",
           {
-            ascending: true,
+            ascending:
+              true,
           }
         );
 
@@ -2948,46 +3687,44 @@ console.log(
 
     if (
       !stations ||
-      stations.length === 0
+      stations.length ===
+        0
     ) {
       const responseBody = {
-  success: true,
+        success:
+          true,
 
-  date,
+        date,
 
-  overallAqi,
+        overallAqi:
+          null,
 
-  overallCategory:
-    overallAqi !== null
-      ? getAQICategory(
-          overallAqi
-        )
-      : "Unavailable",
+        overallCategory:
+          "Unavailable",
 
-  dominant:
-    overallDominant,
+        dominant:
+          null,
 
-  totalStations:
-    stations.length,
+        totalStations:
+          0,
 
-  stations:
-    results,
+        stations: [],
 
-  source:
-    "OpenAQ",
+        source:
+          "OpenAQ",
 
-  databaseWrite:
-    false,
-};
+        databaseWrite:
+          false,
+      };
 
-setCachedHistoricalDay(
-  date,
-  responseBody
-);
+      setCachedHistoricalDay(
+        date,
+        responseBody
+      );
 
-return res.json(
-  responseBody
-);
+      return res.json(
+        responseBody
+      );
     }
 
     // ----------------------------------------------
@@ -3029,7 +3766,8 @@ return res.json(
             status:
               station.status,
 
-            aqi: null,
+            aqi:
+              null,
 
             category:
               "No Data",
@@ -3052,8 +3790,10 @@ return res.json(
           );
 
         const hasAQI =
-          aqiResult.aqi !== null &&
-          aqiResult.aqi !== undefined;
+          aqiResult.aqi !==
+            null &&
+          aqiResult.aqi !==
+            undefined;
 
         results.push({
           stationId:
@@ -3094,7 +3834,10 @@ return res.json(
           dataAvailable:
             hasAQI,
         });
-      } catch (stationError) {
+
+      } catch (
+        stationError
+      ) {
         console.error(
           `Historical day failed for ${station.name}:`,
           stationError.message
@@ -3116,7 +3859,8 @@ return res.json(
           status:
             station.status,
 
-          aqi: null,
+          aqi:
+            null,
 
           category:
             "Error",
@@ -3144,7 +3888,9 @@ return res.json(
         (row) =>
           row.aqi !== null &&
           Number.isFinite(
-            Number(row.aqi)
+            Number(
+              row.aqi
+            )
           )
       );
 
@@ -3152,7 +3898,8 @@ return res.json(
       null;
 
     if (
-      validStations.length > 0
+      validStations.length >
+      0
     ) {
       overallAqi =
         Math.round(
@@ -3162,7 +3909,9 @@ return res.json(
               row
             ) =>
               sum +
-              Number(row.aqi),
+              Number(
+                row.aqi
+              ),
             0
           ) /
             validStations.length
@@ -3173,7 +3922,8 @@ return res.json(
     // Overall dominant pollutant
     // ----------------------------------------------
 
-    const pollutantScores = {};
+    const pollutantScores =
+      {};
 
     for (
       const row of validStations
@@ -3188,25 +3938,33 @@ return res.json(
       pollutantScores[
         dominant
       ] =
-        (pollutantScores[
-          dominant
-        ] || 0) + 1;
+        (
+          pollutantScores[
+            dominant
+          ] || 0
+        ) + 1;
     }
 
     const overallDominant =
       Object.entries(
         pollutantScores
       ).sort(
-        (a, b) =>
-          b[1] - a[1]
-      )[0]?.[0] || null;
+        (
+          a,
+          b
+        ) =>
+          b[1] -
+          a[1]
+      )[0]?.[0] ||
+      null;
 
     // ----------------------------------------------
     // Return
     // ----------------------------------------------
 
-    return res.json({
-      success: true,
+    const responseBody = {
+      success:
+        true,
 
       date,
 
@@ -3233,23 +3991,36 @@ return res.json(
 
       databaseWrite:
         false,
-    });
-  } catch (error) {
+    };
+
+    setCachedHistoricalDay(
+      date,
+      responseBody
+    );
+
+    return res.json(
+      responseBody
+    );
+
+  } catch (
+    error
+  ) {
     console.error(
       "Historical OpenAQ day error:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
+    return res
+      .status(500)
+      .json({
+        success: false,
 
-      message:
-        error.message ||
-        "Unable to load historical OpenAQ day data",
-    });
+        message:
+          error.message ||
+          "Unable to load historical OpenAQ day data",
+      });
   }
 }
-
 
 // ======================================================
 // EXPORT
@@ -3257,10 +4028,10 @@ return res.json(
 
 module.exports = {
   syncOpenAQ,
+
   matchStations,
 
-  // READ-ONLY HISTORICAL APIs
   getHistoricalOpenAQCalendar,
+
   getHistoricalOpenAQDay,
 };
-

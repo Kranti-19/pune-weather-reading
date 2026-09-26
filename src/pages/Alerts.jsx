@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
     AlertTriangle,
@@ -14,12 +14,12 @@ import {
     Play,
 } from "lucide-react";
 
-
 // =========================================================
 // API
 // =========================================================
 
-const API_URL = "https://pune-weather-reading.onrender.com/api/alerts";
+const API_URL =
+    "http://localhost:5000/api/alerts";
 
 
 // =========================================================
@@ -251,6 +251,101 @@ const formatAlert = (alert) => {
 
 
 // =========================================================
+// BROWSER NOTIFICATION
+// =========================================================
+
+const requestNotificationPermission = async () => {
+
+    if (
+        typeof window === "undefined" ||
+        !("Notification" in window)
+    ) {
+        console.warn(
+            "This browser does not support notifications."
+        );
+
+        return "unsupported";
+    }
+
+    if (
+        Notification.permission ===
+        "granted"
+    ) {
+        return "granted";
+    }
+
+    if (
+        Notification.permission ===
+        "denied"
+    ) {
+        return "denied";
+    }
+
+    try {
+
+        const permission =
+            await Notification.requestPermission();
+
+        return permission;
+
+    } catch (error) {
+
+        console.error(
+            "Notification permission error:",
+            error
+        );
+
+        return "denied";
+    }
+};
+
+
+const sendBrowserNotification = (alert) => {
+    console.log("🔔 Trying to send notification:", alert);
+
+    if (typeof window === "undefined" || !("Notification" in window)) {
+        console.error("❌ Browser does not support notifications.");
+        return false;
+    }
+
+    console.log("Notification permission:", Notification.permission);
+
+    if (Notification.permission !== "granted") {
+        console.error("❌ Notification permission is:", Notification.permission);
+        return false;
+    }
+
+    const severity = alert?.severity || "Info";
+    const icon = severity === "Critical" ? "🔴" : severity === "Warning" ? "🟠" : "🔵";
+    const station = alert?.station || "Unknown Station";
+    const parameter = alert?.parameter || "Alert";
+    const value = alert?.actualValue ?? "N/A";
+    const threshold = alert?.threshold || "Configured threshold";
+    const title = `${icon} ${severity} Air Quality Alert`;
+    const body = `${parameter} at ${station}. Value: ${value}. Threshold: ${threshold}.`;
+
+    try {
+        const notification = new Notification(title, {
+            body,
+            tag: `aqms-alert-${alert.alertId}`,
+            requireInteraction: severity === "Critical",
+        });
+
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+        };
+
+        console.log("✅ Browser notification sent:", title);
+        return true;
+    } catch (error) {
+        console.error("❌ Failed to create notification:", error);
+        return false;
+    }
+};
+
+
+// =========================================================
 // COMPONENT
 // =========================================================
 
@@ -281,6 +376,69 @@ export default function Alerts() {
     const [evaluating, setEvaluating] =
         useState(false);
 
+    const [notificationPermission, setNotificationPermission] =
+        useState(
+            typeof window !== "undefined" &&
+            "Notification" in window
+                ? Notification.permission
+                : "unsupported"
+        );
+
+
+    // =====================================================
+    // NOTIFICATION TRACKING
+    // =====================================================
+
+    const notifiedAlertIds =
+        useRef(new Set());
+
+    const firstFetchCompleted =
+        useRef(false);
+
+
+    // =====================================================
+    // ENABLE BROWSER NOTIFICATIONS
+    // =====================================================
+
+    const enableNotifications = async () => {
+        const permission =
+            await requestNotificationPermission();
+
+        setNotificationPermission(permission);
+
+        if (permission === "granted") {
+            console.log(
+                "Browser notifications enabled."
+            );
+
+            try {
+                const testNotification =
+                    new Notification(
+                        "🔔 Notifications Enabled",
+                        {
+                            body:
+                                "You will be notified when a new air-quality alert is generated.",
+                            tag: "aqms-notification-test",
+                        }
+                    );
+
+                testNotification.onclick = () => {
+                    window.focus();
+                    testNotification.close();
+                };
+            } catch (error) {
+                console.error(
+                    "Notification test failed:",
+                    error
+                );
+            }
+        } else if (permission === "denied") {
+            setError(
+                "Browser notifications are blocked. Allow notifications for this site in your browser settings, then reload the page."
+            );
+        }
+    };
+
 
     // =====================================================
     // FETCH ALERTS
@@ -290,7 +448,6 @@ export default function Alerts() {
 
         try {
 
-            setLoading(true);
             setError("");
 
             const response =
@@ -316,15 +473,12 @@ export default function Alerts() {
                 );
             }
 
-            // IMPORTANT:
             // Backend returns:
             //
             // {
             //   status: "success",
             //   alerts: [...]
             // }
-            //
-            // NOT result.data
 
             const backendAlerts =
                 Array.isArray(result?.alerts)
@@ -335,6 +489,74 @@ export default function Alerts() {
                 backendAlerts.map(
                     formatAlert
                 );
+
+
+            // =================================================
+            // NEW ALERT DETECTION
+            // =================================================
+
+            /*
+             * On the first page load we mark all existing
+             * alerts as already seen.
+             *
+             * This prevents old alerts from generating
+             * notifications when the dashboard is opened.
+             */
+
+            if (
+                !firstFetchCompleted.current
+            ) {
+
+                formattedAlerts.forEach(
+                    (alert) => {
+
+                        if (
+                            alert.alertId
+                        ) {
+                            notifiedAlertIds.current.add(
+                                alert.alertId
+                            );
+                        }
+                    }
+                );
+
+                firstFetchCompleted.current =
+                    true;
+
+            } else {
+
+                /*
+                 * After the first fetch, only a new alert ID
+                 * generates a browser notification.
+                 */
+
+                formattedAlerts.forEach(
+                    (alert) => {
+
+                        if (
+                            !alert.alertId
+                        ) {
+                            return;
+                        }
+
+                        if (
+                            !notifiedAlertIds.current.has(
+                                alert.alertId
+                            )
+                        ) {
+
+                            sendBrowserNotification(
+                                alert
+                            );
+
+                            notifiedAlertIds.current.add(
+                                alert.alertId
+                            );
+                        }
+                    }
+                );
+            }
+
 
             setAlerts(
                 formattedAlerts
@@ -363,77 +585,127 @@ export default function Alerts() {
 
     // =====================================================
     // RUN ALERT ENGINE
-    // POST /api/alerts/evaluate
     // =====================================================
 
     const runAlertEngine = async () => {
-
         try {
-
             setEvaluating(true);
             setError("");
 
-            const response =
-                await fetch(
-                    `${API_URL}/evaluate`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-                        },
-                    }
-                );
+            console.log("🚀 Starting alert engine...");
 
-            const result =
-                await response.json();
+            let permission =
+                typeof window !== "undefined" && "Notification" in window
+                    ? Notification.permission
+                    : "unsupported";
+
+            if (permission === "default") {
+                permission = await requestNotificationPermission();
+                setNotificationPermission(permission);
+            }
+
+            if (permission === "denied") {
+                console.warn("⚠️ Browser notifications are blocked.");
+            }
+
+            const beforeResponse = await fetch(API_URL);
+            const beforeResult = await beforeResponse.json();
+
+            if (!beforeResponse.ok) {
+                throw new Error(beforeResult?.message || "Failed to load existing alerts.");
+            }
+
+            const beforeAlerts = Array.isArray(beforeResult?.alerts) ? beforeResult.alerts : [];
+            const beforeIds = new Set(beforeAlerts.map((alert) => String(alert.alert_id)));
+
+            console.log("Existing alert IDs:", [...beforeIds]);
+
+            const response = await fetch(`${API_URL}/evaluate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const result = await response.json();
+            console.log("Alert engine response:", result);
 
             if (!response.ok) {
-                throw new Error(
-                    result?.message ||
-                    "Failed to evaluate alert rules."
-                );
+                throw new Error(result?.message || "Failed to evaluate alert rules.");
             }
 
-            if (
-                result?.status !==
-                "success"
-            ) {
-                throw new Error(
-                    result?.message ||
-                    "Alert engine failed."
-                );
+            if (result?.status !== "success") {
+                throw new Error(result?.message || "Alert engine failed.");
             }
 
-            // Reload alerts after evaluation
-            await fetchAlerts();
+            const afterResponse = await fetch(API_URL);
+            const afterResult = await afterResponse.json();
 
+            if (!afterResponse.ok) {
+                throw new Error(afterResult?.message || "Failed to reload alerts.");
+            }
+
+            const backendAlerts = Array.isArray(afterResult?.alerts) ? afterResult.alerts : [];
+            const formattedAlerts = backendAlerts.map(formatAlert);
+
+            const newlyCreatedAlerts = formattedAlerts.filter(
+                (alert) => alert.alertId && !beforeIds.has(String(alert.alertId))
+            );
+
+            console.log("🆕 Newly created alerts:", newlyCreatedAlerts);
+
+            if (newlyCreatedAlerts.length > 0) {
+                newlyCreatedAlerts.forEach((alert) => {
+                    const alertId = String(alert.alertId);
+                    if (!notifiedAlertIds.current.has(alertId)) {
+                        sendBrowserNotification(alert);
+                        notifiedAlertIds.current.add(alertId);
+                    }
+                });
+            } else {
+                console.log("ℹ️ No new alerts were created.");
+            }
+
+            setAlerts(formattedAlerts);
+
+            formattedAlerts.forEach((alert) => {
+                if (alert.alertId) {
+                    notifiedAlertIds.current.add(String(alert.alertId));
+                }
+            });
         } catch (err) {
-
-            console.error(
-                "Alert engine error:",
-                err
-            );
-
-            setError(
-                err?.message ||
-                "Failed to run alert engine."
-            );
-
+            console.error("❌ Alert engine error:", err);
+            setError(err?.message || "Failed to run alert engine.");
         } finally {
-
             setEvaluating(false);
         }
     };
 
 
     // =====================================================
-    // INITIAL LOAD
+    // INITIAL LOAD + AUTOMATIC REFRESH
     // =====================================================
 
     useEffect(() => {
 
+        // Load existing alerts immediately
         fetchAlerts();
+
+        /*
+         * Check for newly generated alerts every 10 seconds.
+         */
+        const interval =
+            setInterval(() => {
+
+                fetchAlerts();
+
+            }, 10000);
+
+
+        // Cleanup interval when page closes/unmounts
+        return () => {
+
+            clearInterval(interval);
+
+        };
 
     }, []);
 
@@ -447,9 +719,11 @@ export default function Alerts() {
     ) => {
 
         if (!incident?.alertId) {
+
             setError(
                 "Invalid alert ID."
             );
+
             return;
         }
 
@@ -473,6 +747,7 @@ export default function Alerts() {
                 await response.json();
 
             if (!response.ok) {
+
                 throw new Error(
                     result?.message ||
                     "Failed to acknowledge alert."
@@ -483,6 +758,7 @@ export default function Alerts() {
                 result?.status !==
                 "success"
             ) {
+
                 throw new Error(
                     result?.message ||
                     "Failed to acknowledge alert."
@@ -530,9 +806,11 @@ export default function Alerts() {
     ) => {
 
         if (!incident?.alertId) {
+
             setError(
                 "Invalid alert ID."
             );
+
             return;
         }
 
@@ -552,6 +830,7 @@ export default function Alerts() {
                 await response.json();
 
             if (!response.ok) {
+
                 throw new Error(
                     result?.message ||
                     "Failed to resolve alert."
@@ -562,6 +841,7 @@ export default function Alerts() {
                 result?.status !==
                 "success"
             ) {
+
                 throw new Error(
                     result?.message ||
                     "Failed to resolve alert."
@@ -770,6 +1050,23 @@ export default function Alerts() {
 
                 <div className="flex flex-wrap items-center gap-2">
 
+                    {/* ENABLE NOTIFICATIONS */}
+
+                    <button
+                        onClick={
+                            enableNotifications
+                        }
+                        className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md shadow-purple-600/25 transition active:scale-95"
+                    >
+                        <span>🔔</span>
+                        <span>
+                            {notificationPermission === "granted"
+                                ? "Notifications On"
+                                : "Enable Notifications"}
+                        </span>
+                    </button>
+
+
                     {/* RUN ALERT ENGINE */}
 
                     <button
@@ -964,7 +1261,6 @@ export default function Alerts() {
 
             <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
 
-
                 <div className="flex flex-wrap items-center gap-2">
 
                     {[
@@ -1065,7 +1361,6 @@ export default function Alerts() {
 
             <div className="space-y-4 mb-7">
 
-
                 <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-500">
 
                     <span>
@@ -1100,31 +1395,6 @@ export default function Alerts() {
                                 : "No alerts match the current filters."}
                         </p>
 
-
-                        {alerts.length === 0 && (
-
-                            <button
-                                onClick={
-                                    runAlertEngine
-                                }
-                                disabled={
-                                    evaluating
-                                }
-                                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold transition"
-                            >
-
-                                <Play
-                                    size={13}
-                                />
-
-                                {evaluating
-                                    ? "Checking..."
-                                    : "Run Alert Engine"}
-
-                            </button>
-
-                        )}
-
                     </div>
 
                 ) : (
@@ -1156,13 +1426,9 @@ export default function Alerts() {
                                     }`}
                                 >
 
-
                                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 
-
-                                        {/* =================================================
-                                            LEFT
-                                        ================================================= */}
+                                        {/* LEFT */}
 
                                         <div className="flex items-start gap-4">
 
@@ -1284,12 +1550,9 @@ export default function Alerts() {
                                         </div>
 
 
-                                        {/* =================================================
-                                            RIGHT
-                                        ================================================= */}
+                                        {/* RIGHT */}
 
                                         <div className="flex flex-row lg:flex-col items-end justify-between lg:justify-center gap-3 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-
 
                                             <div className="text-left lg:text-right">
 
@@ -1332,9 +1595,7 @@ export default function Alerts() {
                                             </div>
 
 
-                                            {/* =================================================
-                                                ACTION BUTTONS
-                                            ================================================= */}
+                                            {/* ACTION BUTTONS */}
 
                                             {incident.status ===
                                             "Unresolved" ? (
