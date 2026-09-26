@@ -1,9 +1,14 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword"
+import ResetPassword from "./pages/ResetPassword";
 
 import Dashboard from "./pages/Dashboard";
 import AirQuality from "./pages/AirQuality";
@@ -22,6 +27,7 @@ import AdminAlertConfiguration from "./pages/AdminAlertConfiguration";
 
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 
 function App() {
   return (
@@ -29,13 +35,18 @@ function App() {
 
       <Routes>
 
-        {/* ========================= */}
-        {/* Authentication Pages */}
-        {/* ========================= */}
+        {/* ================================================== */}
+        {/* AUTHENTICATION */}
+        {/* ================================================== */}
 
         <Route
           path="/"
-          element={<Navigate to="/login" replace />}
+          element={
+            <Navigate
+              to="/login"
+              replace
+            />
+          }
         />
 
         <Route
@@ -58,10 +69,9 @@ function App() {
           element={<ResetPassword />}
         />
 
-
-        {/* ========================= */}
-        {/* Main Application */}
-        {/* ========================= */}
+        {/* ================================================== */}
+        {/* MAIN APPLICATION */}
+        {/* ================================================== */}
 
         <Route
           path="/dashboard"
@@ -77,92 +87,146 @@ function App() {
         <Route
           path="/air-quality"
           element={
-            <Layout>
-              <AirQuality />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <AirQuality />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/pune-areas"
           element={
-            <Layout>
-              <PuneAreas />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <PuneAreas />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/alerts"
           element={
-            <Layout>
-              <Alerts />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <Alerts />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/analytics"
           element={
-            <Layout>
-              <Analytics />
-            </Layout>
-          }
-        />
-
-        <Route
-          path="/settings"
-          element={
-            <Layout>
-              <Settings />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <Analytics />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/station/:id"
           element={
-            <Layout>
-              <StationDetails />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <StationDetails />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/device-health"
           element={
-            <Layout>
-              <DeviceHealth />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <DeviceHealth />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/maintenance"
           element={
-            <Layout>
-              <Maintenance />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <Maintenance />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/reports"
           element={
-            <Layout>
-              <Reports />
-            </Layout>
+            <ProtectedRoute>
+              <Layout>
+                <Reports />
+              </Layout>
+            </ProtectedRoute>
           }
         />
 
+        {/* ================================================== */}
+        {/* ADMIN ONLY */}
+        {/* ================================================== */}
+
+        {/* SETTINGS */}
+
         <Route
-          path="/admin/add-monitoring-site"
-          element={<AddMonitoringSite />}
+          path="/settings"
+          element={
+            <AdminRoute>
+              <Layout>
+                <Settings />
+              </Layout>
+            </AdminRoute>
+          }
         />
+
+        {/* ALERT CONFIGURATION */}
 
         <Route
           path="/admin/alert-configuration"
-          element={<AdminAlertConfiguration />}
+          element={
+            <AdminRoute>
+              <Layout>
+                <AdminAlertConfiguration />
+              </Layout>
+            </AdminRoute>
+          }
+        />
+
+        {/* ================================================== */}
+        {/* ADD MONITORING SITE */}
+        {/* ================================================== */}
+
+        <Route
+          path="/admin/add-monitoring-site"
+          element={
+            <ProtectedRoute>
+              <AddMonitoringSite />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ================================================== */}
+        {/* FALLBACK */}
+        {/* ================================================== */}
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/dashboard"
+              replace
+            />
+          }
         />
 
       </Routes>

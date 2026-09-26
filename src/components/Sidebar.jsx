@@ -28,8 +28,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     try {
-      const storedUser =
-        localStorage.getItem("user");
+      const storedUser = localStorage.getItem("user");
 
       if (storedUser) {
         setUser(JSON.parse(storedUser));
@@ -172,6 +171,11 @@ export default function Sidebar() {
       path: "/settings",
       icon: Settings,
     },
+    {
+      name: "Alert Configuration",
+      path: "/admin/alert-configuration",
+      icon: Bell,
+    },
   ];
 
   // =====================================================
@@ -194,6 +198,7 @@ export default function Sidebar() {
           h-[45px]
 
           px-3
+
           rounded-xl
 
           border
@@ -336,7 +341,7 @@ export default function Sidebar() {
 
       {/* =================================================
           BRAND HEADER
-      ================================================. */}
+      ================================================= */}
 
       <div
         className="
@@ -572,14 +577,20 @@ export default function Sidebar() {
 
           <nav className="space-y-1">
 
-            {adminItems.map(
-              (item) => (
-                <NavigationItem
-                  key={item.name}
-                  item={item}
-                />
+            {adminItems
+              .filter(
+                (item) =>
+                  item.name === "Device Health" ||
+                  user?.role === "admin"
               )
-            )}
+              .map(
+                (item) => (
+                  <NavigationItem
+                    key={item.name}
+                    item={item}
+                  />
+                )
+              )}
 
           </nav>
 
