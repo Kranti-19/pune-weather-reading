@@ -391,22 +391,38 @@ const getStations = async (req, res) => {
     }
 
     // ----------------------------------------------------------
-    // 2. GET LATEST AQI
-    // ----------------------------------------------------------
+// 2. GET LATEST AQI FOR CURRENT STATIONS
+// ----------------------------------------------------------
 
-    const {
-      data: aqiRows,
-      error: aqiError,
-    } = await supabase
-      .from("aqi_reading")
-      .select("*")
-      .order("timestamp", {
-        ascending: false,
-      });
+const stationIds = (stations || []).map(
+  (station) => station.station_id
+);
 
-    if (aqiError) {
-      throw aqiError;
-    }
+const {
+  data: aqiRows,
+  error: aqiError,
+} = await supabase
+  .from("aqi_reading")
+  .select("*")
+  .in("station_id", stationIds)
+  .order("timestamp", {
+    ascending: false,
+  })
+  .limit(20000);
+
+if (aqiError) {
+  throw aqiError;
+}
+
+// DEBUG: Check what AQI data is coming from Supabase
+console.log(
+  "STATIONS AQI ROWS:",
+  (aqiRows || []).map((row) => ({
+    station_id: row.station_id,
+    aqi: row.aqi,
+    timestamp: row.timestamp,
+  })).slice(0, 20)
+);
 
     // ----------------------------------------------------------
     // 3. GET RAW READINGS

@@ -32,7 +32,6 @@ import AdminRoute from "./components/AdminRoute";
 function App() {
   return (
     <BrowserRouter>
-
       <Routes>
 
         {/* ================================================== */}
@@ -41,12 +40,7 @@ function App() {
 
         <Route
           path="/"
-          element={
-            <Navigate
-              to="/login"
-              replace
-            />
-          }
+          element={<Navigate to="/login" replace />}
         />
 
         <Route
@@ -69,10 +63,12 @@ function App() {
           element={<ResetPassword />}
         />
 
+
         {/* ================================================== */}
-        {/* MAIN APPLICATION */}
+        {/* PROTECTED APPLICATION */}
         {/* ================================================== */}
 
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -84,6 +80,7 @@ function App() {
           }
         />
 
+        {/* Air Quality */}
         <Route
           path="/air-quality"
           element={
@@ -95,6 +92,7 @@ function App() {
           }
         />
 
+        {/* Pune Areas */}
         <Route
           path="/pune-areas"
           element={
@@ -106,6 +104,7 @@ function App() {
           }
         />
 
+        {/* Alerts */}
         <Route
           path="/alerts"
           element={
@@ -117,6 +116,7 @@ function App() {
           }
         />
 
+        {/* Analytics */}
         <Route
           path="/analytics"
           element={
@@ -128,6 +128,7 @@ function App() {
           }
         />
 
+        {/* Station Details */}
         <Route
           path="/station/:id"
           element={
@@ -139,6 +140,7 @@ function App() {
           }
         />
 
+        {/* Device Health */}
         <Route
           path="/device-health"
           element={
@@ -150,6 +152,7 @@ function App() {
           }
         />
 
+        {/* Maintenance */}
         <Route
           path="/maintenance"
           element={
@@ -161,6 +164,7 @@ function App() {
           }
         />
 
+        {/* Reports */}
         <Route
           path="/reports"
           element={
@@ -172,12 +176,12 @@ function App() {
           }
         />
 
+
         {/* ================================================== */}
         {/* ADMIN ONLY */}
         {/* ================================================== */}
 
-        {/* SETTINGS */}
-
+        {/* Settings */}
         <Route
           path="/settings"
           element={
@@ -189,8 +193,17 @@ function App() {
           }
         />
 
-        {/* ALERT CONFIGURATION */}
+        {/* Add Monitoring Site */}
+        <Route
+          path="/admin/add-monitoring-site"
+          element={
+            <ProtectedRoute>
+              <AddMonitoringSite />
+            </ProtectedRoute>
+          }
+        />
 
+        {/* Alert Configuration */}
         <Route
           path="/admin/alert-configuration"
           element={
@@ -202,18 +215,6 @@ function App() {
           }
         />
 
-        {/* ================================================== */}
-        {/* ADD MONITORING SITE */}
-        {/* ================================================== */}
-
-        <Route
-          path="/admin/add-monitoring-site"
-          element={
-            <ProtectedRoute>
-              <AddMonitoringSite />
-            </ProtectedRoute>
-          }
-        />
 
         {/* ================================================== */}
         {/* FALLBACK */}
@@ -222,15 +223,11 @@ function App() {
         <Route
           path="*"
           element={
-            <Navigate
-              to="/dashboard"
-              replace
-            />
+            <Navigate to="/dashboard" replace />
           }
         />
 
       </Routes>
-
     </BrowserRouter>
   );
 }

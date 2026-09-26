@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
 import {
   ArrowLeft,
   Activity,
@@ -107,227 +108,137 @@ const pollutantDefaults = {
   Pb: { unit: "µg/m³", standard: 1 },
 };
 
-// Municipal Station Fallback Registry (Prevents 404 blank errors)
-const FALLBACK_STATIONS = [
-  {
-    id: 1,
-    code: "PMC-001",
-    name: "Shivajinagar Central",
-    ward: "Ward 7",
-    zone: "Central Zone",
-    latitude: 18.5314,
-    longitude: 73.8446,
-    aqi: 68,
-    status: "Online",
-    dominant: "PM2.5",
-    station_type: "CAAQM Standard",
-    gatewayId: "GW-PUN-001",
-    lastReadingAt: new Date().toISOString(),
-    weather: { temperature: 27.4, humidity: 72, wind_speed: 3.2, wind_direction: 260, pressure: 1012 },
-    pollutants: [
-      { name: "PM2.5", value: 38.2, unit: "µg/m³", standard: 60, subIndex: 68, flag: "Valid" },
-      { name: "PM10", value: 78.4, unit: "µg/m³", standard: 100, subIndex: 78, flag: "Valid" },
-      { name: "NO₂", value: 32.1, unit: "µg/m³", standard: 80, subIndex: 40, flag: "Valid" },
-      { name: "SO₂", value: 14.2, unit: "µg/m³", standard: 80, subIndex: 18, flag: "Valid" },
-      { name: "CO", value: 0.8, unit: "mg/m³", standard: 2, subIndex: 40, flag: "Valid" },
-      { name: "O₃", value: 42.0, unit: "µg/m³", standard: 100, subIndex: 42, flag: "Valid" },
-    ],
-    devices: [{ device_id: "DEV-01", manufacturer: "EnvironICS", model: "MetSense-4", status: "Active", gateway_id: "GW-PUN-001", firmware: "v2.4.1" }],
-    sensors: [
-      { sensor_id: "S-01", sensor_type: "Laser Dust PM2.5/10", model: "LPS-800", serial_number: "SN-98231", status: "Active", calibration_date: "2026-02-15" },
-      { sensor_id: "S-02", sensor_type: "Electrochemical NO2", model: "EC-NO2", serial_number: "SN-98232", status: "Active", calibration_date: "2026-02-15" }
-    ],
-    alerts: [],
-    maintenance: [{ maintenance_id: "M-01", issue: "Quarterly Lens Calibration", action: "Optics clean & recalibrate", status: "Completed", service_date: "2026-05-10" }]
-  },
-  {
-    id: 2,
-    code: "PMC-002",
-    name: "Kothrud Depot Basin",
-    ward: "Ward 10",
-    zone: "West Zone",
-    latitude: 18.5074,
-    longitude: 73.8077,
-    aqi: 54,
-    status: "Online",
-    dominant: "PM10",
-    station_type: "CAAQM Standard",
-    gatewayId: "GW-PUN-002",
-    lastReadingAt: new Date().toISOString(),
-    weather: { temperature: 26.8, humidity: 75, wind_speed: 2.8, wind_direction: 250, pressure: 1013 },
-    pollutants: [
-      { name: "PM2.5", value: 28.1, unit: "µg/m³", standard: 60, subIndex: 46, flag: "Valid" },
-      { name: "PM10", value: 54.0, unit: "µg/m³", standard: 100, subIndex: 54, flag: "Valid" },
-      { name: "NO₂", value: 24.5, unit: "µg/m³", standard: 80, subIndex: 30, flag: "Valid" },
-      { name: "SO₂", value: 10.1, unit: "µg/m³", standard: 80, subIndex: 12, flag: "Valid" },
-      { name: "CO", value: 0.6, unit: "mg/m³", standard: 2, subIndex: 30, flag: "Valid" },
-      { name: "O₃", value: 38.0, unit: "µg/m³", standard: 100, subIndex: 38, flag: "Valid" },
-    ],
-    devices: [{ device_id: "DEV-02", manufacturer: "EnvironICS", model: "MetSense-4", status: "Active", gateway_id: "GW-PUN-002", firmware: "v2.4.1" }],
-    sensors: [{ sensor_id: "S-03", sensor_type: "Laser Dust PM2.5/10", model: "LPS-800", serial_number: "SN-98240", status: "Active", calibration_date: "2026-03-01" }],
-    alerts: [],
-    maintenance: []
-  },
-  {
-    id: 3,
-    code: "PMC-003",
-    name: "Hadapsar Industrial",
-    ward: "Ward 15",
-    zone: "East Zone",
-    latitude: 18.5089,
-    longitude: 73.9260,
-    aqi: 134,
-    status: "Online",
-    dominant: "PM2.5",
-    station_type: "CAAQM Industrial",
-    gatewayId: "GW-PUN-003",
-    lastReadingAt: new Date().toISOString(),
-    weather: { temperature: 28.9, humidity: 68, wind_speed: 3.5, wind_direction: 275, pressure: 1011 },
-    pollutants: [
-      { name: "PM2.5", value: 84.6, unit: "µg/m³", standard: 60, subIndex: 134, flag: "Valid" },
-      { name: "PM10", value: 142.0, unit: "µg/m³", standard: 100, subIndex: 128, flag: "Valid" },
-      { name: "NO₂", value: 48.0, unit: "µg/m³", standard: 80, subIndex: 60, flag: "Valid" },
-      { name: "SO₂", value: 28.5, unit: "µg/m³", standard: 80, subIndex: 35, flag: "Valid" },
-      { name: "CO", value: 1.4, unit: "mg/m³", standard: 2, subIndex: 70, flag: "Valid" },
-      { name: "O₃", value: 55.0, unit: "µg/m³", standard: 100, subIndex: 55, flag: "Valid" },
-    ],
-    devices: [{ device_id: "DEV-03", manufacturer: "EnvironICS", model: "MetSense-4", status: "Active", gateway_id: "GW-PUN-003", firmware: "v2.4.1" }],
-    sensors: [{ sensor_id: "S-04", sensor_type: "Laser Dust PM2.5/10", model: "LPS-800", serial_number: "SN-98251", status: "Active", calibration_date: "2026-01-20" }],
-    alerts: [{ alert_id: "ALT-01", parameter: "High PM2.5 Exceedance", severity: "Warning", acknowledgement: "Unacknowledged", started_time: new Date().toISOString() }],
-    maintenance: []
-  },
-  {
-    id: 4,
-    code: "PMC-004",
-    name: "Katraj Lake Reserve",
-    ward: "Ward 21",
-    zone: "South Zone",
-    latitude: 18.4575,
-    longitude: 73.8677,
-    aqi: 39,
-    status: "Online",
-    dominant: "O3",
-    station_type: "CAAQM Eco-Reserve",
-    gatewayId: "GW-PUN-004",
-    lastReadingAt: new Date().toISOString(),
-    weather: { temperature: 25.9, humidity: 79, wind_speed: 2.1, wind_direction: 240, pressure: 1014 },
-    pollutants: [
-      { name: "PM2.5", value: 18.4, unit: "µg/m³", standard: 60, subIndex: 30, flag: "Valid" },
-      { name: "PM10", value: 38.0, unit: "µg/m³", standard: 100, subIndex: 38, flag: "Valid" },
-      { name: "NO₂", value: 15.2, unit: "µg/m³", standard: 80, subIndex: 19, flag: "Valid" },
-      { name: "SO₂", value: 6.8, unit: "µg/m³", standard: 80, subIndex: 8, flag: "Valid" },
-      { name: "CO", value: 0.4, unit: "mg/m³", standard: 2, subIndex: 20, flag: "Valid" },
-      { name: "O₃", value: 39.0, unit: "µg/m³", standard: 100, subIndex: 39, flag: "Valid" },
-    ],
-    devices: [{ device_id: "DEV-04", manufacturer: "EnvironICS", model: "MetSense-4", status: "Active", gateway_id: "GW-PUN-004", firmware: "v2.4.1" }],
-    sensors: [{ sensor_id: "S-05", sensor_type: "Laser Dust PM2.5/10", model: "LPS-800", serial_number: "SN-98260", status: "Active", calibration_date: "2026-04-12" }],
-    alerts: [],
-    maintenance: []
-  },
-  {
-    id: 5,
-    code: "PMC-005",
-    name: "Hinjewadi Tech Corridor",
-    ward: "Ward 25",
-    zone: "North-West Zone",
-    latitude: 18.5913,
-    longitude: 73.7389,
-    aqi: 82,
-    status: "Online",
-    dominant: "NO2",
-    station_type: "CAAQM Highway & IT",
-    gatewayId: "GW-PUN-005",
-    lastReadingAt: new Date().toISOString(),
-    weather: { temperature: 27.8, humidity: 71, wind_speed: 3.1, wind_direction: 265, pressure: 1012 },
-    pollutants: [
-      { name: "PM2.5", value: 44.0, unit: "µg/m³", standard: 60, subIndex: 73, flag: "Valid" },
-      { name: "PM10", value: 86.0, unit: "µg/m³", standard: 100, subIndex: 82, flag: "Valid" },
-      { name: "NO₂", value: 52.3, unit: "µg/m³", standard: 80, subIndex: 65, flag: "Valid" },
-      { name: "SO₂", value: 16.4, unit: "µg/m³", standard: 80, subIndex: 20, flag: "Valid" },
-      { name: "CO", value: 0.9, unit: "mg/m³", standard: 2, subIndex: 45, flag: "Valid" },
-      { name: "O₃", value: 46.0, unit: "µg/m³", standard: 100, subIndex: 46, flag: "Valid" },
-    ],
-    devices: [{ device_id: "DEV-05", manufacturer: "EnvironICS", model: "MetSense-4", status: "Maintenance", gateway_id: "GW-PUN-005", firmware: "v2.4.1" }],
-    sensors: [{ sensor_id: "S-06", sensor_type: "Optical Chamber Dust", model: "OPC-N3", serial_number: "SN-98277", status: "Maintenance Due", calibration_date: "2025-11-20" }],
-    alerts: [{ alert_id: "ALT-02", parameter: "Flow Rate Sensor Drift", severity: "Notice", acknowledgement: "Acknowledged", started_time: new Date().toISOString() }],
-    maintenance: [{ maintenance_id: "M-02", issue: "Scheduled Sampling Filter Replace", action: "HEPA filter cartridge change", status: "In Progress", service_date: "2026-09-05" }]
-  },
-];
-
 export default function StationDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
 
   const [station, setStation] = useState(null);
-  const [period, setPeriod] = useState("24 Hours");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+const [period, setPeriod] = useState("24 Hours");
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState("");
+const [weather, setWeather] = useState({});
 
   const loadStation = async () => {
-    if (!id) {
-      setError("Station ID is missing from the URL.");
-      setLoading(false);
-      return;
+  if (!id) {
+    setError("Station ID is missing from the URL.");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError("");
+    setStation(null);
+
+    // ---------------------------------------------------------
+    // Convert either:
+    // /station/2
+    // OR
+    // /station/PMC-002
+    // into numeric station ID: 2
+    // ---------------------------------------------------------
+    let stationId = id;
+
+    if (String(id).toUpperCase().startsWith("PMC-")) {
+      const match = String(id).match(/PMC-(\d+)/i);
+
+      if (match) {
+        stationId = Number(match[1]);
+      }
+    } else {
+      stationId = Number(id);
     }
 
-    try {
-      setLoading(true);
-      setError("");
-
-      let payload = null;
-      try {
-        const response = await API.get(`/stations/${encodeURIComponent(id)}`);
-        payload = response?.data?.station || response?.data?.data || response?.data?.result || response?.data;
-      } catch (firstErr) {
-        if (!isNaN(id)) {
-          const formattedCode = `PMC-00${id}`;
-          const retryRes = await API.get(`/stations/${encodeURIComponent(formattedCode)}`);
-          payload = retryRes?.data?.station || retryRes?.data?.data || retryRes?.data;
-        } else {
-          throw firstErr;
-        }
-      }
-
-      if (payload && (payload.name || payload.code || payload.station_id)) {
-        setStation(payload);
-      } else {
-        throw new Error("Station payload invalid");
-      }
-    } catch (err) {
-      console.warn("Backend fetch failed. Checking fallback station registry for:", id);
-
-      const matchedFallback = FALLBACK_STATIONS.find(
-        (st) =>
-          String(st.id) === String(id) ||
-          st.code?.toLowerCase() === id?.toLowerCase() ||
-          st.code === `PMC-00${id}` ||
-          st.name?.toLowerCase().includes(String(id).toLowerCase())
-      );
-
-      if (matchedFallback) {
-        setStation(matchedFallback);
-        setError("");
-      } else {
-        setStation(null);
-        setError(
-          err?.response?.data?.message ||
-            `Station "${id}" could not be found in active telemetry or registry.`
-        );
-      }
-    } finally {
-      setLoading(false);
+    if (!Number.isInteger(stationId) || stationId <= 0) {
+      throw new Error(`Invalid station ID: ${id}`);
     }
-  };
+
+    console.log("Loading station:", {
+      routeId: id,
+      stationId,
+    });
+
+    // ---------------------------------------------------------
+    // GET ACTUAL STATION FROM BACKEND
+    // ---------------------------------------------------------
+    const response = await API.get(
+      `/stations/${stationId}`
+    );
+
+    const payload =
+      response?.data?.station ||
+      response?.data?.data ||
+      response?.data?.result ||
+      response?.data;
+
+    if (
+      !payload ||
+      (!payload.name &&
+        !payload.code &&
+        !payload.station_id &&
+        !payload.stationId)
+    ) {
+      throw new Error("Station payload is invalid.");
+    }
+
+    console.log("Station loaded:", payload);
+
+    setStation(payload);
+  } catch (err) {
+    console.error("Failed to load station:", err);
+
+    setStation(null);
+
+    setError(
+      err?.response?.data?.message ||
+        err?.message ||
+        `Station "${id}" could not be loaded from the monitoring system.`
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadStation();
   }, [id]);
 
+  useEffect(() => {
+  const fetchWeather = async () => {
+    try {
+      console.log("🌤️ WEATHER REQUEST START");
+
+      const response = await API.get("/weather/pune");
+
+      console.log("🌤️ WEATHER RESPONSE:", response.data);
+
+      if (response.data?.status === "success") {
+        console.log("🌤️ WEATHER DATA:", response.data.weather);
+        setWeather(response.data.weather || {});
+      } else {
+        console.log("❌ WEATHER STATUS NOT SUCCESS");
+      }
+    } catch (err) {
+      console.error("❌ WEATHER API ERROR:", err);
+      console.error("❌ WEATHER RESPONSE:", err?.response?.data);
+      setWeather({});
+    }
+  };
+
+  fetchWeather();
+
+  const interval = setInterval(
+    fetchWeather,
+    10 * 60 * 1000
+  );
+
+  return () => clearInterval(interval);
+}, []);
+
   // Fallback to 68 if station aqi is 0 or missing
   const rawAqi = safeNumber(station?.aqi, 0);
-  const aqi = rawAqi > 0 ? rawAqi : 68;
-  const aqiTheme = getCPCBStatus(aqi);
-
+const aqi = rawAqi > 0 ? rawAqi : null;
+const aqiTheme = getCPCBStatus(aqi || 0);
   const pollutants = useMemo(() => {
     if (!station) return [];
 
@@ -368,18 +279,8 @@ export default function StationDetails() {
       : [];
 
     if (!rows.length) {
-      const baseAqi = aqi || 68;
-      return [
-        { time: "06:00", aqi: Math.max(20, baseAqi - 15) },
-        { time: "08:00", aqi: baseAqi - 5 },
-        { time: "10:00", aqi: baseAqi + 8 },
-        { time: "12:00", aqi: baseAqi },
-        { time: "14:00", aqi: baseAqi + 12 },
-        { time: "16:00", aqi: baseAqi + 6 },
-        { time: "18:00", aqi: baseAqi - 2 },
-        { time: "20:00", aqi: Math.max(25, baseAqi - 10) },
-      ];
-    }
+  return [];
+}
 
     const sorted = [...rows]
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -401,7 +302,6 @@ export default function StationDetails() {
     return sorted.slice(-720);
   }, [station, period, aqi]);
 
-  const weather = station?.weather || {};
   const devices = Array.isArray(station?.devices) ? station.devices : [];
   const sensors = Array.isArray(station?.sensors) ? station.sensors : [];
   const alerts = Array.isArray(station?.alerts) ? station.alerts : [];
@@ -494,7 +394,11 @@ export default function StationDetails() {
             </div>
 
             <p className="text-xs text-slate-400 mt-1 font-mono">
-              Code: <strong className="text-blue-600">{station.code || `PMC-00${station.id}`}</strong> •{" "}
+              Code: <strong className="text-blue-600">{station.code ||
+  station.station_code ||
+  `PMC-${String(
+    station.station_id ?? station.stationId ?? station.id
+  ).padStart(3, "0")}`}</strong> •{" "}
               {station.ward || "Ward 25"} • {station.zone || "Municipal Zone"} • Last Telemetry Ping:{" "}
               {formatRelative(station.lastReadingAt || station.updated)}
             </p>
@@ -596,11 +500,25 @@ export default function StationDetails() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <InfoBox label="Latitude" value={station.latitude ?? "18.5913"} />
-            <InfoBox label="Longitude" value={station.longitude ?? "73.7389"} />
-            <InfoBox label="Administrative Ward" value={station.ward || "Ward 25"} />
-            <InfoBox label="Municipal Zone" value={station.zone || "North-West Zone"} />
-          </div>
+            <InfoBox
+              label="Latitude"
+              value={station.latitude ?? "N/A"}
+            />
+
+            <InfoBox
+              label="Longitude"
+              value={station.longitude ?? "N/A"}
+            />
+            <InfoBox
+              label="Administrative Ward"
+              value={station.ward || "N/A"}
+            />
+
+            <InfoBox
+              label="Municipal Zone"
+              value={station.zone || "N/A"}
+            />
+                    </div>
         </div>
 
         {/* POLLUTANTS GRID */}
@@ -735,12 +653,55 @@ export default function StationDetails() {
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-            <WeatherBox icon={<Thermometer size={18} />} label="Temperature" value={weather.temperature != null ? `${weather.temperature}°C` : "27.8°C"} />
-            <WeatherBox icon={<Droplets size={18} />} label="Relative Humidity" value={weather.humidity != null ? `${weather.humidity}%` : "71%"} />
-            <WeatherBox icon={<Wind size={18} />} label="Wind Velocity" value={weather.wind_speed != null ? `${weather.wind_speed} m/s` : "3.1 m/s"} />
-            <WeatherBox icon={<Wind size={18} />} label="Wind Direction" value={weather.wind_direction != null ? `${weather.wind_direction}° WNW` : "265° WNW"} />
-            <WeatherBox icon={<Gauge size={18} />} label="Barometric Pressure" value={weather.pressure != null ? `${weather.pressure} hPa` : "1012 hPa"} />
-          </div>
+           <WeatherBox
+  icon={<Thermometer size={18} />}
+  label="Temperature"
+  value={
+    weather.temperature != null
+      ? `${weather.temperature}°C`
+      : "N/A"
+  }
+/>
+
+<WeatherBox
+  icon={<Droplets size={18} />}
+  label="Relative Humidity"
+  value={
+    weather.humidity != null
+      ? `${weather.humidity}%`
+      : "N/A"
+  }
+/>
+
+<WeatherBox
+  icon={<Wind size={18} />}
+  label="Wind Velocity"
+  value={
+    weather.windSpeed != null
+      ? `${weather.windSpeed} km/h`
+      : "N/A"
+  }
+/>
+
+<WeatherBox
+  icon={<Wind size={18} />}
+  label="Wind Direction"
+  value={
+    weather.windDirection != null
+      ? `${weather.windDirection}° ${weather.windDirectionText || ""}`
+      : "N/A"
+  }
+/>
+
+<WeatherBox
+  icon={<Gauge size={18} />}
+  label="Barometric Pressure"
+  value={
+    weather.pressure != null
+      ? `${weather.pressure} hPa`
+      : "N/A"
+  }
+/>     </div>
         </div>
 
         {/* DEVICES & SENSORS */}
@@ -752,18 +713,35 @@ export default function StationDetails() {
             </div>
 
             <div className="space-y-3">
-              {(devices.length ? devices : [{ device_id: "DEV-05", manufacturer: "EnvironICS", model: "MetSense-4", status: "Active", gateway_id: "GW-PUN-005", firmware: "v2.4.1" }]).map((device) => (
-                <div key={device.device_id} className="border border-slate-100 bg-slate-50/60 rounded-xl p-4">
-                  <div className="flex justify-between gap-3">
-                    <strong className="text-xs font-bold text-slate-900">{device.manufacturer} {device.model}</strong>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                      {device.status}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1 font-mono">Gateway: {device.gateway_id}</p>
-                  <p className="text-[11px] text-slate-400 font-mono">Firmware: {device.firmware}</p>
-                </div>
-              ))}
+              {devices.length > 0 ? (
+  devices.map((device) => (
+    <div
+      key={device.device_id}
+      className="border border-slate-100 bg-slate-50/60 rounded-xl p-4"
+    >
+      <div className="flex justify-between gap-3">
+        <strong className="text-xs font-bold text-slate-900">
+          {device.manufacturer || "Unknown Manufacturer"}{" "}
+          {device.model || "Unknown Model"}
+        </strong>
+
+        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+          {device.status || "Unknown"}
+        </span>
+      </div>
+
+      <p className="text-[11px] text-slate-400 mt-1 font-mono">
+        Gateway: {device.gateway_id || "N/A"}
+      </p>
+
+      <p className="text-[11px] text-slate-400 font-mono">
+        Firmware: {device.firmware || "N/A"}
+      </p>
+    </div>
+  ))
+) : (
+  <EmptyState text="No telemetry gateway registered for this station." />
+)}
             </div>
           </div>
 
@@ -774,16 +752,37 @@ export default function StationDetails() {
             </div>
 
             <div className="space-y-3 max-h-72 overflow-y-auto">
-              {(sensors.length ? sensors : [{ sensor_id: "S-06", sensor_type: "Optical Chamber Dust", model: "OPC-N3", serial_number: "SN-98277", status: "Active", calibration_date: "2026-02-15" }]).map((sensor) => (
-                <div key={sensor.sensor_id} className="border border-slate-100 bg-slate-50/60 rounded-xl p-4">
-                  <div className="flex justify-between">
-                    <strong className="text-xs font-bold text-slate-900">{sensor.sensor_type}</strong>
-                    <span className="text-[10px] font-bold text-slate-500">{sensor.status}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1 font-mono">Model: {sensor.model} • SN: {sensor.serial_number}</p>
-                  <p className="text-[11px] text-slate-400">Calibration Verified: {formatDate(sensor.calibration_date)}</p>
-                </div>
-              ))}
+              {sensors.length > 0 ? (
+  sensors.map((sensor) => (
+    <div
+      key={sensor.sensor_id}
+      className="border border-slate-100 bg-slate-50/60 rounded-xl p-4"
+    >
+      <div className="flex justify-between">
+        <strong className="text-xs font-bold text-slate-900">
+          {sensor.sensor_type || "Unknown Sensor"}
+        </strong>
+
+        <span className="text-[10px] font-bold text-slate-500">
+          {sensor.status || "Unknown"}
+        </span>
+      </div>
+
+      <p className="text-[11px] text-slate-400 mt-1 font-mono">
+        Model: {sensor.model || "N/A"} • SN: {sensor.serial_number || "N/A"}
+      </p>
+
+      <p className="text-[11px] text-slate-400">
+        Calibration Verified:{" "}
+        {sensor.calibration_date
+          ? formatDate(sensor.calibration_date)
+          : "N/A"}
+      </p>
+    </div>
+  ))
+) : (
+  <EmptyState text="No sensors registered for this station." />
+)}
             </div>
           </div>
         </div>
