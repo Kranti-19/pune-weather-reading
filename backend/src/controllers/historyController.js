@@ -36,29 +36,66 @@ const getAqiTrend = async (req, res) => {
         let endDate;
 
         // Current time
-        const now = new Date();
+        // Current time
+const now = new Date();
 
-        // -------------------------------------------------
-        // DETERMINE DATE RANGE
-        // -------------------------------------------------
+// -------------------------------------------------
+// DETERMINE DATE RANGE - IST
+// -------------------------------------------------
 
-        if (range === "7d") {
-            // Include today + previous 6 calendar days
-            startDate = new Date();
-            startDate.setHours(0, 0, 0, 0);
-            startDate.setDate(startDate.getDate() - 6);
+const istDateFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+});
 
-            endDate = new Date();
-            endDate.setHours(23, 59, 59, 999);
+const todayIST = istDateFormatter.format(now);
 
-        } else if (range === "30d") {
-            // Include today + previous 29 calendar days
-            startDate = new Date();
-            startDate.setHours(0, 0, 0, 0);
-            startDate.setDate(startDate.getDate() - 29);
+if (range === "7d") {
 
-            endDate = new Date();
-            endDate.setHours(23, 59, 59, 999);
+    // Today in IST
+    const todayStart = new Date(
+        `${todayIST}T00:00:00+05:30`
+    );
+
+    // Previous 6 days
+    startDate = new Date(
+        todayStart.getTime() -
+        6 * 24 * 60 * 60 * 1000
+    );
+
+    // End of today in IST
+    endDate = new Date(
+        `${todayIST}T23:59:59.999+05:30`
+    );
+
+} else if (range === "30d") {
+
+    // Today in IST
+    const todayStart = new Date(
+        `${todayIST}T00:00:00+05:30`
+    );
+
+    // Previous 29 days
+    startDate = new Date(
+        todayStart.getTime() -
+        29 * 24 * 60 * 60 * 1000
+    );
+
+    // End of today in IST
+    endDate = new Date(
+        `${todayIST}T23:59:59.999+05:30`
+    );
+
+    console.log("========================================");
+    console.log("AQI TREND DATE DEBUG");
+    console.log("Server time:", now.toISOString());
+    console.log("Today IST:", todayIST);
+    console.log("Start:", startDate.toISOString());
+    console.log("End:", endDate.toISOString());
+    console.log("========================================");
+
 
         } else if (from && to) {
 
